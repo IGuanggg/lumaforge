@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+API/.env
+
+# Data (runtime, may contain user data)
+data/conversations/
+data/canvases/
+data/api_providers.json
+data/.auth_token
+output/*
+!output/.gitkeep
+assets/input/*
+assets/output/*
+history.json
+global_config.json
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+
+# Python venv
+venv/
+.venv/
+env/
