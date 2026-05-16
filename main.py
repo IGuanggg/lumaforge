@@ -1,9 +1,7 @@
 import json
 import uuid
 import base64
-import urllib.request
 import urllib.parse
-import urllib.error
 import os
 import re
 import random
@@ -12,8 +10,8 @@ import shutil
 import asyncio
 import logging
 import secrets
-import requests
 from typing import List, Dict, Any, Optional
+from contextlib import asynccontextmanager
 from threading import Lock
 import httpx
 from PIL import Image
@@ -24,6 +22,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response, StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger("infinite_canvas")
 
 QUIET_ACCESS_PATHS = {
     "/api/queue_status",
@@ -52,32 +52,10 @@ class QuietAccessLogFilter(logging.Filter):
 
 logging.getLogger("uvicorn.access").addFilter(QuietAccessLogFilter())
 
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # --- 本地鉴权：localhost 免认证，远程需 Bearer token ---
 AUTH_TOKEN = secrets.token_urlsafe(32)
 LOCALHOST_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
 PUBLIC_PATHS = {"/", "/login.html"}
-
-@app.middleware("http")
-async def auth_middleware(request: Request, call_next):
-    path = request.url.path
-    if path.startswith("/static/") or path in PUBLIC_PATHS or path.startswith("/ws/"):
-        return await call_next(request)
-    client_host = (request.client or {}).host or ""
-    if client_host in LOCALHOST_IPS:
-        return await call_next(request)
-    auth = request.headers.get("authorization", "")
-    if auth == f"Bearer {AUTH_TOKEN}":
-        return await call_next(request)
-    return JSONResponse(status_code=403, content={"detail": "Remote access requires Authorization header. Use: Bearer <token> (see server console for token)."})
 
 # --- WebSocket 状态管理器 ---
 class ConnectionManager:
@@ -92,7 +70,7 @@ class ConnectionManager:
         self.connection_clients[websocket] = client_id or f"anon-{id(websocket)}"
         if client_id:
             self.user_connections[client_id] = websocket
-        print(f"WS Connected. Total: {len(self.active_connections)}, Online: {self.online_count()}")
+        logger.info("WS Connected. Total: %d, Online: %d", len(self.active_connections), self.online_count())
         await self.broadcast_count()
 
     async def disconnect(self, websocket: WebSocket, client_id: str = None):
@@ -101,7 +79,7 @@ class ConnectionManager:
         self.connection_clients.pop(websocket, None)
         if client_id and self.user_connections.get(client_id) is websocket:
             del self.user_connections[client_id]
-        print(f"WS Disconnected. Total: {len(self.active_connections)}, Online: {self.online_count()}")
+        logger.info(f"WS Disconnected. Total: {len(self.active_connections)}, Online: {self.online_count()}")
         await self.broadcast_count()
 
     def online_count(self):
@@ -118,7 +96,7 @@ class ConnectionManager:
             try:
                 await connection.send_text(data)
             except Exception as e:
-                print(f"Broadcast error: {e}")
+                logger.warning(f"Broadcast error: {e}")
                 self.active_connections.remove(connection)
 
     async def broadcast_new_image(self, image_data: dict):
@@ -127,7 +105,7 @@ class ConnectionManager:
             try:
                 await connection.send_text(data)
             except Exception as e:
-                print(f"Broadcast image error: {e}")
+                logger.warning(f"Broadcast image error: {e}")
                 self.active_connections.remove(connection)
 
     async def broadcast_canvas_updated(self, canvas_id: str, updated_at: int, client_id: str = ""):
@@ -141,7 +119,7 @@ class ConnectionManager:
             try:
                 await connection.send_text(data)
             except Exception as e:
-                print(f"Broadcast canvas error: {e}")
+                logger.error(f"Broadcast canvas error: {e}")
                 self.active_connections.remove(connection)
 
     async def send_personal_message(self, message: dict, client_id: str):
@@ -150,19 +128,74 @@ class ConnectionManager:
             try:
                 await ws.send_text(json.dumps(message))
             except Exception as e:
-                print(f"Personal message error for {client_id}: {e}")
+                logger.error(f"Personal message error for {client_id}: {e}")
 
 manager = ConnectionManager()
-GLOBAL_LOOP = None
+GLOBAL_HTTP_CLIENT: httpx.AsyncClient = None
+CANVAS_TASK_MAX_AGE = 3600  # seconds
 
-@app.on_event("startup")
-async def startup_event():
-    global GLOBAL_LOOP
-    GLOBAL_LOOP = asyncio.get_running_loop()
-    print(f"\n{'='*50}")
-    print(f"  Remote access token: {AUTH_TOKEN}")
-    print(f"  (localhost access is unrestricted)")
-    print(f"{'='*50}\n")
+
+async def _cleanup_canvas_tasks():
+    while True:
+        await asyncio.sleep(300)
+        now = time.time()
+        with CANVAS_TASK_LOCK:
+            expired = [k for k, v in CANVAS_TASKS.items() if now - v.get("created_at", 0) > CANVAS_TASK_MAX_AGE]
+            for k in expired:
+                del CANVAS_TASKS[k]
+        if expired:
+            logger.info("Cleaned up %d expired canvas tasks", len(expired))
+
+
+@asynccontextmanager
+async def lifespan(app):
+    global GLOBAL_HTTP_CLIENT
+    GLOBAL_HTTP_CLIENT = httpx.AsyncClient(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True)
+    cleanup_task = asyncio.create_task(_cleanup_canvas_tasks())
+    logger.info("=" * 50)
+    logger.info("  Remote access token: %s", AUTH_TOKEN)
+    logger.info("  (localhost access is unrestricted)")
+    logger.info("=" * 50)
+    yield
+    cleanup_task.cancel()
+    try:
+        await cleanup_task
+    except asyncio.CancelledError:
+        pass
+    for ws in list(manager.active_connections):
+        try:
+            await ws.close()
+        except Exception:
+            pass
+    await GLOBAL_HTTP_CLIENT.aclose()
+    GLOBAL_HTTP_CLIENT = None
+    logger.info("Server shutdown complete")
+
+
+app = FastAPI(lifespan=lifespan)
+
+ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "*").split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in ALLOWED_ORIGINS],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/static/") or path in PUBLIC_PATHS or path.startswith("/ws/"):
+        return await call_next(request)
+    client_host = (request.client or {}).host or ""
+    if client_host in LOCALHOST_IPS:
+        return await call_next(request)
+    auth = request.headers.get("authorization", "")
+    if auth == f"Bearer {AUTH_TOKEN}":
+        return await call_next(request)
+    return JSONResponse(status_code=403, content={"detail": "Remote access requires Authorization header. Use: Bearer <token> (see server console for token)."})
+
 
 @app.websocket("/ws/stats")
 async def websocket_endpoint(websocket: WebSocket, client_id: str = None):
@@ -175,8 +208,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str = None):
     except WebSocketDisconnect:
         await manager.disconnect(websocket, client_id)
     except Exception as e:
-        print(f"WS Error: {e}")
+        logger.error(f"WS Error: {e}")
         await manager.disconnect(websocket, client_id)
+
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "ok",
+        "online_count": manager.online_count(),
+        "comfyui_backends": len(COMFYUI_INSTANCES),
+    }
+
 
 # --- 配置区域 ---
 
@@ -199,7 +242,7 @@ GLOBAL_CONFIG_FILE = os.path.join(BASE_DIR, "global_config.json")
 CANVAS_TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 QUEUE = []
-QUEUE_LOCK = Lock()
+QUEUE_LOCK = asyncio.Lock()
 HISTORY_LOCK = Lock()
 GLOBAL_CONFIG_LOCK = Lock()
 CONVERSATION_LOCK = Lock()
@@ -223,7 +266,7 @@ def load_env_file():
                 value = value.strip().strip('"').strip("'")
                 os.environ.setdefault(key, value)
     except Exception as e:
-        print(f"加载 API/.env 失败: {e}")
+        logger.error(f"加载 API/.env 失败: {e}")
 
 load_env_file()
 
@@ -518,7 +561,7 @@ def load_api_providers():
         providers = [normalize_provider(item) for item in raw if isinstance(item, dict)]
         return merge_default_api_providers(providers or defaults)
     except Exception as e:
-        print(f"加载 API 平台配置失败: {e}")
+        logger.error(f"加载 API 平台配置失败: {e}")
         return defaults
 
 def save_api_providers(providers):
@@ -749,54 +792,64 @@ class CanvasSaveRequest(BaseModel):
 
 # --- 负载均衡 ---
 
-def check_images_exist(backend_addr, images):
-    if not images: return True
-    for img in images:
-        try:
-            url = f"http://{backend_addr}/view?filename={urllib.parse.quote(img)}&type=input"
-            r = requests.get(url, stream=True, timeout=0.5)
-            r.close()
-            if r.status_code != 200: return False
-        except Exception: return False
-    return True
+async def check_images_exist(backend_addr, images):
+    if not images:
+        return True
+    client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=2)
+    own_client = GLOBAL_HTTP_CLIENT is None
+    try:
+        for img in images:
+            try:
+                url = f"http://{backend_addr}/view?filename={urllib.parse.quote(img)}&type=input"
+                r = await client.get(url, timeout=0.5)
+                if r.status_code != 200:
+                    return False
+            except Exception:
+                return False
+        return True
+    finally:
+        if own_client:
+            await client.aclose()
 
-def get_best_backend(required_images: List[str] = None):
+async def get_best_backend(required_images: List[str] = None):
     best_backend = COMFYUI_INSTANCES[0]
     min_queue_size = float('inf')
     candidates_with_images = []
     candidates_others = []
     backend_stats = {}
-
-    for addr in COMFYUI_INSTANCES:
-        try:
-            with urllib.request.urlopen(f"http://{addr}/queue", timeout=1) as response:
-                data = json.loads(response.read())
+    client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=2)
+    own_client = GLOBAL_HTTP_CLIENT is None
+    try:
+        for addr in COMFYUI_INSTANCES:
+            try:
+                response = await client.get(f"http://{addr}/queue", timeout=1)
+                data = response.json()
                 remote_load = len(data.get('queue_running', [])) + len(data.get('queue_pending', []))
                 with LOAD_LOCK:
                     local_load = BACKEND_LOCAL_LOAD.get(addr, 0)
                 effective_load = max(remote_load, local_load)
-                has_images = check_images_exist(addr, required_images)
+                has_images = await check_images_exist(addr, required_images)
                 backend_stats[addr] = {"load": effective_load, "has_images": has_images}
                 if has_images:
                     candidates_with_images.append(addr)
                 else:
                     candidates_others.append(addr)
-        except Exception as e:
-            print(f"Backend {addr} unreachable: {e}")
-            continue
+            except Exception as e:
+                logger.warning("Backend %s unreachable: %s", addr, e)
+                continue
 
-    target_candidates = candidates_with_images if candidates_with_images else candidates_others
-    if not target_candidates:
-        if candidates_others:
-            target_candidates = candidates_others
-        else:
-            return COMFYUI_INSTANCES[0]
+        target_candidates = candidates_with_images if candidates_with_images else candidates_others
+        if not target_candidates:
+            return candidates_others[0] if candidates_others else COMFYUI_INSTANCES[0]
 
-    for addr in target_candidates:
-        load = backend_stats[addr]["load"]
-        if load < min_queue_size:
-            min_queue_size = load
-            best_backend = addr
+        for addr in target_candidates:
+            load = backend_stats[addr]["load"]
+            if load < min_queue_size:
+                min_queue_size = load
+                best_backend = addr
+    finally:
+        if own_client:
+            await client.aclose()
 
     return best_backend
 
@@ -821,7 +874,7 @@ def is_video_output_item(item):
     fmt = str((item or {}).get("format") or "").lower()
     return ext in {".mp4", ".webm", ".mov", ".m4v"} or "video" in fmt
 
-def download_comfy_output(comfy_address, item, prefix="studio_"):
+async def download_comfy_output(comfy_address, item, prefix="studio_"):
     ext = comfy_output_extension(item)
     filename = f"{prefix}{uuid.uuid4().hex[:10]}{ext}"
     local_path = output_path_for(filename, "output")
@@ -830,11 +883,19 @@ def download_comfy_output(comfy_address, item, prefix="studio_"):
     comfy_url_path = f"/view?filename={urllib.parse.quote(str(item['filename']))}&subfolder={subfolder}&type={file_type}"
     full_url = f"http://{comfy_address}{comfy_url_path}"
     try:
-        with urllib.request.urlopen(full_url) as response, open(local_path, 'wb') as out_file:
-            shutil.copyfileobj(response, out_file)
+        client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=60)
+        own_client = GLOBAL_HTTP_CLIENT is None
+        try:
+            response = await client.get(full_url)
+            response.raise_for_status()
+            with open(local_path, 'wb') as out_file:
+                out_file.write(response.content)
+        finally:
+            if own_client:
+                await client.aclose()
         return output_url_for(filename, "output")
     except Exception as e:
-        print(f"下载 ComfyUI 输出失败: {e}")
+        logger.error("下载 ComfyUI 输出失败: %s", e)
         if comfy_url_path.startswith("/view"):
             return comfy_url_path.replace("/view", "/api/view", 1)
         return full_url
@@ -847,18 +908,24 @@ def save_to_history(record):
                 with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
                     history = json.load(f)
             except Exception as e:
-                print(f"History load error: {e}")
+                logger.error(f"History load error: {e}")
         if "timestamp" not in record:
             record["timestamp"] = time.time()
         history.insert(0, record)
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(history[:5000], f, ensure_ascii=False, indent=4)
 
-def get_comfy_history(comfy_address, prompt_id):
+async def get_comfy_history(comfy_address, prompt_id):
     try:
-        with urllib.request.urlopen(f"http://{comfy_address}/history/{prompt_id}") as response:
-            return json.loads(response.read())
-    except Exception as e:
+        client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=10)
+        own_client = GLOBAL_HTTP_CLIENT is None
+        try:
+            response = await client.get(f"http://{comfy_address}/history/{prompt_id}")
+            return response.json()
+        finally:
+            if own_client:
+                await client.aclose()
+    except Exception:
         return {}
 
 def safe_user_id(user_id, request: Request):
@@ -1269,7 +1336,7 @@ def convert_output_to_jpg(url, quality=88):
         prefix = "/assets" if root == ASSETS_DIR else "/output"
         return f"{prefix}/{rel}"
     except Exception as e:
-        print(f"转换 JPG 失败: {e}")
+        logger.error(f"转换 JPG 失败: {e}")
         return url
 
 def reference_to_data_url(ref, max_size=None):
@@ -1293,7 +1360,7 @@ def reference_to_data_url(ref, max_size=None):
                 mime = "image/png" if fmt == "PNG" else "image/jpeg"
                 return f"data:{mime};base64,{encoded}"
         except Exception as e:
-            print(f"reference resize failed, fallback to raw: {e}")
+            logger.error(f"reference resize failed, fallback to raw: {e}")
     with open(path, "rb") as f:
         encoded = base64.b64encode(f.read()).decode("ascii")
     return f"data:{content_type_for_path(path)};base64,{encoded}"
@@ -1324,7 +1391,7 @@ def compress_data_url_image(value, max_size=1536, jpeg_quality=88):
                 img.save(buf, format=fmt, optimize=True)
             return f"data:{mime};base64,{base64.b64encode(buf.getvalue()).decode('ascii')}"
     except Exception as e:
-        print(f"data url image compress failed, fallback to raw: {e}")
+        logger.error(f"data url image compress failed, fallback to raw: {e}")
         return value
 
 def modelscope_image_url(value, max_size=1536):
@@ -1365,10 +1432,10 @@ async def upload_image_for_apimart(client, provider, ref_url: str) -> str:
                    (rj.get("file") or {}).get("url") or "")
             if url:
                 return url
-        print(f"APIMart 文件上传失败 ({resp.status_code})，降级使用原路径: {resp.text[:200]}")
+        logger.error(f"APIMart 文件上传失败 ({resp.status_code})，降级使用原路径: {resp.text[:200]}")
         return ref_url
     except Exception as e:
-        print(f"APIMart 文件上传异常，降级使用原路径: {e}")
+        logger.error(f"APIMart 文件上传异常，降级使用原路径: {e}")
         return ref_url
 
 async def save_ai_image_to_output(image_data, prefix="online_", category="output"):
@@ -1397,7 +1464,7 @@ async def save_ai_image_to_output(image_data, prefix="online_", category="output
                 f.write(response.content)
             return output_url_for(filename, category)
     except Exception as e:
-        print(f"保存上游图片失败: {e}")
+        logger.error(f"保存上游图片失败: {e}")
         return value
 
 async def save_remote_video_to_output(url, prefix="video_", category="output"):
@@ -1427,7 +1494,7 @@ async def save_remote_video_to_output(url, prefix="video_", category="output"):
                 f.write(response.content)
             return output_url_for(filename, category)
     except Exception as e:
-        print(f"保存上游视频失败: {e}")
+        logger.error(f"保存上游视频失败: {e}")
         return url
 
 def parse_size_pair(size):
@@ -1631,7 +1698,7 @@ async def generate_ai_image(prompt, size, quality, model, reference_images=None,
                     fh.close()
             # 2) edits 失败 → 回退到 /images/generations + JSON image:[urls/base64]（grsai 风格）
             if response is None:
-                print(f"/images/edits failed ({edit_failed_status}): {edit_failed_text[:200]} → 回退到 /images/generations + image:[] JSON")
+                logger.error(f"/images/edits failed ({edit_failed_status}): {edit_failed_text[:200]} → 回退到 /images/generations + image:[] JSON")
                 image_payload = [reference_to_data_url(ref, max_size=1536) for ref in image_refs[:4]]
                 body = {
                     "model": model, "prompt": prompt, "size": size,
@@ -1677,7 +1744,7 @@ async def index():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 @app.get("/api/view")
-def view_image(filename: str, type: str = "input", subfolder: str = ""):
+async def view_image(filename: str, type: str = "input", subfolder: str = ""):
     SAFE_NAME_RE = re.compile(r'^[a-zA-Z0-9_\-.\s\(\)]+$')
     if not filename or not SAFE_NAME_RE.match(filename):
         raise HTTPException(status_code=400, detail="Invalid filename")
@@ -1685,16 +1752,21 @@ def view_image(filename: str, type: str = "input", subfolder: str = ""):
         raise HTTPException(status_code=400, detail="Invalid type")
     if subfolder and not SAFE_NAME_RE.match(subfolder):
         raise HTTPException(status_code=400, detail="Invalid subfolder")
-    # 先按原逻辑去各 ComfyUI 后端找
-    for addr in COMFYUI_INSTANCES:
-        try:
-            url = f"http://{addr}/view"
-            params = {"filename": filename, "type": type, "subfolder": subfolder}
-            r = requests.get(url, params=params, timeout=1)
-            if r.status_code == 200:
-                return Response(content=r.content, media_type=r.headers.get('Content-Type'))
-        except Exception:
-            continue
+    client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=2)
+    own_client = GLOBAL_HTTP_CLIENT is None
+    try:
+        for addr in COMFYUI_INSTANCES:
+            try:
+                url = f"http://{addr}/view"
+                params = {"filename": filename, "type": type, "subfolder": subfolder}
+                r = await client.get(url, params=params, timeout=1)
+                if r.status_code == 200:
+                    return Response(content=r.content, media_type=r.headers.get('Content-Type'))
+            except Exception:
+                continue
+    finally:
+        if own_client:
+            await client.aclose()
     # 后端都拿不到时回退本地 assets/<input|output>/
     # 适用场景：画布通过 /api/ai/upload 把参考图直接落到本地 assets/input/，
     # 但 ComfyUI 的 input 可能因为重启/清理而丢失，导致 enhance/klein 等页面预览对比图 404
@@ -1725,18 +1797,24 @@ async def upload_image(files: List[UploadFile] = File(...)):
             raise HTTPException(status_code=413, detail=f"File too large (max {MAX_UPLOAD_SIZE_MB}MB)")
         files_content.append((file, content))
 
-    for file, content in files_content:
-        success_count = 0
-        last_result = None
-        for addr in COMFYUI_INSTANCES:
-            try:
-                files_data = {'image': (file.filename, content, file.content_type)}
-                response = requests.post(f"http://{addr}/upload/image", files=files_data, timeout=5)
-                if response.status_code == 200:
-                    last_result = response.json()
-                    success_count += 1
-            except Exception as e:
-                print(f"Upload error for {addr}: {e}")
+    client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=10)
+    own_client = GLOBAL_HTTP_CLIENT is None
+    try:
+        for file, content in files_content:
+            success_count = 0
+            last_result = None
+            for addr in COMFYUI_INSTANCES:
+                try:
+                    files_data = {'image': (file.filename, content, file.content_type)}
+                    response = await client.post(f"http://{addr}/upload/image", files=files_data, timeout=5)
+                    if response.status_code == 200:
+                        last_result = response.json()
+                        success_count += 1
+                except Exception as e:
+                    logger.warning("Upload error for %s: %s", addr, e)
+    finally:
+        if own_client:
+            await client.aclose()
 
         if success_count > 0 and last_result:
             uploaded_files.append({"comfy_name": last_result.get("name", file.filename)})
@@ -2019,8 +2097,7 @@ async def build_online_image_result(payload: OnlineImageRequest):
         "raw_usage": raw.get("usage") if isinstance(raw, dict) else None,
     }
     save_to_history(result)
-    if GLOBAL_LOOP:
-        asyncio.run_coroutine_threadsafe(manager.broadcast_new_image(result), GLOBAL_LOOP)
+    await manager.broadcast_new_image(result)
     return result
 
 @app.post("/api/online-image")
@@ -2326,7 +2403,7 @@ async def canvas_llm(payload: CanvasLLMRequest):
                 continue
             content_parts.append({"type": "image_url", "image_url": {"url": ref_url}})
             ok_imgs += 1
-        print(f"[canvas-llm] model={model} provider={payload.provider} text_len={len(payload.message)} images={ok_imgs}/{len(payload.images)}")
+        logger.info(f"[canvas-llm] model={model} provider={payload.provider} text_len={len(payload.message)} images={ok_imgs}/{len(payload.images)}")
         upstream_messages.append({"role": "user", "content": content_parts})
     else:
         upstream_messages.append({"role": "user", "content": payload.message})
@@ -2655,13 +2732,13 @@ async def get_history_api(type: str = None):
                 data.sort(key=sort_key, reverse=True)
                 return data
         except Exception as e:
-            print(f"读取历史文件失败: {e}")
+            logger.error(f"读取历史文件失败: {e}")
             return []
     return []
 
 @app.get("/api/queue_status")
 async def get_queue_status(client_id: str):
-    with QUEUE_LOCK:
+    async with QUEUE_LOCK:
         total = len(QUEUE)
         positions = [i + 1 for i, t in enumerate(QUEUE) if t["client_id"] == client_id]
         position = positions[0] if positions else 0
@@ -2670,7 +2747,7 @@ async def get_queue_status(client_id: str):
 @app.post("/api/history/delete")
 async def delete_history(req: DeleteHistoryRequest):
     if not os.path.exists(HISTORY_FILE):
-        return {"success": False, "message": "History file not found"}
+        raise HTTPException(status_code=404, detail="历史记录文件不存在")
     try:
         with HISTORY_LOCK:
             with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
@@ -2689,24 +2766,29 @@ async def delete_history(req: DeleteHistoryRequest):
                     target_record = item
                 else:
                     new_history.append(item)
-            if target_record:
-                with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
-                    json.dump(new_history, f, ensure_ascii=False, indent=4)
+            if not target_record:
+                raise HTTPException(status_code=404, detail="未找到匹配的历史记录")
+            with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
+                json.dump(new_history, f, ensure_ascii=False, indent=4)
 
-        if target_record:
-            for img_url in target_record.get("images", []):
-                file_path = output_file_from_url(img_url)
-                if file_path and os.path.exists(file_path):
-                    try:
-                        os.remove(file_path)
-                    except Exception as e:
-                        print(f"Failed to delete file {file_path}: {e}")
-            return {"success": True}
-        else:
-            return {"success": False, "message": "Record not found"}
+        failed_files = []
+        for img_url in target_record.get("images", []):
+            file_path = output_file_from_url(img_url)
+            if file_path and os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    logger.error("Failed to delete file %s: %s", file_path, e)
+                    failed_files.append(file_path)
+        result = {"ok": True}
+        if failed_files:
+            result["warnings"] = f"{len(failed_files)} 个文件删除失败"
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Delete history error: {e}")
-        return {"success": False, "message": str(e)}
+        logger.error("Delete history error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- ModelScope 角度控制 ---
 
@@ -2723,7 +2805,7 @@ async def poll_angle_cloud(req: CloudPollRequest):
         "X-ModelScope-Async-Mode": "true"
     }
     task_id = req.task_id
-    print(f"Resuming polling for Angle Task: {task_id}")
+    logger.info(f"Resuming polling for Angle Task: {task_id}")
 
     try:
         async with httpx.AsyncClient(timeout=30) as client:
@@ -2763,7 +2845,7 @@ async def poll_angle_cloud(req: CloudPollRequest):
                     elif status == "FAILED":
                         if req.client_id:
                             await manager.send_personal_message({"type": "cloud_status", "status": "FAILED", "task_id": task_id}, req.client_id)
-                        raise Exception(f"ModelScope task failed: {data}")
+                        raise HTTPException(status_code=502, detail=f"ModelScope task failed: {data}")
 
                     if i % 5 == 0 and req.client_id:
                         await manager.send_personal_message({
@@ -2772,16 +2854,18 @@ async def poll_angle_cloud(req: CloudPollRequest):
                         }, req.client_id)
 
                 except Exception as loop_e:
-                    print(f"Angle polling error: {loop_e}")
+                    logger.warning("Angle polling error: %s", loop_e)
                     continue
 
             if req.client_id:
                 await manager.send_personal_message({"type": "cloud_status", "status": "TIMEOUT", "task_id": task_id}, req.client_id)
-            return {"status": "timeout", "task_id": task_id, "message": "Task still pending"}
+            raise HTTPException(status_code=504, detail="角度控制任务超时")
 
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"Angle polling error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Angle polling error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/angle/generate")
 async def generate_angle_cloud(req: CloudGenRequest):
@@ -2817,7 +2901,7 @@ async def generate_angle_cloud(req: CloudGenRequest):
                 raise HTTPException(status_code=submit_res.status_code, detail=detail)
 
             task_id = submit_res.json().get("task_id")
-            print(f"Angle Task submitted, ID: {task_id}")
+            logger.info(f"Angle Task submitted, ID: {task_id}")
 
             for i in range(300):
                 await asyncio.sleep(2)
@@ -2850,14 +2934,13 @@ async def generate_angle_cloud(req: CloudGenRequest):
                         save_to_history(record)
                         if req.client_id:
                             await manager.send_personal_message({"type": "cloud_status", "status": "SUCCEED", "task_id": task_id}, req.client_id)
-                        if GLOBAL_LOOP:
-                            asyncio.run_coroutine_threadsafe(manager.broadcast_new_image(record), GLOBAL_LOOP)
+                        await manager.broadcast_new_image(record)
                         return {"url": local_path, "task_id": task_id}
 
                     elif status == "FAILED":
                         if req.client_id:
                             await manager.send_personal_message({"type": "cloud_status", "status": "FAILED", "task_id": task_id}, req.client_id)
-                        raise Exception(f"ModelScope task failed: {data}")
+                        raise HTTPException(status_code=502, detail=f"ModelScope task failed: {data}")
 
                     if i % 5 == 0 and req.client_id:
                         await manager.send_personal_message({
@@ -2866,18 +2949,18 @@ async def generate_angle_cloud(req: CloudGenRequest):
                         }, req.client_id)
 
                 except Exception as loop_e:
-                    print(f"Angle polling error: {loop_e}")
+                    logger.warning("Angle polling error: %s", loop_e)
                     continue
 
             if req.client_id:
                 await manager.send_personal_message({"type": "cloud_status", "status": "TIMEOUT", "task_id": task_id}, req.client_id)
-            return {"status": "timeout", "task_id": task_id, "message": "Task still pending"}
+            raise HTTPException(status_code=504, detail="角度控制生成超时")
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Angle generation error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Angle generation error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- ModelScope Z-Image 云端生图 ---
 
@@ -2916,7 +2999,7 @@ async def generate_cloud(req: CloudGenRequest):
                 raise HTTPException(status_code=submit_res.status_code, detail=detail)
 
             task_id = submit_res.json().get("task_id")
-            print(f"Z-Image Task submitted, ID: {task_id}")
+            logger.info(f"Z-Image Task submitted, ID: {task_id}")
 
             for i in range(200):
                 await asyncio.sleep(3)
@@ -2929,7 +3012,7 @@ async def generate_cloud(req: CloudGenRequest):
                     status = data.get("task_status")
 
                     if i % 5 == 0:
-                        print(f"Task {task_id} status check {i}: {status}")
+                        logger.info(f"Task {task_id} status check {i}: {status}")
 
                     if status == "SUCCEED":
                         img_url = data["output_images"][0]
@@ -2946,7 +3029,7 @@ async def generate_cloud(req: CloudGenRequest):
                                 else:
                                     local_path = img_url
                         except Exception as dl_e:
-                            print(f"Download error: {dl_e}")
+                            logger.error(f"Download error: {dl_e}")
                             local_path = img_url
 
                         record = {"timestamp": time.time(), "prompt": req.prompt, "images": [local_path], "type": "cloud"}
@@ -2958,19 +3041,21 @@ async def generate_cloud(req: CloudGenRequest):
                         return {"url": local_path}
 
                     elif status == "FAILED":
-                        raise Exception(f"ModelScope task failed: {data}")
+                        raise HTTPException(status_code=502, detail=f"ModelScope task failed: {data}")
 
+                except HTTPException:
+                    raise
                 except Exception as loop_e:
-                    print(f"Polling error (retrying): {loop_e}")
+                    logger.warning("Polling error (retrying): %s", loop_e)
                     continue
 
-            raise Exception("Cloud generation timeout")
+            raise HTTPException(status_code=504, detail="Z-Image 云端生图超时")
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Cloud generation error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Cloud generation error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- ModelScope 通用图片生成（支持图生图） ---
 
@@ -3016,7 +3101,7 @@ async def ms_generate(req: MsGenerateRequest):
                 raise HTTPException(status_code=submit_res.status_code, detail=detail)
 
             task_id = submit_res.json().get("task_id")
-            print(f"MS Generate Task submitted ({req.model}), ID: {task_id}")
+            logger.info(f"MS Generate Task submitted ({req.model}), ID: {task_id}")
 
             TERMINAL_FAILED_STATUSES = {"FAILED", "FAIL", "ERROR", "CANCELED", "CANCELLED", "TIMEOUT", "REVOKED"}
 
@@ -3029,7 +3114,7 @@ async def ms_generate(req: MsGenerateRequest):
                     )
                     data = result.json()
                     status = data.get("task_status")
-                    print(f"MS Task {task_id} poll {i}: status={status}")
+                    logger.info(f"MS Task {task_id} poll {i}: status={status}")
 
                     if status == "SUCCEED":
                         img_url = data["output_images"][0]
@@ -3056,8 +3141,7 @@ async def ms_generate(req: MsGenerateRequest):
                             "model": req.model,
                         }
                         save_to_history(record)
-                        if GLOBAL_LOOP:
-                            asyncio.run_coroutine_threadsafe(manager.broadcast_new_image(record), GLOBAL_LOOP)
+                        await manager.broadcast_new_image(record)
                         return {"url": local_path, "task_id": task_id}
 
                     elif status in TERMINAL_FAILED_STATUSES:
@@ -3067,7 +3151,7 @@ async def ms_generate(req: MsGenerateRequest):
                 except HTTPException:
                     raise
                 except Exception as loop_e:
-                    print(f"MS polling error: {loop_e}")
+                    logger.warning("MS polling error: %s", loop_e)
                     continue
 
             raise HTTPException(status_code=504, detail="MS 生图超时")
@@ -3075,22 +3159,24 @@ async def ms_generate(req: MsGenerateRequest):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"MS generate error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("MS generate error: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- 本地 ComfyUI 生图 ---
 
 @app.post("/api/generate")
-def generate(req: GenerateRequest):
+async def generate(req: GenerateRequest):
     global NEXT_TASK_ID
     current_task = None
     target_backend = None
-    with QUEUE_LOCK:
+    async with QUEUE_LOCK:
         task_id = NEXT_TASK_ID
         NEXT_TASK_ID += 1
         current_task = {"task_id": task_id, "client_id": req.client_id}
         QUEUE.append(current_task)
 
+    client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=httpx.Timeout(connect=20, read=120, write=60, pool=20))
+    own_client = GLOBAL_HTTP_CLIENT is None
     try:
         required_images = []
         for node_id, node_inputs in req.params.items():
@@ -3099,7 +3185,7 @@ def generate(req: GenerateRequest):
                 if isinstance(image_name, str) and image_name:
                     required_images.append(image_name)
 
-        target_backend = get_best_backend(required_images)
+        target_backend = await get_best_backend(required_images)
         with LOAD_LOCK:
             BACKEND_LOCAL_LOAD[target_backend] += 1
 
@@ -3107,8 +3193,7 @@ def generate(req: GenerateRequest):
             need_sync = False
             try:
                 check_url = f"http://{target_backend}/view?filename={urllib.parse.quote(image_name)}&type=input"
-                resp = requests.get(check_url, stream=True, timeout=0.5)
-                resp.close()
+                resp = await client.get(check_url, timeout=0.5)
                 if resp.status_code != 200:
                     need_sync = True
             except Exception:
@@ -3118,22 +3203,24 @@ def generate(req: GenerateRequest):
                 image_content = None
                 image_type = "image/png"
                 for addr in COMFYUI_INSTANCES:
-                    if addr == target_backend: continue
+                    if addr == target_backend:
+                        continue
                     try:
                         src_url = f"http://{addr}/view?filename={urllib.parse.quote(image_name)}&type=input"
-                        r = requests.get(src_url, timeout=5)
+                        r = await client.get(src_url, timeout=5)
                         if r.status_code == 200:
                             image_content = r.content
                             image_type = r.headers.get("Content-Type", "image/png")
                             break
-                    except Exception: continue
+                    except Exception:
+                        continue
 
                 if image_content:
                     try:
                         files = {'image': (image_name, image_content, image_type)}
-                        requests.post(f"http://{target_backend}/upload/image", files=files, timeout=10)
+                        await client.post(f"http://{target_backend}/upload/image", files=files, timeout=10)
                     except Exception as e:
-                        print(f"Sync upload failed: {e}")
+                        logger.warning("Sync upload failed: %s", e)
 
         wf_name = req.workflow_json
         if not WORKFLOW_NAME_RE.match(wf_name):
@@ -3145,7 +3232,7 @@ def generate(req: GenerateRequest):
         if not os.path.exists(workflow_path) and req.workflow_json == "Z-Image.json":
             workflow_path = WORKFLOW_PATH
         if not os.path.exists(workflow_path):
-            raise Exception(f"Workflow file not found: {req.workflow_json}")
+            raise HTTPException(status_code=404, detail=f"Workflow file not found: {req.workflow_json}")
 
         with open(workflow_path, 'r', encoding='utf-8') as f:
             workflow = json.load(f)
@@ -3179,27 +3266,26 @@ def generate(req: GenerateRequest):
                     workflow[node_id]["inputs"][input_name] = value
 
         p = {"prompt": workflow, "client_id": CLIENT_ID}
-        data = json.dumps(p).encode('utf-8')
         try:
-            post_req = urllib.request.Request(f"http://{target_backend}/prompt", data=data)
-            prompt_id = json.loads(urllib.request.urlopen(post_req, timeout=10).read())['prompt_id']
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8')
-            raise Exception(f"HTTP Error {e.code}: {error_body}")
+            resp = await client.post(f"http://{target_backend}/prompt", json=p, timeout=10)
+            resp.raise_for_status()
+            prompt_id = resp.json()['prompt_id']
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(status_code=502, detail=f"ComfyUI /prompt error {e.response.status_code}: {e.response.text[:300]}")
 
         history_data = None
         for i in range(COMFYUI_HISTORY_TIMEOUT):
             try:
-                res = get_comfy_history(target_backend, prompt_id)
+                res = await get_comfy_history(target_backend, prompt_id)
                 if prompt_id in res:
                     history_data = res[prompt_id]
                     break
             except Exception:
                 pass
-            time.sleep(1)
+            await asyncio.sleep(1)
 
         if not history_data:
-            raise Exception("ComfyUI 渲染超时")
+            raise HTTPException(status_code=504, detail="ComfyUI 渲染超时")
 
         local_images = []
         local_videos = []
@@ -3211,7 +3297,7 @@ def generate(req: GenerateRequest):
                 if 'images' in node_output:
                     for img in node_output['images']:
                         prefix = f"{req.type}_{int(current_timestamp)}_"
-                        local_path = download_comfy_output(target_backend, img, prefix=prefix)
+                        local_path = await download_comfy_output(target_backend, img, prefix=prefix)
                         if req.convert_to_jpg:
                             local_path = convert_output_to_jpg(local_path)
                         local_images.append(local_path)
@@ -3221,7 +3307,7 @@ def generate(req: GenerateRequest):
                         if not isinstance(video, dict) or not video.get("filename"):
                             continue
                         prefix = f"{req.type}_{int(current_timestamp)}_"
-                        local_path = download_comfy_output(target_backend, video, prefix=prefix)
+                        local_path = await download_comfy_output(target_backend, video, prefix=prefix)
                         local_videos.append(local_path)
                         local_urls.append(local_path)
 
@@ -3237,25 +3323,26 @@ def generate(req: GenerateRequest):
             "task_id": task_id,
             "prompt_id": prompt_id,
             "backend": target_backend,
-            "params": req.params
+            "params": req.params,
         }
         save_to_history(result)
-        if GLOBAL_LOOP:
-            asyncio.run_coroutine_threadsafe(manager.broadcast_new_image(result), GLOBAL_LOOP)
+        await manager.broadcast_new_image(result)
         return result
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Generate error: {e}")
+        logger.error("Generate error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
     finally:
+        if own_client:
+            await client.aclose()
         if target_backend:
             with LOAD_LOCK:
                 if BACKEND_LOCAL_LOAD.get(target_backend, 0) > 0:
                     BACKEND_LOCAL_LOAD[target_backend] -= 1
         if current_task:
-            with QUEUE_LOCK:
+            async with QUEUE_LOCK:
                 if current_task in QUEUE:
                     QUEUE.remove(current_task)
 
@@ -3450,7 +3537,7 @@ def delete_workflow(name: str):
     return {"ok": True}
 
 @app.post("/api/workflows/{name:path}/run")
-def run_workflow(name: str, payload: WorkflowRunRequest):
+async def run_workflow(name: str, payload: WorkflowRunRequest):
     if not WORKFLOW_NAME_RE.match(name):
         raise HTTPException(status_code=400, detail="Invalid workflow name")
     if not os.path.exists(workflow_path_from_name(name)):
@@ -3489,7 +3576,7 @@ def run_workflow(name: str, payload: WorkflowRunRequest):
         type="workflow-test",
         client_id=payload.client_id or str(uuid.uuid4()),
     )
-    return generate(req)
+    return await generate(req)
 
 if __name__ == "__main__":
     import uvicorn
