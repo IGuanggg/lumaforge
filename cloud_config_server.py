@@ -26,6 +26,7 @@ DB_PATH = os.getenv("CLOUD_CONFIG_DB", os.path.join(DATA_DIR, "cloud_config.db")
 TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_TOKEN_TTL_SECONDS", str(30 * 24 * 60 * 60)))
 RESET_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_RESET_TOKEN_TTL_SECONDS", str(30 * 60)))
 EMAIL_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_EMAIL_TOKEN_TTL_SECONDS", str(24 * 60 * 60)))
+CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "1.0.1").strip() or "1.0.1"
 CLOUD_PUBLIC_URL = os.getenv("CLOUD_PUBLIC_URL", "").strip().rstrip("/")
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
@@ -636,6 +637,7 @@ def public_config_status() -> dict:
     public_url = setting_value("cloud_public_url").strip().rstrip("/")
     dev_mode = setting_bool("cloud_email_dev_mode", EMAIL_DEV_MODE)
     return {
+        "version": CLOUD_APP_VERSION,
         "database": "已挂载" if DB_PATH else "未配置",
         "smtp": "已配置" if smtp_host else "未配置",
         "smtp_configured": bool(smtp_host),
@@ -1257,6 +1259,7 @@ def render_dashboard_html() -> str:
           {pill("SMTP " + status["smtp"], smtp_tone)}
           {pill("Public URL " + status["public_url"], url_tone)}
           {pill("Dev Mode " + status["dev_mode"], dev_tone)}
+          {pill("v" + status["version"], "ok")}
         </div>
       </header>
 
@@ -1466,7 +1469,7 @@ def render_admin_console_html(admin: dict) -> str:
       <div class="wrap">
         <header class="topbar">
           <div class="brand"><div class="logo">IC</div><div><h1>Infinite Canvas Cloud</h1><div class="sub">当前管理员：{html.escape(admin["username"])}</div></div></div>
-          <div>{pill("服务在线","ok")} {pill("SMTP " + status["smtp"], "ok" if status["smtp_configured"] else "warn")} {pill("Dev Mode " + status["dev_mode"], "warn" if status["dev_mode_enabled"] else "ok")}</div>
+          <div>{pill("服务在线","ok")} {pill("SMTP " + status["smtp"], "ok" if status["smtp_configured"] else "warn")} {pill("Dev Mode " + status["dev_mode"], "warn" if status["dev_mode_enabled"] else "ok")} {pill("v" + status["version"], "ok")}</div>
         </header>
 
         <section id="tab-overview" class="section active">
@@ -2409,7 +2412,12 @@ def current_user(authorization: str = Header(default="")):
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": CLOUD_APP_VERSION}
+
+
+@app.get("/version")
+def version():
+    return {"name": "infinite-canvas-cloud", "version": CLOUD_APP_VERSION}
 
 
 @app.get("/api/me")
