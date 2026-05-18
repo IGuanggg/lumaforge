@@ -1340,12 +1340,12 @@ def render_admin_login_html() -> str:
           <div class="sub">登录后管理云端部署状态</div>
         </div>
       </div>
-      <label>管理员账号<input id="username" autocomplete="username" value="admin"></label>
-      <label>管理员密码<input id="password" type="password" autocomplete="current-password" placeholder="admin"></label>
+      <label>管理员账号<input id="username" autocomplete="username" placeholder="请输入账号"></label>
+      <label>管理员密码<input id="password" type="password" autocomplete="current-password" placeholder="请输入密码"></label>
       <div class="actions">
         <button class="primary" type="button" onclick="login()">登录</button>
       </div>
-      <div class="note">首次部署默认账号密码为 admin / admin，登录后请立即修改。</div>
+      <div class="note">请使用管理员账号登录。首次部署请先通过环境变量设置管理员密码。</div>
       <div id="status" class="status"></div>
     </section>
   </main>
