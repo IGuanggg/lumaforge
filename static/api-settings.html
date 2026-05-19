@@ -17,7 +17,7 @@
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="/static/theme.js?v=20260516-theme-sync"></script>
+    <script src="/static/theme.js?v=20260518-theme-sync2"></script>
     <script src="/static/i18n.js?v=20260515-image-editor-i18n"></script>
     <link rel="stylesheet" href="/static/theme.css?v=20260514-api-lora-i18n">
     <style>
@@ -243,6 +243,12 @@
         .ms-hint .ms-line { display:block; }
         .ms-hint .inline-code { display:inline-flex; align-items:center; min-height:20px; padding:0 7px; border-radius:6px; background:var(--panel); color:var(--text); border:1px solid var(--line); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:11px; font-weight:700; vertical-align:middle; }
         .empty { padding:18px; border:1px dashed var(--line); border-radius:11px; color:var(--faint); text-align:center; font-size:11.5px; font-weight:700; }
+        .cloud-panel { display:none; flex-direction:column; gap:14px; }
+        .cloud-grid { display:grid; grid-template-columns:1.2fr 1fr 1fr; gap:10px; }
+        .cloud-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+        .cloud-status { color:var(--muted); font-size:11.5px; line-height:1.55; font-weight:700; min-height:18px; }
+        .cloud-status strong { color:var(--text); }
+        .cloud-note { color:var(--faint); font-size:11px; line-height:1.55; font-weight:650; }
         @media (max-width:860px) { .page{padding:24px 16px 60px}.layout{grid-template-columns:1fr;gap:28px}.sidebar{position:static}.form,.model-grid{grid-template-columns:1fr}.models-toolbar{align-items:flex-start;flex-direction:column}.models-toolbar-actions{width:100%;justify-content:flex-end}.lora-row{grid-template-columns:1fr}.lora-row .icon-btn{width:100%;} }
     </style>
 </head>
@@ -262,7 +268,7 @@
                     <div class="side-section-title" data-i18n="api.providersTitle">平台列表</div>
                     <div id="providerList" class="provider-list"></div>
                     <button class="add-btn" type="button" onclick="addProvider()"><i data-lucide="plus" class="w-4 h-4"></i><span data-i18n="api.addProvider">新增平台</span></button>
-                    <a class="api-link-btn" href="https://apimart.ai/register?aff=1uyAbb" target="_blank" rel="noopener noreferrer"><i data-lucide="key-round" class="w-4 h-4"></i><span data-i18n="api.getApi">获取API</span></a>
+                    <a class="api-link-btn" href="https://apimart.ai/zh/register" target="_blank" rel="noopener noreferrer"><i data-lucide="key-round" class="w-4 h-4"></i><span data-i18n="api.getApi">获取API</span></a>
                 </aside>
 
                 <main class="content">
@@ -464,6 +470,11 @@
         function refreshIcons(){ if(window.lucide) lucide.createIcons(); }
         function tr(key){ return window.StudioI18n ? window.StudioI18n.t(key) : key; }
         function setStatus(text){ statusEl.textContent = text || ''; }
+        async function jsonOrError(res, fallback){
+            const data = await res.json().catch(() => ({}));
+            if(!res.ok) throw new Error(data.detail || fallback || '请求失败');
+            return data;
+        }
         function normalizeId(value){
             return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/^-+|-+$/g, '').replace(/-+/g, '-').slice(0, 40);
         }
@@ -977,7 +988,7 @@
             });
             if(new Set(providers.map(item => item.id)).size !== providers.length){
                 alert(tr('api.duplicateId'));
-                return;
+                return false;
             }
             setStatus(tr('api.saving'));
             try {
@@ -1007,8 +1018,10 @@
                 setStatus(tr('api.saved'));
                 // 广播变更，画布等其他 iframe 立即重新拉取最新平台/模型列表
                 try { new BroadcastChannel('studio-api').postMessage({ type:'providers-changed' }); } catch(e) {}
+                return true;
             } catch(err) {
                 setStatus(err.message || tr('api.saveFailed'));
+                return false;
             }
         }
         function escapeHtml(str){

@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>应用设置</title>
+    <script>
+        (function(){
+            try {
+                var theme = localStorage.getItem('studio_theme') || localStorage.getItem('canvas_theme') || 'light';
+                if(theme === 'dark') {
+                    document.documentElement.classList.add('studio-theme-dark');
+                    document.documentElement.classList.add('theme-dark');
+                }
+            } catch(e) {}
+        })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/static/theme.js?v=20260518-theme-sync2"></script>
+    <script src="/static/i18n.js?v=20260518-app-settings1"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260519-app-settings-ui">
+    <style>
+        :root {
+            --bg:#f7f8fa;
+            --panel:#fff;
+            --soft:#f1f4f8;
+            --line:#e8ecf2;
+            --line-strong:#dbe1ea;
+            --text:#0f172a;
+            --muted:#64748b;
+            --faint:#94a3b8;
+            --accent:#0f172a;
+            --danger:#dc2626;
+        }
+        body.studio-theme-dark,
+        html.studio-theme-dark body {
+            --bg:#0e1014;
+            --panel:#1c1e26;
+            --soft:#272a33;
+            --line:#323540;
+            --line-strong:#3f424d;
+            --text:#e8e8ea;
+            --muted:#a4adbf;
+            --faint:#7a8497;
+            --accent:#f5f6f8;
+            --danger:#fca5a5;
+        }
+        * { box-sizing:border-box; }
+        html { min-height:100%; overflow-y:auto; overscroll-behavior:auto; }
+        body {
+            margin:0;
+            min-height:100vh;
+            overflow-y:auto;
+            background:var(--bg);
+            color:var(--text);
+            font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+            -webkit-font-smoothing:antialiased;
+        }
+        button { font-family:inherit; cursor:pointer; border:0; background:transparent; color:inherit; }
+        .page { min-height:100vh; padding:40px 32px 80px; }
+        .wrap { max-width:1100px; margin:0 auto; }
+        .page-head {
+            padding:0 4px 28px;
+            display:flex;
+            justify-content:space-between;
+            align-items:end;
+            gap:24px;
+            flex-wrap:wrap;
+        }
+        .title { font-size:26px; line-height:1.05; font-weight:900; letter-spacing:0; }
+        .sub { margin-top:8px; color:var(--muted); font-size:12.5px; line-height:1.55; font-weight:600; max-width:600px; }
+        .version-pill {
+            height:36px;
+            padding:0 13px;
+            border:1px solid var(--line);
+            border-radius:10px;
+            background:var(--panel);
+            color:var(--muted);
+            display:inline-flex;
+            align-items:center;
+            gap:7px;
+            font-size:12px;
+            font-weight:850;
+            white-space:nowrap;
+        }
+        .layout { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr); gap:20px; align-items:start; }
+        .content { display:flex; flex-direction:column; gap:20px; min-width:0; }
+        .block {
+            display:flex;
+            flex-direction:column;
+            gap:14px;
+            padding:22px 24px;
+            background:var(--panel);
+            border:1px solid var(--line);
+            border-radius:16px;
+        }
+        .block-head {
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:12px;
+            flex-wrap:wrap;
+            padding-bottom:14px;
+            border-bottom:1px solid var(--line);
+            margin-bottom:2px;
+        }
+        .block-title { font-size:12px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:var(--text); }
+        .block-desc { color:var(--muted); font-size:11.5px; line-height:1.55; font-weight:600; margin-top:4px; max-width:560px; }
+        .path-list { display:flex; flex-direction:column; gap:8px; }
+        .path-row {
+            display:grid;
+            grid-template-columns:150px minmax(0,1fr) auto;
+            gap:10px;
+            align-items:center;
+            padding:10px;
+            border:1px solid var(--line);
+            border-radius:12px;
+            background:var(--panel);
+        }
+        body.studio-theme-dark .path-row,
+        html.studio-theme-dark body .path-row { background:var(--soft); border-color:var(--line-strong); }
+        .path-main { min-width:0; display:flex; align-items:center; gap:10px; }
+        .path-icon {
+            width:34px;
+            height:34px;
+            border-radius:10px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            flex:0 0 auto;
+            background:var(--soft);
+            color:var(--muted);
+        }
+        body.studio-theme-dark .path-icon,
+        html.studio-theme-dark body .path-icon { background:var(--panel); color:var(--muted); }
+        .path-title { font-size:12.5px; font-weight:900; color:var(--text); }
+        .path-note { margin-top:2px; font-size:10.5px; color:var(--faint); font-weight:700; line-height:1.4; }
+        .path-value {
+            min-width:0;
+            height:38px;
+            display:flex;
+            align-items:center;
+            padding:0 12px;
+            border:1px solid var(--line);
+            border-radius:10px;
+            background:var(--soft);
+            color:var(--text);
+            font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+            font-size:11.5px;
+            font-weight:650;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+        }
+        body.studio-theme-dark .path-value,
+        html.studio-theme-dark body .path-value { background:var(--panel); border-color:var(--line-strong); }
+        .path-actions { display:flex; align-items:center; gap:8px; justify-content:flex-end; }
+        .action-btn {
+            height:36px;
+            padding:0 12px;
+            border-radius:10px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:6px;
+            border:1px solid var(--line);
+            background:var(--panel);
+            color:var(--muted);
+            font-size:12px;
+            font-weight:800;
+            transition:all .15s ease;
+            white-space:nowrap;
+        }
+        .action-btn:hover { color:var(--text); border-color:var(--text); transform:translateY(-1px); }
+        .action-btn.primary { background:var(--accent); border-color:var(--accent); color:var(--bg); }
+        .action-btn.primary:hover { color:var(--bg); box-shadow:0 8px 18px rgba(15,23,42,.16); }
+        .action-btn.danger { color:var(--danger); border-color:rgba(220,38,38,.25); }
+        .action-btn:disabled { opacity:.42; cursor:not-allowed; transform:none; box-shadow:none; }
+        body.studio-theme-dark .action-btn,
+        html.studio-theme-dark body .action-btn { background:var(--soft); border-color:var(--line-strong); }
+        body.studio-theme-dark .action-btn.primary,
+        html.studio-theme-dark body .action-btn.primary { background:#f5f6f8; border-color:#f5f6f8; color:#0e1014; }
+        .kv-list { display:flex; flex-direction:column; gap:2px; }
+        .kv { display:grid; grid-template-columns:110px minmax(0,1fr); gap:12px; padding:10px 0; border-bottom:1px solid var(--line); }
+        .kv:last-child { border-bottom:0; }
+        .kv span:first-child { color:var(--muted); font-size:11.5px; font-weight:850; }
+        .kv span:last-child { min-width:0; color:var(--text); font-size:12px; font-weight:850; text-align:right; word-break:break-word; }
+        .setting-field { display:flex; flex-direction:column; gap:7px; }
+        .setting-label { color:var(--muted); font-size:11.5px; font-weight:900; }
+        .setting-input {
+            width:100%;
+            height:40px;
+            border:1px solid var(--line);
+            border-radius:10px;
+            background:var(--soft);
+            color:var(--text);
+            outline:none;
+            padding:0 12px;
+            font-size:12px;
+            font-weight:750;
+        }
+        .setting-input:focus { border-color:var(--text); background:var(--panel); }
+        body.studio-theme-dark .setting-input,
+        html.studio-theme-dark body .setting-input { background:var(--panel); border-color:var(--line-strong); }
+        .update-result {
+            display:none;
+            padding:12px 14px;
+            border-radius:12px;
+            border:1px solid var(--line);
+            background:var(--soft);
+            color:var(--text);
+            font-size:12px;
+            line-height:1.55;
+            font-weight:700;
+        }
+        .update-result.show { display:block; }
+        .update-result-title { font-size:13px; font-weight:950; margin-bottom:4px; }
+        .update-result-meta { color:var(--muted); word-break:break-word; }
+        .update-result-notes { margin-top:8px; max-height:120px; overflow:auto; color:var(--muted); white-space:pre-wrap; }
+        .update-result a { color:#2563eb; font-weight:900; text-decoration:underline; text-underline-offset:3px; }
+        .status {
+            min-height:20px;
+            color:var(--muted);
+            font-size:12px;
+            font-weight:750;
+            line-height:1.55;
+        }
+        .status.ok { color:#059669; }
+        .status.warn { color:#b45309; }
+        .status.error { color:var(--danger); }
+        .pending-box {
+            display:none;
+            padding:12px 14px;
+            border-radius:12px;
+            border:1px solid rgba(245,158,11,.28);
+            background:rgba(245,158,11,.08);
+            color:#b45309;
+            font-size:12px;
+            font-weight:800;
+            line-height:1.55;
+        }
+        .pending-box.show { display:block; }
+        body.studio-theme-dark .pending-box,
+        html.studio-theme-dark body .pending-box { color:#fbbf24; background:rgba(245,158,11,.12); }
+        @media (max-width:980px) {
+            .page { padding:28px 18px 48px; }
+            .layout { grid-template-columns:1fr; }
+            .path-row { grid-template-columns:1fr; align-items:stretch; }
+            .path-actions { justify-content:flex-start; }
+            .kv span:last-child { text-align:left; }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <div class="wrap">
+            <header class="page-head">
+                <div>
+                    <div class="title">应用设置</div>
+                    <div class="sub">管理本地保存目录、版本信息和桌面端预留动作。目录选择会写入本地配置，浏览器端和后续 EXE 会共用这些路径。</div>
+                </div>
+                <div class="version-pill"><i data-lucide="badge-info" class="w-4 h-4"></i><span id="version-pill">Version ...</span></div>
+            </header>
+
+            <section class="layout">
+                <div class="content">
+                    <section class="block">
+                        <div class="block-head">
+                            <div>
+                                <div class="block-title">目录</div>
+                                <div class="block-desc">保存目录会生成 input / output / thumbs 子目录。日志和缓存目录可以独立指定。</div>
+                            </div>
+                        </div>
+                        <div class="pending-box" id="path-pending"></div>
+                        <div class="path-list" id="path-list"></div>
+                        <div class="status" id="path-status">正在读取目录...</div>
+                    </section>
+                </div>
+
+                <aside class="content">
+                    <section class="block">
+                        <div class="block-head">
+                            <div>
+                                <div class="block-title">版本与更新</div>
+                                <div class="block-desc">发布到 GitHub 后，可以把更新检查地址指向版本 JSON 或 Release 元数据。</div>
+                            </div>
+                        </div>
+                        <div class="kv-list">
+                            <div class="kv"><span>当前版本</span><span id="version-text">-</span></div>
+                            <div class="kv"><span>运行模式</span><span id="mode-text">-</span></div>
+                            <div class="kv"><span>云端地址</span><span id="cloud-text">-</span></div>
+                        </div>
+                        <label class="setting-field">
+                            <span class="setting-label">更新检查地址</span>
+                            <input id="update-url-input" class="setting-input" type="url" placeholder="https://example.com/version.json 或 GitHub latest release API">
+                        </label>
+                        <div class="path-actions">
+                            <button class="action-btn" id="save-update-url-btn" type="button">
+                                <i data-lucide="save" class="w-4 h-4"></i><span>保存地址</span>
+                            </button>
+                            <button class="action-btn primary" id="check-update-btn" type="button">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i><span>检查更新</span>
+                            </button>
+                        </div>
+                        <div class="update-result" id="update-result"></div>
+                        <div class="status" id="update-status">等待检查。</div>
+                    </section>
+
+                    <section class="block">
+                        <div class="block-head">
+                            <div>
+                                <div class="block-title">桌面端动作</div>
+                                <div class="block-desc">这些动作留给 EXE 容器接入。浏览器端暂不直接退出或重启系统进程。</div>
+                            </div>
+                        </div>
+                        <div class="path-actions">
+                            <button class="action-btn" type="button" disabled><i data-lucide="rotate-cw" class="w-4 h-4"></i><span>重启应用</span></button>
+                            <button class="action-btn danger" type="button" disabled><i data-lucide="power" class="w-4 h-4"></i><span>退出应用</span></button>
+                        </div>
+                        <div class="status">浏览器版先通过终端或启动脚本重启；EXE 阶段再接入原生窗口命令。</div>
+                    </section>
+                </aside>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        const PATH_ROWS = [
+            {key:'save', label:'保存目录', note:'素材库、生成输出和缩略图的根目录', icon:'folder-open', selectable:true},
+            {key:'output', label:'生成输出', note:'保存目录下的 output 子目录', icon:'image', selectable:false},
+            {key:'input', label:'导入素材', note:'保存目录下的 input 子目录', icon:'upload', selectable:false},
+            {key:'logs', label:'日志目录', note:'桌面端和后端日志保存位置', icon:'file-text', selectable:true},
+            {key:'cache', label:'缓存目录', note:'临时缓存和下载缓存位置', icon:'database', selectable:true},
+            {key:'data', label:'数据目录', note:'画布、会话、配置数据库', icon:'hard-drive', selectable:false},
+        ];
+        let appInfo = null;
+
+        async function jsonOrThrow(res) {
+            const data = await res.json().catch(() => ({}));
+            if(!res.ok) throw new Error(data.detail || data.message || `HTTP ${res.status}`);
+            return data;
+        }
+
+        function setStatus(id, message, kind='') {
+            const el = document.getElementById(id);
+            if(!el) return;
+            el.textContent = message || '';
+            el.className = `status ${kind}`.trim();
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+        }
+
+        function linkify(value) {
+            const url = String(value || '').trim();
+            if(!url) return '-';
+            return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+        }
+
+        function renderInfo(info) {
+            appInfo = info || {};
+            const paths = appInfo.paths || {};
+            document.getElementById('version-pill').textContent = `Version ${appInfo.version || '-'}`;
+            document.getElementById('version-text').textContent = appInfo.version || '-';
+            document.getElementById('mode-text').textContent = appInfo.desktop ? '桌面端' : '浏览器端';
+            document.getElementById('cloud-text').textContent = appInfo.cloud_url || '-';
+            const updateInput = document.getElementById('update-url-input');
+            if(updateInput) updateInput.value = appInfo.update_check_url || '';
+            document.getElementById('path-list').innerHTML = PATH_ROWS.map(row => {
+                const value = paths[row.key] || '-';
+                const choose = row.selectable ? `<button class="action-btn primary" type="button" onclick="selectPath('${row.key}')"><i data-lucide="folder-plus" class="w-4 h-4"></i><span>选择</span></button>` : '';
+                return `
+                    <div class="path-row">
+                        <div class="path-main">
+                            <div class="path-icon"><i data-lucide="${row.icon}" class="w-4 h-4"></i></div>
+                            <div>
+                                <div class="path-title">${escapeHtml(row.label)}</div>
+                                <div class="path-note">${escapeHtml(row.note)}</div>
+                            </div>
+                        </div>
+                        <div class="path-value" title="${escapeHtml(value)}">${escapeHtml(value)}</div>
+                        <div class="path-actions">
+                            ${choose}
+                            <button class="action-btn" type="button" onclick="openPath('${row.key}')"><i data-lucide="external-link" class="w-4 h-4"></i><span>打开</span></button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            setStatus('path-status', '目录已加载。');
+            if(window.lucide) lucide.createIcons();
+        }
+
+        async function loadInfo() {
+            try {
+                renderInfo(await fetch('/api/app/info').then(jsonOrThrow));
+            } catch(e) {
+                setStatus('path-status', e.message || String(e), 'error');
+            }
+        }
+
+        async function openPath(target) {
+            setStatus('path-status', '正在打开目录...');
+            try {
+                await fetch('/api/app/open-path', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({target})
+                }).then(jsonOrThrow);
+                setStatus('path-status', '已请求系统打开目录。', 'ok');
+            } catch(e) {
+                setStatus('path-status', e.message || String(e), 'error');
+            }
+        }
+
+        async function selectPath(target) {
+            const row = PATH_ROWS.find(item => item.key === target);
+            setStatus('path-status', `请选择${row?.label || '目录'}...`);
+            try {
+                const data = await fetch('/api/app/select-path', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({target})
+                }).then(jsonOrThrow);
+                if(data.cancelled) {
+                    setStatus('path-status', '已取消选择。', 'warn');
+                    return;
+                }
+                await loadInfo();
+                setStatus('path-status', `${row?.label || '目录'}已更新。`, 'ok');
+                showPathPending(target);
+            } catch(e) {
+                setStatus('path-status', e.message || String(e), 'error');
+            }
+        }
+
+        function showPathPending(target) {
+            const box = document.getElementById('path-pending');
+            if(!box) return;
+            if(target === 'save') {
+                box.textContent = '保存目录已立即用于新生成文件。旧文件仍保留在原目录；如果页面里已有旧图，刷新后会继续按原链接读取。';
+            } else {
+                box.textContent = '目录已写入本地配置。后续桌面端启动会沿用该路径。';
+            }
+            box.classList.add('show');
+        }
+
+        function renderUpdateResult(data) {
+            const box = document.getElementById('update-result');
+            if(!box) return;
+            if(!data?.configured) {
+                box.classList.remove('show');
+                box.innerHTML = '';
+                return;
+            }
+            const latest = data.latest_version || '-';
+            const current = data.current_version || appInfo?.version || '-';
+            const title = data.is_newer ? `发现新版本 ${latest}` : `当前已是最新版本 ${current}`;
+            box.innerHTML = `
+                <div class="update-result-title">${escapeHtml(title)}</div>
+                <div class="update-result-meta">当前：${escapeHtml(current)} · 最新：${escapeHtml(latest)}</div>
+                <div class="update-result-meta">来源：${linkify(data.source_url || appInfo?.update_check_url || '')}</div>
+                ${data.download_url ? `<div class="update-result-meta">下载：${linkify(data.download_url)}</div>` : ''}
+                ${data.notes ? `<div class="update-result-notes">${escapeHtml(data.notes)}</div>` : ''}
+            `;
+            box.classList.add('show');
+        }
+
+        async function saveUpdateSettings() {
+            const input = document.getElementById('update-url-input');
+            const url = input?.value?.trim() || '';
+            setStatus('update-status', '正在保存更新地址...');
+            try {
+                const data = await fetch('/api/app/update-settings', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({update_check_url:url})
+                }).then(jsonOrThrow);
+                appInfo = {...(appInfo || {}), update_check_url:data.update_check_url || '', update_check_configured:!!data.update_check_configured};
+                setStatus('update-status', url ? '更新地址已保存。' : '已清空更新检查地址。', 'ok');
+            } catch(e) {
+                setStatus('update-status', e.message || String(e), 'error');
+            }
+        }
+
+        async function checkUpdate() {
+            setStatus('update-status', '正在检查更新...');
+            try {
+                const data = await fetch('/api/app/update-check').then(jsonOrThrow);
+                if(!data.configured) {
+                    renderUpdateResult(data);
+                    setStatus('update-status', data.message || '未配置更新检查地址。', 'warn');
+                    return;
+                }
+                renderUpdateResult(data);
+                if(data.is_newer) {
+                    setStatus('update-status', `发现新版本 ${data.latest_version}。`, 'ok');
+                } else {
+                    setStatus('update-status', `当前已是最新版本 ${data.current_version}。`, 'ok');
+                }
+            } catch(e) {
+                setStatus('update-status', e.message || String(e), 'error');
+            }
+        }
+
+        window.addEventListener('message', event => {
+            if(event.data?.type === 'theme') applyTheme(event.data.theme);
+            if(event.data?.type === 'language') applyLanguage(event.data.lang);
+        });
+        document.getElementById('save-update-url-btn').addEventListener('click', saveUpdateSettings);
+        document.getElementById('check-update-btn').addEventListener('click', checkUpdate);
+        window.addEventListener('DOMContentLoaded', () => {
+            loadInfo();
+            if(window.lucide) lucide.createIcons();
+        });
+    </script>
+</body>
+</html>

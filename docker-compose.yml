@@ -1,0 +1,22 @@
+services:
+  infinite-canvas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: iguang9881/infinite-canvas:latest
+    container_name: infinite-canvas
+    restart: unless-stopped
+    environment:
+      APP_RUNTIME_DIR: /app/userdata
+      APP_ACCESS_TOKEN: ${APP_ACCESS_TOKEN:-change-me}
+      CLOUD_SYNC_BASE_URL: ${CLOUD_SYNC_BASE_URL:-https://image-cloud.0909106.xyz}
+      COMFYUI_INSTANCES: ${COMFYUI_INSTANCES:-127.0.0.1:8188}
+    ports:
+      - "${APP_BIND_HOST:-127.0.0.1}:${APP_HTTP_PORT:-3000}:3000"
+    volumes:
+      - ./userdata:/app/userdata
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3000/health', timeout=3).read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

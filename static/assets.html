@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>素材库</title>
+    <script>
+        (function(){
+            try {
+                var theme = localStorage.getItem('studio_theme') || localStorage.getItem('canvas_theme') || 'light';
+                if(theme === 'dark') document.documentElement.classList.add('studio-theme-dark');
+            } catch(e) {}
+        })();
+    </script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="/static/theme.js?v=20260518-theme-sync2"></script>
+    <style>
+        :root {
+            --bg:#f7f8fb;
+            --panel:#fff;
+            --text:#111827;
+            --muted:#8a93a3;
+            --line:#e5e8ef;
+            --soft:#f1f4f8;
+            --accent:#0f172a;
+            --danger:#dc2626;
+            --green:#10b981;
+            --shadow:0 22px 60px rgba(15,23,42,.08);
+        }
+        html.studio-theme-dark {
+            --bg:#0f131a;
+            --panel:#151b24;
+            --text:#eef2f8;
+            --muted:#9aa5b5;
+            --line:#273241;
+            --soft:#1d2632;
+            --accent:#f8fafc;
+            --danger:#f87171;
+            --shadow:0 22px 60px rgba(0,0,0,.28);
+        }
+        * { box-sizing:border-box; }
+        body { margin:0; background:var(--bg); color:var(--text); font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        button, input, textarea { font:inherit; }
+        button { cursor:pointer; }
+        .page { min-height:100vh; padding:32px; }
+        .topbar { max-width:1460px; margin:0 auto 22px; display:flex; align-items:flex-end; justify-content:space-between; gap:18px; }
+        .title h1 { margin:0; font-size:30px; line-height:1.1; letter-spacing:0; }
+        .title p { margin:8px 0 0; color:var(--muted); font-size:13px; font-weight:700; }
+        .actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+        .btn { height:40px; border:1px solid var(--line); background:var(--panel); color:var(--text); border-radius:999px; padding:0 15px; display:inline-flex; align-items:center; justify-content:center; gap:8px; font-weight:900; font-size:13px; box-shadow:0 8px 22px rgba(15,23,42,.04); }
+        .btn:hover { border-color:var(--accent); }
+        .btn.primary { background:var(--accent); color:var(--bg); border-color:var(--accent); }
+        .btn.danger { color:var(--danger); }
+        .icon-btn { width:40px; padding:0; }
+        .toolbar { max-width:1460px; margin:0 auto 22px; display:grid; grid-template-columns:minmax(220px, 1fr) auto auto; gap:12px; align-items:center; }
+        .search { height:44px; border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:0 16px; color:var(--text); outline:none; font-weight:800; }
+        .tabs { display:flex; background:var(--soft); border:1px solid var(--line); border-radius:999px; padding:4px; }
+        .tab { border:0; background:transparent; color:var(--muted); height:34px; padding:0 14px; border-radius:999px; font-weight:900; }
+        .tab.active { background:var(--panel); color:var(--text); box-shadow:0 8px 24px rgba(15,23,42,.08); }
+        .layout { max-width:1460px; margin:0 auto; display:grid; grid-template-columns:minmax(0, 1fr) 360px; gap:22px; align-items:start; }
+        .asset-grid { columns:5 180px; column-gap:14px; }
+        .asset-card { break-inside:avoid; display:block; margin:0 0 14px; border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--panel); position:relative; box-shadow:0 12px 30px rgba(15,23,42,.04); }
+        .asset-card:hover { border-color:rgba(15,23,42,.28); transform:translateY(-1px); }
+        .asset-media { position:relative; background:var(--soft); }
+        .asset-card img, .asset-card video { width:100%; display:block; background:var(--soft); }
+        .asset-card video { min-height:128px; object-fit:cover; }
+        .asset-quick { position:absolute; inset:auto 8px 8px 8px; display:flex; gap:6px; justify-content:flex-end; opacity:0; transform:translateY(4px); transition:.16s; }
+        .asset-card:hover .asset-quick { opacity:1; transform:translateY(0); }
+        .quick-btn, .fav { width:32px; height:32px; border:1px solid rgba(255,255,255,.5); border-radius:999px; background:rgba(255,255,255,.92); color:#111827; display:flex; align-items:center; justify-content:center; box-shadow:0 12px 28px rgba(15,23,42,.14); }
+        html.studio-theme-dark .quick-btn, html.studio-theme-dark .fav { background:rgba(15,19,26,.9); color:#eef2f8; border-color:rgba(255,255,255,.12); }
+        .fav { position:absolute; top:8px; right:8px; color:#c2a21b; }
+        .asset-meta { padding:11px; display:flex; flex-direction:column; gap:7px; }
+        .asset-title { font-size:12px; font-weight:950; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .asset-prompt { color:var(--muted); font-size:11px; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .asset-badges { display:flex; gap:6px; flex-wrap:wrap; }
+        .badge { border:1px solid var(--line); color:var(--muted); border-radius:999px; padding:3px 7px; font-size:10px; font-weight:900; }
+        .side { display:flex; flex-direction:column; gap:16px; position:sticky; top:24px; }
+        .panel { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:16px; box-shadow:var(--shadow); }
+        .panel h2 { margin:0 0 12px; font-size:16px; }
+        .field { display:flex; flex-direction:column; gap:7px; margin-bottom:10px; }
+        .field label { color:var(--muted); font-size:11px; font-weight:950; text-transform:uppercase; }
+        .field input, .field textarea { width:100%; border:1px solid var(--line); background:var(--bg); color:var(--text); border-radius:14px; outline:none; padding:11px 12px; font-weight:800; }
+        .field textarea { min-height:92px; resize:vertical; line-height:1.45; }
+        .prompt-list { display:flex; flex-direction:column; gap:10px; max-height:420px; overflow:auto; }
+        .prompt-item { border:1px solid var(--line); border-radius:14px; padding:11px; background:var(--bg); display:flex; flex-direction:column; gap:8px; }
+        .prompt-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+        .prompt-title { font-weight:950; font-size:13px; }
+        .prompt-content { color:var(--muted); font-size:12px; line-height:1.45; white-space:pre-wrap; }
+        .mini-actions { display:flex; gap:8px; flex-wrap:wrap; }
+        .mini { height:30px; border:1px solid var(--line); background:var(--panel); color:var(--text); border-radius:999px; padding:0 10px; font-size:12px; font-weight:900; display:inline-flex; gap:6px; align-items:center; }
+        .empty { border:1px dashed var(--line); border-radius:18px; min-height:260px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-weight:900; text-align:center; padding:24px; background:rgba(255,255,255,.35); }
+        .context-menu { position:fixed; z-index:50; width:206px; background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:0 18px 44px rgba(15,23,42,.18); padding:7px; display:none; }
+        .context-menu.open { display:block; }
+        .context-menu button { width:100%; height:36px; border:0; background:transparent; color:var(--text); border-radius:10px; text-align:left; padding:0 10px; display:flex; align-items:center; gap:8px; font-weight:900; }
+        .context-menu button:hover { background:var(--soft); }
+        .context-menu button.danger { color:var(--danger); }
+        .toast { position:fixed; right:22px; bottom:22px; background:var(--accent); color:var(--bg); border-radius:999px; padding:12px 16px; font-size:13px; font-weight:900; opacity:0; transform:translateY(8px); transition:.18s; pointer-events:none; z-index:70; }
+        .toast.show { opacity:1; transform:translateY(0); }
+        .preview { position:fixed; inset:0; z-index:65; background:rgba(15,23,42,.45); display:none; align-items:center; justify-content:center; padding:32px; }
+        .preview.open { display:flex; }
+        .preview-shell { position:relative; max-width:min(1200px, 94vw); max-height:88vh; background:var(--panel); border-radius:22px; box-shadow:0 28px 90px rgba(15,23,42,.24); overflow:hidden; }
+        .preview-media { max-width:100%; max-height:78vh; display:block; background:var(--soft); }
+        .preview-actions { position:absolute; right:16px; bottom:16px; display:flex; gap:10px; }
+        .preview-close { position:absolute; right:16px; top:16px; }
+        @media (max-width:1000px) {
+            .page { padding:22px 16px; }
+            .topbar { align-items:flex-start; flex-direction:column; }
+            .toolbar { grid-template-columns:1fr; }
+            .layout { grid-template-columns:1fr; }
+            .side { position:static; }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <header class="topbar">
+            <div class="title">
+                <h1>素材库</h1>
+                <p>生成结果会自动归档；本地素材也可以上传，然后送到无限画布继续创作。</p>
+            </div>
+            <div class="actions">
+                <input id="uploadInput" type="file" accept="image/*,video/*" multiple hidden>
+                <button class="btn primary" id="uploadBtn" type="button"><i data-lucide="upload" size="16"></i><span>上传素材</span></button>
+                <button class="btn" id="rescanBtn" type="button"><i data-lucide="refresh-cw" size="16"></i><span>扫描历史</span></button>
+                <button class="btn" id="newPromptFocusBtn" type="button"><i data-lucide="sparkles" size="16"></i><span>新增提示词</span></button>
+            </div>
+        </header>
+
+        <section class="toolbar">
+            <input class="search" id="assetSearch" placeholder="搜索文件名、模型、提示词">
+            <div class="tabs" role="tablist" aria-label="素材类型">
+                <button class="tab active" data-type="" type="button">全部</button>
+                <button class="tab" data-type="image" type="button">图片</button>
+                <button class="tab" data-type="video" type="button">视频</button>
+                <button class="tab" data-type="file" type="button">文件</button>
+            </div>
+            <button class="btn icon-btn" id="favoriteFilterBtn" type="button" title="只看收藏"><i data-lucide="star" size="17"></i></button>
+        </section>
+
+        <section class="layout">
+            <div>
+                <div id="assetGrid" class="asset-grid"></div>
+                <div id="assetEmpty" class="empty" hidden>还没有素材。上传一张图片，或点“扫描历史”把生成记录归档进来。</div>
+            </div>
+
+            <aside class="side">
+                <section class="panel">
+                    <h2>提示词库</h2>
+                    <div class="field">
+                        <label for="promptTitle">标题</label>
+                        <input id="promptTitle" placeholder="例如：产品摄影">
+                    </div>
+                    <div class="field">
+                        <label for="promptContent">提示词</label>
+                        <textarea id="promptContent" placeholder="写入常用的高质量提示词"></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="promptTags">标签</label>
+                        <input id="promptTags" placeholder="逗号分隔，例如：写实, 电商">
+                    </div>
+                    <div class="actions" style="justify-content:flex-start">
+                        <button class="btn primary" id="savePromptBtn" type="button"><i data-lucide="plus" size="16"></i><span>保存</span></button>
+                        <button class="btn" id="clearPromptBtn" type="button"><i data-lucide="eraser" size="16"></i><span>清空</span></button>
+                    </div>
+                </section>
+
+                <section class="panel">
+                    <h2>常用提示词</h2>
+                    <div id="promptList" class="prompt-list"></div>
+                </section>
+            </aside>
+        </section>
+    </main>
+
+    <div id="contextMenu" class="context-menu" role="menu">
+        <button type="button" data-action="canvas"><i data-lucide="send-to-back" size="15"></i><span>加入无限画布</span></button>
+        <button type="button" data-action="preview"><i data-lucide="scan-eye" size="15"></i><span>打开预览</span></button>
+        <button type="button" data-action="download"><i data-lucide="download" size="15"></i><span>下载</span></button>
+        <button type="button" data-action="favorite"><i data-lucide="star" size="15"></i><span>收藏</span></button>
+        <button type="button" data-action="prompt"><i data-lucide="send" size="15"></i><span>提示词到文生图</span></button>
+        <button class="danger" type="button" data-action="delete"><i data-lucide="trash-2" size="15"></i><span>删除素材</span></button>
+    </div>
+
+    <div id="preview" class="preview" onclick="closePreview()">
+        <div class="preview-shell" onclick="event.stopPropagation()">
+            <button class="btn icon-btn preview-close" type="button" onclick="closePreview()" title="关闭"><i data-lucide="x" size="18"></i></button>
+            <div id="previewMedia"></div>
+            <div class="preview-actions">
+                <button class="btn" id="previewCanvasBtn" type="button"><i data-lucide="send-to-back" size="16"></i><span>加入画布</span></button>
+                <button class="btn primary" id="previewDownloadBtn" type="button"><i data-lucide="download" size="16"></i><span>下载</span></button>
+            </div>
+        </div>
+    </div>
+    <div id="toast" class="toast"></div>
+
+    <script>
+        const state = { type:'', q:'', favorite:null, assets:[], prompts:[], activeAsset:null, previewAsset:null };
+        const $ = id => document.getElementById(id);
+
+        function showToast(text){
+            const el = $('toast');
+            el.textContent = text;
+            el.classList.add('show');
+            clearTimeout(showToast.timer);
+            showToast.timer = setTimeout(() => el.classList.remove('show'), 1800);
+        }
+        function esc(value){
+            return String(value || '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+        }
+        async function jsonOrThrow(res){
+            const data = await res.json().catch(() => ({}));
+            if(!res.ok) throw new Error(data.detail || '请求失败');
+            return data;
+        }
+        function tagArray(value){ return String(value || '').split(',').map(x => x.trim()).filter(Boolean); }
+        function dimsFor(asset){ return asset.width && asset.height ? `${asset.width} x ${asset.height}` : asset.type; }
+
+        async function loadAssets(){
+            const params = new URLSearchParams({ limit:'160' });
+            if(state.type) params.set('type', state.type);
+            if(state.q) params.set('q', state.q);
+            if(state.favorite !== null) params.set('favorite', String(state.favorite));
+            const data = await fetch('/api/assets?' + params.toString()).then(jsonOrThrow);
+            state.assets = data.items || [];
+            renderAssets();
+        }
+
+        function renderAssets(){
+            const grid = $('assetGrid');
+            const empty = $('assetEmpty');
+            grid.innerHTML = state.assets.map(asset => {
+                const media = asset.type === 'video'
+                    ? `<video src="${esc(asset.local_url)}" muted loop playsinline preload="metadata"></video>`
+                    : `<img src="${esc(asset.thumb_url || asset.local_url)}" loading="lazy" alt="">`;
+                return `
+                    <article class="asset-card" data-id="${esc(asset.id)}">
+                        <div class="asset-media">
+                            ${media}
+                            <button class="fav" data-action="favorite" type="button" title="收藏">${asset.favorite ? '<i data-lucide="star" size="16" fill="currentColor"></i>' : '<i data-lucide="star" size="16"></i>'}</button>
+                            <div class="asset-quick">
+                                <button class="quick-btn" data-action="canvas" type="button" title="加入无限画布"><i data-lucide="send-to-back" size="15"></i></button>
+                                <button class="quick-btn" data-action="preview" type="button" title="打开预览"><i data-lucide="scan-eye" size="15"></i></button>
+                                <button class="quick-btn" data-action="download" type="button" title="下载"><i data-lucide="download" size="15"></i></button>
+                            </div>
+                        </div>
+                        <div class="asset-meta">
+                            <div class="asset-title">${esc(asset.title)}</div>
+                            <div class="asset-prompt">${esc(asset.prompt || '没有关联提示词')}</div>
+                            <div class="asset-badges">
+                                <span class="badge">${esc(dimsFor(asset))}</span>
+                                ${asset.model ? `<span class="badge">${esc(asset.model)}</span>` : ''}
+                            </div>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+            empty.hidden = state.assets.length > 0;
+            grid.hidden = state.assets.length === 0;
+            grid.querySelectorAll('.asset-card').forEach(card => {
+                const asset = state.assets.find(x => x.id === card.dataset.id);
+                card.addEventListener('click', event => {
+                    const action = event.target.closest('button')?.dataset.action;
+                    if(action) return handleAssetAction(action, asset);
+                    openPreview(asset);
+                });
+                card.addEventListener('contextmenu', event => openContext(event, asset));
+                card.addEventListener('dblclick', event => {
+                    event.preventDefault();
+                    sendAssetToCanvas(asset);
+                });
+                const video = card.querySelector('video');
+                if(video){
+                    card.addEventListener('mouseenter', () => video.play().catch(() => {}));
+                    card.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
+                }
+            });
+            lucide.createIcons();
+        }
+
+        function openContext(event, asset){
+            event.preventDefault();
+            state.activeAsset = asset;
+            const menu = $('contextMenu');
+            menu.querySelector('[data-action="favorite"] span').textContent = asset.favorite ? '取消收藏' : '收藏';
+            menu.style.left = Math.min(event.clientX, window.innerWidth - 216) + 'px';
+            menu.style.top = Math.min(event.clientY, window.innerHeight - 226) + 'px';
+            menu.classList.add('open');
+            lucide.createIcons();
+        }
+        function closeContext(){ $('contextMenu').classList.remove('open'); }
+
+        async function downloadAsset(asset){
+            if(!asset) return;
+            const res = await fetch(`/api/assets/${encodeURIComponent(asset.id)}/download`);
+            if(!res.ok) throw new Error('下载失败');
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = asset.title || `asset-${asset.id}`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        async function toggleFavorite(asset){
+            if(!asset) return;
+            const data = await fetch(`/api/assets/${encodeURIComponent(asset.id)}`, {
+                method:'PUT',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ favorite: !asset.favorite })
+            }).then(jsonOrThrow);
+            Object.assign(asset, data);
+            renderAssets();
+        }
+
+        async function deleteAsset(asset){
+            if(!asset) return;
+            if(!confirm('删除后会从素材库移除。是否同时删除本地文件？')) return;
+            await fetch(`/api/assets/${encodeURIComponent(asset.id)}?delete_file=true`, { method:'DELETE' }).then(jsonOrThrow);
+            state.assets = state.assets.filter(x => x.id !== asset.id);
+            renderAssets();
+            closePreview();
+            showToast('素材已删除');
+        }
+
+        function sendPromptToTextImage(prompt){
+            if(!prompt) return showToast('这个素材没有提示词');
+            window.parent?.postMessage({ type:'asset-insert-prompt', prompt }, '*');
+            showToast('已发送到文生图');
+        }
+
+        function sendAssetToCanvas(asset){
+            if(!asset) return;
+            window.parent?.postMessage({
+                type:'asset-add-to-canvas',
+                message_id:`asset-${asset.id || Date.now()}-${Date.now()}`,
+                asset:{
+                    id:asset.id,
+                    title:asset.title,
+                    type:asset.type,
+                    url:asset.local_url,
+                    thumb_url:asset.thumb_url,
+                    prompt:asset.prompt || '',
+                    model:asset.model || '',
+                    width:asset.width || 0,
+                    height:asset.height || 0
+                }
+            }, '*');
+            showToast('已发送到无限画布');
+        }
+
+        function openPreview(asset){
+            if(!asset) return;
+            state.previewAsset = asset;
+            const media = $('previewMedia');
+            media.innerHTML = asset.type === 'video'
+                ? `<video class="preview-media" src="${esc(asset.local_url)}" controls autoplay playsinline></video>`
+                : `<img class="preview-media" src="${esc(asset.local_url)}" alt="">`;
+            $('preview').classList.add('open');
+            lucide.createIcons();
+        }
+        function closePreview(){
+            $('preview').classList.remove('open');
+            $('previewMedia').innerHTML = '';
+            state.previewAsset = null;
+        }
+        async function handleAssetAction(action, asset){
+            closeContext();
+            if(action === 'canvas') sendAssetToCanvas(asset);
+            if(action === 'preview') openPreview(asset);
+            if(action === 'download') await downloadAsset(asset).catch(err => showToast(err.message));
+            if(action === 'favorite') await toggleFavorite(asset).catch(err => showToast(err.message));
+            if(action === 'prompt') sendPromptToTextImage(asset?.prompt || '');
+            if(action === 'delete') await deleteAsset(asset).catch(err => showToast(err.message));
+        }
+
+        async function uploadAssets(files){
+            const list = [...(files || [])].filter(file => file.type.startsWith('image/') || file.type.startsWith('video/'));
+            if(!list.length) return;
+            const form = new FormData();
+            list.forEach(file => form.append('files', file));
+            showToast('正在上传素材...');
+            const data = await fetch('/api/assets/upload', { method:'POST', body:form }).then(jsonOrThrow);
+            await loadAssets();
+            showToast(`已上传 ${data.items?.length || list.length} 个素材`);
+        }
+
+        async function loadPrompts(){
+            const data = await fetch('/api/prompts?limit=120').then(jsonOrThrow);
+            state.prompts = data.items || [];
+            renderPrompts();
+        }
+        function renderPrompts(){
+            const list = $('promptList');
+            list.innerHTML = state.prompts.length ? state.prompts.map(item => `
+                <article class="prompt-item" data-id="${esc(item.id)}">
+                    <div class="prompt-head">
+                        <div class="prompt-title">${esc(item.title)}</div>
+                        <button class="mini" data-prompt-fav type="button">${item.favorite ? '★' : '☆'}</button>
+                    </div>
+                    <div class="prompt-content">${esc(item.content)}</div>
+                    <div class="mini-actions">
+                        <button class="mini" data-prompt-use type="button"><i data-lucide="send" size="13"></i><span>使用</span></button>
+                        <button class="mini" data-prompt-edit type="button"><i data-lucide="pencil" size="13"></i><span>编辑</span></button>
+                        <button class="mini" data-prompt-delete type="button"><i data-lucide="trash-2" size="13"></i><span>删除</span></button>
+                    </div>
+                </article>
+            `).join('') : '<div class="empty">还没有提示词。保存一个常用模板后，它会出现在这里。</div>';
+            list.querySelectorAll('.prompt-item').forEach(el => {
+                const item = state.prompts.find(x => x.id === el.dataset.id);
+                el.querySelector('[data-prompt-use]')?.addEventListener('click', async () => {
+                    fetch(`/api/prompts/${encodeURIComponent(item.id)}/use`, { method:'POST' }).catch(() => {});
+                    sendPromptToTextImage(item.content);
+                });
+                el.querySelector('[data-prompt-edit]')?.addEventListener('click', () => {
+                    $('promptTitle').value = item.title;
+                    $('promptContent').value = item.content;
+                    $('promptTags').value = (item.tags || []).join(', ');
+                    $('savePromptBtn').dataset.editing = item.id;
+                    $('promptTitle').focus();
+                });
+                el.querySelector('[data-prompt-delete]')?.addEventListener('click', async () => {
+                    await fetch(`/api/prompts/${encodeURIComponent(item.id)}`, { method:'DELETE' }).then(jsonOrThrow);
+                    await loadPrompts();
+                });
+                el.querySelector('[data-prompt-fav]')?.addEventListener('click', async () => {
+                    await fetch(`/api/prompts/${encodeURIComponent(item.id)}`, {
+                        method:'PUT',
+                        headers:{'Content-Type':'application/json'},
+                        body:JSON.stringify({ title:item.title, content:item.content, tags:item.tags || [], favorite:!item.favorite })
+                    }).then(jsonOrThrow);
+                    await loadPrompts();
+                });
+            });
+            lucide.createIcons();
+        }
+        async function savePrompt(){
+            const payload = {
+                title:$('promptTitle').value.trim(),
+                content:$('promptContent').value.trim(),
+                tags:tagArray($('promptTags').value),
+                favorite:true
+            };
+            if(!payload.title || !payload.content) return showToast('标题和提示词都要填写');
+            const editing = $('savePromptBtn').dataset.editing;
+            await fetch(editing ? `/api/prompts/${encodeURIComponent(editing)}` : '/api/prompts', {
+                method: editing ? 'PUT' : 'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify(payload)
+            }).then(jsonOrThrow);
+            clearPromptForm();
+            await loadPrompts();
+            showToast('提示词已保存');
+        }
+        function clearPromptForm(){
+            $('promptTitle').value = '';
+            $('promptContent').value = '';
+            $('promptTags').value = '';
+            delete $('savePromptBtn').dataset.editing;
+        }
+
+        document.querySelectorAll('.tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+                btn.classList.add('active');
+                state.type = btn.dataset.type || '';
+                loadAssets().catch(err => showToast(err.message));
+            });
+        });
+        $('assetSearch').addEventListener('input', event => {
+            clearTimeout($('assetSearch')._timer);
+            $('assetSearch')._timer = setTimeout(() => {
+                state.q = event.target.value.trim();
+                loadAssets().catch(err => showToast(err.message));
+            }, 220);
+        });
+        $('favoriteFilterBtn').addEventListener('click', () => {
+            state.favorite = state.favorite === true ? null : true;
+            $('favoriteFilterBtn').classList.toggle('primary', state.favorite === true);
+            loadAssets().catch(err => showToast(err.message));
+        });
+        $('uploadBtn').addEventListener('click', () => $('uploadInput').click());
+        $('uploadInput').addEventListener('change', event => uploadAssets(event.target.files).catch(err => showToast(err.message)).finally(() => { event.target.value = ''; }));
+        $('rescanBtn').addEventListener('click', async () => {
+            const data = await fetch('/api/assets/rescan', { method:'POST' }).then(jsonOrThrow);
+            await loadAssets();
+            showToast(`已扫描 ${data.indexed || 0} 个素材`);
+        });
+        $('newPromptFocusBtn').addEventListener('click', () => $('promptTitle').focus());
+        $('savePromptBtn').addEventListener('click', () => savePrompt().catch(err => showToast(err.message)));
+        $('clearPromptBtn').addEventListener('click', clearPromptForm);
+        $('contextMenu').addEventListener('click', event => {
+            const action = event.target.closest('button')?.dataset.action;
+            handleAssetAction(action, state.activeAsset);
+        });
+        $('previewDownloadBtn').addEventListener('click', () => downloadAsset(state.previewAsset).catch(err => showToast(err.message)));
+        $('previewCanvasBtn').addEventListener('click', () => sendAssetToCanvas(state.previewAsset));
+        document.addEventListener('click', closeContext);
+        window.addEventListener('keydown', event => { if(event.key === 'Escape') closePreview(); });
+        window.addEventListener('message', event => {
+            if(event.data?.type === 'studio-theme') {
+                document.documentElement.classList.toggle('studio-theme-dark', event.data.theme === 'dark');
+            }
+            if(event.data?.type === 'assets-refresh') loadAssets().catch(err => showToast(err.message));
+        });
+
+        Promise.all([loadAssets(), loadPrompts()]).catch(err => showToast(err.message));
+        lucide.createIcons();
+    </script>
+</body>
+</html>

@@ -16,17 +16,25 @@ from email.message import EmailMessage
 from typing import Dict, Any
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.getenv("CLOUD_CONFIG_DB", os.path.join(DATA_DIR, "cloud_config.db"))
+AVATAR_DIR = os.path.join(DATA_DIR, "avatars")
+AVATAR_MAX_BYTES = 5 * 1024 * 1024
+AVATAR_TYPES = {
+    "image/jpeg": ("jpg", b"\xff\xd8"),
+    "image/png": ("png", b"\x89PNG\r\n\x1a\n"),
+    "image/webp": ("webp", b"RIFF"),
+    "image/gif": ("gif", b"GIF"),
+}
 TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_TOKEN_TTL_SECONDS", str(30 * 24 * 60 * 60)))
 RESET_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_RESET_TOKEN_TTL_SECONDS", str(30 * 60)))
 EMAIL_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_EMAIL_TOKEN_TTL_SECONDS", str(24 * 60 * 60)))
-CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "1.0.1").strip() or "1.0.1"
+CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "1.0.3").strip() or "1.0.3"
 CLOUD_PUBLIC_URL = os.getenv("CLOUD_PUBLIC_URL", "").strip().rstrip("/")
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
@@ -149,6 +157,36 @@ def db():
     return conn
 
 
+def detect_avatar_type(content: bytes, content_type: str = "") -> tuple[str, str]:
+    declared = (content_type or "").split(";", 1)[0].strip().lower()
+    candidates = [declared] if declared in AVATAR_TYPES else list(AVATAR_TYPES)
+    for mime in candidates:
+        ext, signature = AVATAR_TYPES[mime]
+        if mime == "image/webp":
+            if content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+                return mime, ext
+        elif content.startswith(signature):
+            return mime, ext
+    raise HTTPException(status_code=400, detail="头像只支持 JPG、PNG、WebP 或 GIF")
+
+
+def avatar_public_url(request: Request, filename: str) -> str:
+    base_url = setting_value("cloud_public_url").strip().rstrip("/")
+    if not base_url:
+        base_url = str(request.base_url).rstrip("/")
+    return f"{base_url}/avatars/{filename}"
+
+
+def remove_owned_avatar(user_id: int, avatar_url: str):
+    filename = os.path.basename((avatar_url or "").split("?", 1)[0])
+    if not re.match(rf"^user-{user_id}-[a-f0-9]{{16}}\.(jpg|png|webp|gif)$", filename):
+        return
+    try:
+        os.remove(os.path.join(AVATAR_DIR, filename))
+    except OSError:
+        pass
+
+
 DEFAULT_APP_SETTINGS = {
     "cloud_public_url": CLOUD_PUBLIC_URL,
     "smtp_host": SMTP_HOST,
@@ -238,6 +276,7 @@ def rate_limit(request: Request, bucket: str, identifier: str = "", limit: int =
 
 
 def init_db():
+    os.makedirs(AVATAR_DIR, exist_ok=True)
     with db() as conn:
         conn.execute(
             """
@@ -2420,6 +2459,23 @@ def version():
     return {"name": "infinite-canvas-cloud", "version": CLOUD_APP_VERSION}
 
 
+@app.get("/avatars/{filename}")
+def get_avatar(filename: str):
+    if not re.match(r"^user-\d+-[a-f0-9]{16}\.(jpg|png|webp|gif)$", filename):
+        raise HTTPException(status_code=404, detail="头像不存在")
+    path = os.path.join(AVATAR_DIR, filename)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="头像不存在")
+    ext = filename.rsplit(".", 1)[-1].lower()
+    media_type = {
+        "jpg": "image/jpeg",
+        "png": "image/png",
+        "webp": "image/webp",
+        "gif": "image/gif",
+    }.get(ext, "application/octet-stream")
+    return FileResponse(path, media_type=media_type)
+
+
 @app.get("/api/me")
 def get_me(user=Depends(current_user)):
     return {
@@ -2449,6 +2505,34 @@ def update_me(payload: ProfilePayload, user=Depends(current_user)):
     if email_changed:
         send_verification_email(user["id"], email)
     return {"email": email, "email_verified": not email_changed and bool(user.get("email_verified")), "display_name": display_name, "avatar_url": avatar_url}
+
+
+@app.post("/api/me/avatar")
+async def upload_avatar(request: Request, file: UploadFile = File(...), user=Depends(current_user)):
+    content = await file.read(AVATAR_MAX_BYTES + 1)
+    if not content:
+        raise HTTPException(status_code=400, detail="请选择头像文件")
+    if len(content) > AVATAR_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="头像文件不能超过 5MB")
+    mime, ext = detect_avatar_type(content, file.content_type or "")
+    os.makedirs(AVATAR_DIR, exist_ok=True)
+    filename = f"user-{user['id']}-{secrets.token_hex(8)}.{ext}"
+    path = os.path.join(AVATAR_DIR, filename)
+    with open(path, "wb") as fh:
+        fh.write(content)
+    avatar_url = avatar_public_url(request, filename)
+    with db() as conn:
+        row = conn.execute("SELECT avatar_url FROM users WHERE id = ?", (user["id"],)).fetchone()
+        conn.execute("UPDATE users SET avatar_url = ? WHERE id = ?", (avatar_url, user["id"]))
+    if row:
+        remove_owned_avatar(user["id"], row["avatar_url"])
+    return {
+        "email": user["email"],
+        "email_verified": bool(user.get("email_verified")),
+        "display_name": user.get("display_name") or "",
+        "avatar_url": avatar_url,
+        "content_type": mime,
+    }
 
 
 @app.post("/api/me/password")

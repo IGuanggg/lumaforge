@@ -14,14 +14,17 @@ __pycache__/
 API/.env
 
 # Data (runtime, may contain user data)
+data/
 data/conversations/
 data/canvases/
 data/api_providers.json
+data/assets.db
 data/.auth_token
 output/*
 !output/.gitkeep
 assets/input/*
 assets/output/*
+assets/thumbs/*
 history.json
 global_config.json
 
@@ -31,6 +34,7 @@ Thumbs.db
 
 # Logs
 *.log
+.codex-backups/
 
 # Python venv
 venv/

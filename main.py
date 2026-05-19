@@ -10,6 +10,10 @@ import shutil
 import asyncio
 import logging
 import secrets
+import sys
+import sqlite3
+import hashlib
+import subprocess
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
 from threading import Lock
@@ -19,11 +23,13 @@ from io import BytesIO
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Header, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger("infinite_canvas")
+APP_VERSION = os.getenv("APP_VERSION", "1.0.3")
+APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/Infinite-Canvas/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
     "/api/queue_status",
@@ -53,9 +59,23 @@ class QuietAccessLogFilter(logging.Filter):
 logging.getLogger("uvicorn.access").addFilter(QuietAccessLogFilter())
 
 # --- 本地鉴权：localhost 免认证，远程需 Bearer token ---
-AUTH_TOKEN = secrets.token_urlsafe(32)
+AUTH_TOKEN = (
+    os.getenv("APP_ACCESS_TOKEN")
+    or os.getenv("ACCESS_TOKEN")
+    or secrets.token_urlsafe(32)
+)
+AUTH_COOKIE_NAME = "ic_app_access"
 LOCALHOST_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
-PUBLIC_PATHS = {"/", "/login.html"}
+PUBLIC_PATHS = {
+    "/health",
+    "/login.html",
+    "/api/local-auth/status",
+    "/api/local-auth/login",
+}
+
+class LocalAuthRequest(BaseModel):
+    identity: str = Field(default="", max_length=120)
+    access_code: str = Field(min_length=1, max_length=500)
 
 # --- WebSocket 状态管理器 ---
 class ConnectionManager:
@@ -186,19 +206,65 @@ app.add_middleware(
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    if path.startswith("/static/") or path in PUBLIC_PATHS or path.startswith("/ws/"):
+    if path in PUBLIC_PATHS:
         return await call_next(request)
-    client_host = (request.client or {}).host or ""
+    client_host = getattr(request.client, "host", "") or ""
     if client_host in LOCALHOST_IPS:
         return await call_next(request)
     auth = request.headers.get("authorization", "")
-    if auth == f"Bearer {AUTH_TOKEN}":
+    cookie_token = request.cookies.get(AUTH_COOKIE_NAME, "")
+    if secrets.compare_digest(auth, f"Bearer {AUTH_TOKEN}") or secrets.compare_digest(cookie_token, AUTH_TOKEN):
         return await call_next(request)
-    return JSONResponse(status_code=403, content={"detail": "Remote access requires Authorization header. Use: Bearer <token> (see server console for token)."})
+    accepts_html = "text/html" in request.headers.get("accept", "")
+    if accepts_html and request.method == "GET":
+        next_url = urllib.parse.quote(str(request.url.path) or "/", safe="")
+        return RedirectResponse(url=f"/login.html?next={next_url}", status_code=303)
+    return JSONResponse(status_code=401, content={"detail": "请先登录主应用。访问码见服务端控制台，或通过 APP_ACCESS_TOKEN 环境变量固定。"})
+
+
+@app.get("/api/local-auth/status")
+async def local_auth_status(request: Request):
+    client_host = getattr(request.client, "host", "") or ""
+    cookie_token = request.cookies.get(AUTH_COOKIE_NAME, "")
+    authenticated = (
+        client_host in LOCALHOST_IPS
+        or secrets.compare_digest(cookie_token, AUTH_TOKEN)
+        or secrets.compare_digest(request.headers.get("authorization", ""), f"Bearer {AUTH_TOKEN}")
+    )
+    return {"authenticated": authenticated, "localhost": client_host in LOCALHOST_IPS}
+
+
+@app.post("/api/local-auth/login")
+async def local_auth_login(payload: LocalAuthRequest):
+    if not secrets.compare_digest(payload.access_code, AUTH_TOKEN):
+        raise HTTPException(status_code=401, detail="访问码不正确")
+    response = JSONResponse({"ok": True, "identity": payload.identity.strip()})
+    response.set_cookie(
+        AUTH_COOKIE_NAME,
+        AUTH_TOKEN,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=30 * 24 * 60 * 60,
+        path="/",
+    )
+    return response
+
+
+@app.post("/api/local-auth/logout")
+async def local_auth_logout():
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(AUTH_COOKIE_NAME, path="/")
+    return response
 
 
 @app.websocket("/ws/stats")
 async def websocket_endpoint(websocket: WebSocket, client_id: str = None):
+    client_host = getattr(websocket.client, "host", "") or ""
+    cookie_token = websocket.cookies.get(AUTH_COOKIE_NAME, "")
+    if client_host not in LOCALHOST_IPS and not secrets.compare_digest(cookie_token, AUTH_TOKEN):
+        await websocket.close(code=1008)
+        return
     await manager.connect(websocket, client_id)
     try:
         while True:
@@ -225,25 +291,36 @@ async def health_check():
 
 CLIENT_ID = str(uuid.uuid4())
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-WORKFLOW_DIR = os.path.join(BASE_DIR, "workflows")
+BUNDLE_DIR = getattr(sys, "_MEIPASS", BASE_DIR)
+RUNTIME_DIR = os.path.abspath(os.getenv("APP_RUNTIME_DIR") or os.getenv("INFINITE_CANVAS_HOME") or BASE_DIR)
+WORKFLOW_SOURCE_DIR = os.path.join(BUNDLE_DIR, "workflows")
+WORKFLOW_DIR = os.path.abspath(os.getenv("APP_WORKFLOW_DIR") or os.path.join(RUNTIME_DIR, "workflows"))
 WORKFLOW_PATH = os.path.join(WORKFLOW_DIR, "Z-Image.json")
-STATIC_DIR = os.path.join(BASE_DIR, "static")
-OUTPUT_DIR = os.path.join(BASE_DIR, "output")
-ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+STATIC_DIR = os.path.join(BUNDLE_DIR, "static")
+OUTPUT_DIR = os.path.abspath(os.getenv("APP_OUTPUT_DIR") or os.path.join(RUNTIME_DIR, "output"))
+ASSETS_DIR = os.path.abspath(os.getenv("APP_ASSETS_DIR") or os.path.join(RUNTIME_DIR, "assets"))
 OUTPUT_INPUT_DIR = os.path.join(ASSETS_DIR, "input")
 OUTPUT_OUTPUT_DIR = os.path.join(ASSETS_DIR, "output")
-HISTORY_FILE = os.path.join(BASE_DIR, "history.json")
-API_ENV_FILE = os.path.join(BASE_DIR, "API", ".env")
-DATA_DIR = os.path.join(BASE_DIR, "data")
+ASSET_THUMB_DIR = os.path.join(ASSETS_DIR, "thumbs")
+APP_LOG_DIR = os.path.abspath(os.getenv("APP_LOG_DIR") or os.path.join(RUNTIME_DIR, "logs"))
+APP_CACHE_DIR = os.path.abspath(os.getenv("APP_CACHE_DIR") or os.path.join(RUNTIME_DIR, "cache"))
+HISTORY_FILE = os.path.join(RUNTIME_DIR, "history.json")
+API_ENV_FILE = os.path.join(RUNTIME_DIR, "API", ".env")
+DATA_DIR = os.path.join(RUNTIME_DIR, "data")
+ASSET_DB_FILE = os.path.join(DATA_DIR, "assets.db")
 CONVERSATION_DIR = os.path.join(DATA_DIR, "conversations")
 CANVAS_DIR = os.path.join(DATA_DIR, "canvases")
 API_PROVIDERS_FILE = os.path.join(DATA_DIR, "api_providers.json")
-GLOBAL_CONFIG_FILE = os.path.join(BASE_DIR, "global_config.json")
+GLOBAL_CONFIG_FILE = os.path.join(RUNTIME_DIR, "global_config.json")
+CLOUD_SESSION_FILE = os.path.join(DATA_DIR, "cloud_session.json")
+CLOUD_SYNC_BASE_URL = os.getenv("CLOUD_SYNC_BASE_URL", "https://image-cloud.0909106.xyz").strip().rstrip("/")
+CLOUD_AVATAR_MAX_BYTES = 5 * 1024 * 1024
 CANVAS_TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 
 QUEUE = []
 QUEUE_LOCK = asyncio.Lock()
 HISTORY_LOCK = Lock()
+ASSET_LOCK = Lock()
 GLOBAL_CONFIG_LOCK = Lock()
 CONVERSATION_LOCK = Lock()
 CANVAS_LOCK = Lock()
@@ -570,6 +647,99 @@ def save_api_providers(providers):
         with open(API_PROVIDERS_FILE, "w", encoding="utf-8") as f:
             json.dump(providers, f, ensure_ascii=False, indent=2)
 
+def load_cloud_session():
+    if not os.path.exists(CLOUD_SESSION_FILE):
+        return {}
+    try:
+        with open(CLOUD_SESSION_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if isinstance(data, dict):
+            return data
+    except Exception as e:
+        logger.warning("加载云同步登录状态失败: %s", e)
+    return {}
+
+def save_cloud_session(session):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    with GLOBAL_CONFIG_LOCK:
+        with open(CLOUD_SESSION_FILE, "w", encoding="utf-8") as f:
+            json.dump(session or {}, f, ensure_ascii=False, indent=2)
+
+def cloud_auth_header(session):
+    token = (session or {}).get("token", "")
+    if not token:
+        raise HTTPException(status_code=401, detail="尚未登录云端账户")
+    return {"Authorization": f"Bearer {token}"}
+
+def cloud_base_url(session):
+    base_url = str((session or {}).get("base_url") or CLOUD_SYNC_BASE_URL).strip().rstrip("/")
+    if not base_url or not re.match(r"^https?://", base_url):
+        raise HTTPException(status_code=400, detail="云端服务地址未配置，请在后端设置 CLOUD_SYNC_BASE_URL")
+    return base_url
+
+def build_cloud_config(include_secrets=False):
+    providers = load_api_providers()
+    env_values = {
+        "COMFYUI_INSTANCES": ",".join(COMFYUI_INSTANCES),
+        "COMFLY_BASE_URL": AI_BASE_URL,
+        "IMAGE_MODELS": ",".join(IMAGE_MODELS),
+        "CHAT_MODELS": ",".join(CHAT_MODELS),
+        "VIDEO_MODELS": ",".join(VIDEO_MODELS),
+        "MODELSCOPE_CHAT_MODELS": ",".join(MODELSCOPE_CHAT_MODELS),
+    }
+    config = {
+        "version": 1,
+        "exported_at": now_ms(),
+        "api_providers": providers,
+        "env": env_values,
+    }
+    if include_secrets:
+        api_keys = {}
+        for provider in providers:
+            pid = provider.get("id")
+            key = os.getenv(provider_key_env(pid), "") if pid else ""
+            if key:
+                api_keys[pid] = key
+        config["api_keys"] = api_keys
+    return config
+
+def apply_cloud_config(config):
+    if not isinstance(config, dict):
+        raise HTTPException(status_code=400, detail="云端配置格式不正确")
+    raw_providers = config.get("api_providers") or []
+    providers = [normalize_provider(item) for item in raw_providers if isinstance(item, dict)]
+    if providers:
+        save_api_providers(merge_default_api_providers(providers))
+    env_updates = {}
+    raw_env = config.get("env") or {}
+    allowed_env_keys = {
+        "COMFYUI_INSTANCES",
+        "COMFLY_BASE_URL",
+        "IMAGE_MODELS",
+        "CHAT_MODELS",
+        "VIDEO_MODELS",
+        "MODELSCOPE_CHAT_MODELS",
+    }
+    for key in allowed_env_keys:
+        if key in raw_env:
+            env_updates[key] = str(raw_env.get(key) or "")
+    for provider_id, api_key in (config.get("api_keys") or {}).items():
+        pid = str(provider_id or "").strip().lower()
+        if PROVIDER_ID_RE.fullmatch(pid):
+            env_updates[provider_key_env(pid)] = str(api_key or "")
+    if env_updates:
+        update_env_values(env_updates)
+        reload_env_globals()
+        if "COMFYUI_INSTANCES" in env_updates:
+            cleaned = [s.strip() for s in env_updates["COMFYUI_INSTANCES"].split(",") if s.strip()]
+            if cleaned:
+                global COMFYUI_INSTANCES, COMFYUI_ADDRESS, BACKEND_LOCAL_LOAD
+                with LOAD_LOCK:
+                    COMFYUI_INSTANCES = cleaned
+                    COMFYUI_ADDRESS = cleaned[0]
+                    BACKEND_LOCAL_LOAD = {addr: BACKEND_LOCAL_LOAD.get(addr, 0) for addr in cleaned}
+    return {"providers": [public_provider(p) for p in load_api_providers()], "comfyui_instances": COMFYUI_INSTANCES}
+
 def public_provider(provider):
     key = os.getenv(provider_key_env(provider["id"]), "")
     return {
@@ -651,14 +821,224 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(ASSETS_DIR, exist_ok=True)
 os.makedirs(OUTPUT_INPUT_DIR, exist_ok=True)
 os.makedirs(OUTPUT_OUTPUT_DIR, exist_ok=True)
+os.makedirs(ASSET_THUMB_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(WORKFLOW_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(CONVERSATION_DIR, exist_ok=True)
 os.makedirs(CANVAS_DIR, exist_ok=True)
+
+if os.path.abspath(WORKFLOW_SOURCE_DIR) != os.path.abspath(WORKFLOW_DIR) and os.path.isdir(WORKFLOW_SOURCE_DIR):
+    for root, _, files in os.walk(WORKFLOW_SOURCE_DIR):
+        rel_root = os.path.relpath(root, WORKFLOW_SOURCE_DIR)
+        target_root = WORKFLOW_DIR if rel_root == "." else os.path.join(WORKFLOW_DIR, rel_root)
+        os.makedirs(target_root, exist_ok=True)
+        for filename in files:
+            source_path = os.path.join(root, filename)
+            target_path = os.path.join(target_root, filename)
+            if not os.path.exists(target_path):
+                shutil.copy2(source_path, target_path)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
 app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+
+# --- Local asset library ---
+
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
+
+def asset_db():
+    conn = sqlite3.connect(ASSET_DB_FILE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_asset_library():
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS assets (
+                    id TEXT PRIMARY KEY,
+                    title TEXT DEFAULT '',
+                    type TEXT NOT NULL,
+                    local_url TEXT NOT NULL UNIQUE,
+                    local_path TEXT NOT NULL,
+                    thumb_url TEXT DEFAULT '',
+                    source_url TEXT DEFAULT '',
+                    source_type TEXT DEFAULT '',
+                    prompt TEXT DEFAULT '',
+                    model TEXT DEFAULT '',
+                    width INTEGER DEFAULT 0,
+                    height INTEGER DEFAULT 0,
+                    duration REAL DEFAULT 0,
+                    tags TEXT DEFAULT '[]',
+                    favorite INTEGER DEFAULT 0,
+                    sha256 TEXT DEFAULT '',
+                    size_bytes INTEGER DEFAULT 0,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_assets_type_created ON assets(type, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_assets_favorite_created ON assets(favorite, created_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_assets_sha256 ON assets(sha256);
+
+                CREATE TABLE IF NOT EXISTS prompt_snippets (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    tags TEXT DEFAULT '[]',
+                    favorite INTEGER DEFAULT 0,
+                    usage_count INTEGER DEFAULT 0,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_prompt_snippets_favorite ON prompt_snippets(favorite, updated_at DESC);
+            """)
+
+def json_list(value):
+    if isinstance(value, list):
+        return [str(x).strip() for x in value if str(x).strip()]
+    if isinstance(value, str):
+        try:
+            data = json.loads(value)
+            if isinstance(data, list):
+                return [str(x).strip() for x in data if str(x).strip()]
+        except Exception:
+            return [x.strip() for x in value.split(",") if x.strip()]
+    return []
+
+def asset_type_for_path(path):
+    ext = os.path.splitext(path)[1].lower()
+    if ext in VIDEO_EXTENSIONS:
+        return "video"
+    if ext in IMAGE_EXTENSIONS:
+        return "image"
+    return "file"
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+def image_dimensions(path):
+    try:
+        with Image.open(path) as img:
+            return img.size
+    except Exception:
+        return (0, 0)
+
+def make_asset_thumbnail(asset_id, path):
+    if asset_type_for_path(path) != "image":
+        return ""
+    thumb_name = f"{asset_id}.jpg"
+    thumb_path = os.path.join(ASSET_THUMB_DIR, thumb_name)
+    try:
+        with Image.open(path) as img:
+            img.load()
+            if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
+                bg = Image.new("RGB", img.size, (255, 255, 255))
+                rgba = img.convert("RGBA")
+                bg.paste(rgba, mask=rgba.split()[-1])
+                img = bg
+            else:
+                img = img.convert("RGB")
+            img.thumbnail((480, 480), Image.LANCZOS)
+            img.save(thumb_path, "JPEG", quality=82, optimize=True)
+        return output_url_for(thumb_name, "thumbs")
+    except Exception as e:
+        logger.warning("Asset thumbnail failed for %s: %s", path, e)
+        return ""
+
+def asset_row_to_dict(row):
+    data = dict(row)
+    data["tags"] = json_list(data.get("tags"))
+    data["favorite"] = bool(data.get("favorite"))
+    return data
+
+def index_local_asset(local_url, *, source_type="", prompt="", model="", source_url="", tags=None, favorite=False, created_at=None):
+    path = output_file_from_url(local_url)
+    if not path or not os.path.isfile(path):
+        return None
+    try:
+        digest = file_sha256(path)
+        asset_id = digest[:20]
+        kind = asset_type_for_path(path)
+        width, height = image_dimensions(path) if kind == "image" else (0, 0)
+        thumb_url = make_asset_thumbnail(asset_id, path)
+        now = time.time()
+        created = float(created_at or now)
+        title = os.path.basename(path)
+        size_bytes = os.path.getsize(path)
+        tag_json = json.dumps(json_list(tags), ensure_ascii=False)
+        with ASSET_LOCK:
+            with asset_db() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO assets (
+                        id, title, type, local_url, local_path, thumb_url, source_url, source_type,
+                        prompt, model, width, height, tags, favorite, sha256, size_bytes, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(local_url) DO UPDATE SET
+                        title=excluded.title,
+                        type=excluded.type,
+                        local_path=excluded.local_path,
+                        thumb_url=COALESCE(NULLIF(excluded.thumb_url, ''), assets.thumb_url),
+                        source_url=COALESCE(NULLIF(excluded.source_url, ''), assets.source_url),
+                        source_type=COALESCE(NULLIF(excluded.source_type, ''), assets.source_type),
+                        prompt=COALESCE(NULLIF(excluded.prompt, ''), assets.prompt),
+                        model=COALESCE(NULLIF(excluded.model, ''), assets.model),
+                        width=excluded.width,
+                        height=excluded.height,
+                        tags=CASE WHEN excluded.tags != '[]' THEN excluded.tags ELSE assets.tags END,
+                        favorite=CASE WHEN excluded.favorite = 1 THEN 1 ELSE assets.favorite END,
+                        sha256=excluded.sha256,
+                        size_bytes=excluded.size_bytes,
+                        updated_at=excluded.updated_at
+                    """,
+                    (
+                        asset_id, title, kind, local_url, path, thumb_url, source_url, source_type,
+                        prompt or "", model or "", width, height, tag_json, 1 if favorite else 0,
+                        digest, size_bytes, created, now,
+                    ),
+                )
+                row = conn.execute("SELECT * FROM assets WHERE local_url = ?", (local_url,)).fetchone()
+                return asset_row_to_dict(row) if row else None
+    except Exception as e:
+        logger.warning("Index asset failed for %s: %s", local_url, e)
+        return None
+
+def index_history_record_assets(record):
+    if not isinstance(record, dict):
+        return []
+    urls = []
+    for key in ("images", "videos", "outputs"):
+        value = record.get(key)
+        if isinstance(value, list):
+            urls.extend([x for x in value if isinstance(x, str)])
+    for key in ("url", "video", "video_url"):
+        value = record.get(key)
+        if isinstance(value, str):
+            urls.append(value)
+    indexed = []
+    seen = set()
+    for url in urls:
+        if url in seen:
+            continue
+        seen.add(url)
+        item = index_local_asset(
+            url,
+            source_type=str(record.get("type") or ""),
+            prompt=str(record.get("prompt") or ""),
+            model=str(record.get("model") or record.get("workflow_json") or ""),
+            created_at=record.get("timestamp"),
+        )
+        if item:
+            indexed.append(item)
+    return indexed
+
+init_asset_library()
 
 # --- Pydantic 模型 ---
 
@@ -674,6 +1054,17 @@ class GenerateRequest(BaseModel):
 
 class DeleteHistoryRequest(BaseModel):
     timestamp: float
+
+class AssetUpdateRequest(BaseModel):
+    title: Optional[str] = Field(default=None, max_length=200)
+    tags: Optional[List[str]] = None
+    favorite: Optional[bool] = None
+
+class PromptSnippetRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    content: str = Field(min_length=1, max_length=ONLINE_IMAGE_PROMPT_MAX_LENGTH)
+    tags: List[str] = []
+    favorite: bool = False
 
 class TokenRequest(BaseModel):
     token: str = Field(min_length=1, max_length=500)
@@ -740,6 +1131,49 @@ class ApiProviderPayload(BaseModel):
     ms_loras: List[Dict[str, Any]] = []
     ms_defaults_version: int = 0
     api_key: Optional[str] = None
+
+class CloudAuthRequest(BaseModel):
+    base_url: str = Field(default="", max_length=URL_MAX_LENGTH)
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(min_length=6, max_length=200)
+
+class CloudUploadRequest(BaseModel):
+    include_secrets: bool = False
+
+class CloudProfileRequest(BaseModel):
+    email: str = Field(default="", max_length=200)
+    display_name: str = Field(default="", max_length=80)
+    avatar_url: str = Field(default="", max_length=URL_MAX_LENGTH)
+
+class CloudPasswordRequest(BaseModel):
+    current_password: str = Field(min_length=6, max_length=200)
+    new_password: str = Field(min_length=6, max_length=200)
+
+class CloudPasswordForgotRequest(BaseModel):
+    base_url: str = Field(default="", max_length=URL_MAX_LENGTH)
+    email: str = Field(min_length=3, max_length=200)
+
+class CloudPasswordResetRequest(BaseModel):
+    base_url: str = Field(default="", max_length=URL_MAX_LENGTH)
+    email: str = Field(min_length=3, max_length=200)
+    token: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    new_password: str = Field(min_length=6, max_length=200)
+
+class CloudEmailVerifyConfirmRequest(BaseModel):
+    token: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+class AppOpenPathRequest(BaseModel):
+    target: str = Field(max_length=40)
+
+class AppPathSelectRequest(BaseModel):
+    target: str = Field(max_length=40)
+
+class AppPathUpdateRequest(BaseModel):
+    target: str = Field(max_length=40)
+    path: str = Field(min_length=1, max_length=1000)
+
+class AppUpdateSettingsRequest(BaseModel):
+    update_check_url: str = Field(default="", max_length=1000)
 
 class ChatRequest(BaseModel):
     conversation_id: str = Field(default="", max_length=CLIENT_ID_MAX_LENGTH)
@@ -914,6 +1348,7 @@ def save_to_history(record):
         history.insert(0, record)
         with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(history[:5000], f, ensure_ascii=False, indent=4)
+    index_history_record_assets(record)
 
 async def get_comfy_history(comfy_address, prompt_id):
     try:
@@ -1188,7 +1623,52 @@ def text_delta_from_chat_chunk(data):
 def sse_event(data):
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
+def _looks_like_image_url(value):
+    if not isinstance(value, str):
+        return False
+    text = value.strip()
+    if not text:
+        return False
+    if text.startswith(("http://", "https://", "/output/", "/assets/", "data:image/")):
+        return True
+    clean = urllib.parse.urlparse(text).path.lower()
+    return os.path.splitext(clean)[1] in IMAGE_EXTENSIONS
+
+def _extract_image_candidate(value, depth=0):
+    if depth > 8 or value is None:
+        return None
+    if isinstance(value, str):
+        if value.startswith("data:image/") and ";base64," in value:
+            return {"type": "b64", "value": value.split(";base64,", 1)[1]}
+        return {"type": "url", "value": value} if _looks_like_image_url(value) else None
+    if isinstance(value, list):
+        for item in value:
+            found = _extract_image_candidate(item, depth + 1)
+            if found:
+                return found
+        return None
+    if not isinstance(value, dict):
+        return None
+    for key in ("b64_json", "base64", "image_base64"):
+        item = value.get(key)
+        if isinstance(item, str) and item.strip():
+            return {"type": "b64", "value": item}
+    for key in ("url", "image_url", "imageUrl", "output_url", "outputUrl", "file_url", "fileUrl"):
+        found = _extract_image_candidate(value.get(key), depth + 1)
+        if found:
+            return found
+    for key in ("images", "image", "output_images", "outputs", "output", "data", "result", "results"):
+        found = _extract_image_candidate(value.get(key), depth + 1)
+        if found:
+            return found
+    return None
+
 def extract_image(data):
+    found = _extract_image_candidate(data)
+    if found:
+        return found
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=502, detail="生图接口已返回，但没有识别到图片 URL 或 base64 数据")
     if isinstance(data.get("data"), dict) and isinstance(data["data"].get("result"), dict):
         data = data["data"]
     if isinstance(data.get("result"), dict):
@@ -1213,9 +1693,16 @@ def extract_image(data):
     raise HTTPException(status_code=502, detail="无法识别生图接口返回格式")
 
 def extract_task_id(data):
+    if not isinstance(data, dict):
+        return None
+    for key in ("task_id", "taskId", "task", "job_id", "jobId", "generation_id", "generationId"):
+        if data.get(key):
+            return str(data[key])
     if data.get("task_id"):
         return str(data["task_id"])
-    if data.get("id") and str(data.get("id", "")).startswith("task"):
+    status = str(data.get("status") or data.get("task_status") or data.get("state") or "").lower()
+    id_value = str(data.get("id") or "").strip()
+    if id_value and (id_value.lower().startswith(("task", "job", "generation")) or status in {"queued", "pending", "running", "processing", "submitted", "in_progress"}):
         return str(data["id"])
     nested = data.get("data")
     if isinstance(nested, list) and nested:
@@ -1256,7 +1743,7 @@ async def wait_for_image_task(client, task_id, provider=None):
         last_payload = response.json()
         task_data = last_payload.get("data") if isinstance(last_payload.get("data"), dict) else last_payload
         status = str(task_data.get("status", "")).upper()
-        if status in {"SUCCESS", "COMPLETED"}:
+        if status in {"SUCCESS", "SUCCEEDED", "COMPLETED", "DONE", "FINISHED"}:
             return last_payload
         if status in {"FAILURE", "FAILED", "ERROR"}:
             error = task_data.get("error") if isinstance(task_data.get("error"), dict) else {}
@@ -1266,7 +1753,11 @@ async def wait_for_image_task(client, task_id, provider=None):
     raise HTTPException(status_code=504, detail=f"生图任务超时（已等待 {int(timeout)} 秒），task_id={task_id}")
 
 def output_storage(category="output"):
-    return (OUTPUT_INPUT_DIR, "input") if category == "input" else (OUTPUT_OUTPUT_DIR, "output")
+    if category == "input":
+        return (OUTPUT_INPUT_DIR, "input")
+    if category == "thumbs":
+        return (ASSET_THUMB_DIR, "thumbs")
+    return (OUTPUT_OUTPUT_DIR, "output")
 
 def output_url_for(filename, category="output"):
     _, subdir = output_storage(category)
@@ -1403,40 +1894,124 @@ def modelscope_image_url(value, max_size=1536):
         return compress_data_url_image(value, max_size=max_size)
     return value
 
+def valid_video_image_input(value: str) -> bool:
+    if not isinstance(value, str):
+        return False
+    value = value.strip()
+    return (
+        value.startswith("http://") or
+        value.startswith("https://") or
+        value.startswith("asset://") or
+        (value.startswith("data:image/") and ";base64," in value)
+    )
+
+def valid_apimart_video_image_input(value: str) -> bool:
+    if not isinstance(value, str):
+        return False
+    value = value.strip()
+    return value.startswith("http://") or value.startswith("https://") or value.startswith("asset://")
+
+def is_apimart_veo31_model(model: str) -> bool:
+    return str(model or "").strip().lower().startswith("veo3.1")
+
+def apimart_veo31_model(model: str) -> str:
+    value = str(model or "").strip().lower()
+    aliases = {
+        "veo3.1": "veo3.1-fast",
+        "veo3.1-pro": "veo3.1-quality",
+        "veo3.1-preview": "veo3.1-fast",
+    }
+    value = aliases.get(value, value or "veo3.1-fast")
+    allowed = {"veo3.1-fast", "veo3.1-quality", "veo3.1-lite"}
+    return value if value in allowed else "veo3.1-fast"
+
+def apimart_veo31_aspect(aspect: str) -> str:
+    value = str(aspect or "16:9").strip()
+    return value if value in {"16:9", "9:16"} else "16:9"
+
+def apimart_veo31_resolution(resolution: str) -> str:
+    value = str(resolution or "").strip().lower()
+    aliases = {"": "720p", "auto": "720p", "480p": "720p", "780p": "720p", "1080": "1080p", "4k": "4k"}
+    value = aliases.get(value, value)
+    return value if value in {"720p", "1080p", "4k"} else "720p"
+
+def apimart_upload_file_payload(path: str):
+    max_bytes = 9_500_000
+    size = os.path.getsize(path)
+    if size <= max_bytes:
+        with open(path, "rb") as fh:
+            return os.path.basename(path), fh.read(), content_type_for_path(path)
+    with Image.open(path) as img:
+        img = img.convert("RGBA")
+        bg = Image.new("RGB", img.size, (255, 255, 255))
+        bg.paste(img, mask=img.split()[-1])
+        quality = 92
+        while quality >= 62:
+            buf = BytesIO()
+            bg.save(buf, format="JPEG", quality=quality, optimize=True)
+            data = buf.getvalue()
+            if len(data) <= max_bytes:
+                name = os.path.splitext(os.path.basename(path))[0] + ".jpg"
+                return name, data, "image/jpeg"
+            quality -= 8
+    raise ValueError("image is over 10MB after compression")
+
+def invalid_video_image_preview(value: str) -> str:
+    text = str(value or "")
+    if text.startswith("data:"):
+        return text.split(";base64,", 1)[0] + ";base64,..."
+    return text[:120]
+
+def extract_apimart_asset_url(payload):
+    if isinstance(payload, list):
+        for item in payload:
+            found = extract_apimart_asset_url(item)
+            if found:
+                return found
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    for key in ("url", "asset_url", "assetUrl", "uri", "file_url", "fileUrl"):
+        value = str(payload.get(key) or "").strip()
+        if valid_apimart_video_image_input(value):
+            return value
+    for key in ("asset_id", "assetId", "file_id", "fileId", "id"):
+        value = str(payload.get(key) or "").strip()
+        if value:
+            return value if value.startswith("asset://") else f"asset://{value}"
+    for key in ("data", "file", "asset", "result"):
+        found = extract_apimart_asset_url(payload.get(key))
+        if found:
+            return found
+    return ""
+
 async def upload_image_for_apimart(client, provider, ref_url: str) -> str:
-    """把本地 /output/* 或 /assets/* 图片上传到 APIMart 文件接口，返回 https URL。
-    如果已经是 http/https/asset:// URL，直接返回原值。"""
+    ref_url = str(ref_url or "").strip()
     if not ref_url:
         return ref_url
-    # 已经是网络 URL 或 asset:// → 直接可用，无需上传
     if ref_url.startswith("http://") or ref_url.startswith("https://") or ref_url.startswith("asset://"):
         return ref_url
-    # data URL → 不支持，返回空串（APIMart 会拒绝 base64）
     if ref_url.startswith("data:"):
         return ""
     path = output_file_from_url(ref_url)
     if not path:
-        return ref_url  # 无法解析，原样返回，让上游自行处理
+        return ""
     try:
-        ct = content_type_for_path(path)
         base_url = video_api_root(provider)
-        upload_url = f"{base_url}/v1/files"
-        with open(path, "rb") as fh:
-            files = {"file": (os.path.basename(path), fh, ct)}
-            resp = await client.post(upload_url, headers=api_headers(provider=provider), files=files, timeout=60)
-        if resp.status_code == 200:
+        upload_url = f"{base_url}/v1/uploads/images"
+        filename, content, ct = apimart_upload_file_payload(path)
+        files = {"file": (filename, content, ct)}
+        resp = await client.post(upload_url, headers=api_headers(json_body=False, provider=provider), files=files, timeout=60)
+        if resp.status_code in (200, 201):
             rj = resp.json()
-            # 兼容 {"url":...} 或 {"data":{"url":...}} 两种返回格式
-            url = (rj.get("url") or
-                   (rj.get("data") or {}).get("url") or
-                   (rj.get("file") or {}).get("url") or "")
-            if url:
+            url = extract_apimart_asset_url(rj)
+            if valid_apimart_video_image_input(url):
                 return url
-        logger.error(f"APIMart 文件上传失败 ({resp.status_code})，降级使用原路径: {resp.text[:200]}")
-        return ref_url
+            logger.error("APIMart upload response has no usable asset/url: %s", str(rj)[:300])
+        logger.error("APIMart upload failed (%s): %s", resp.status_code, resp.text[:300])
     except Exception as e:
-        logger.error(f"APIMart 文件上传异常，降级使用原路径: {e}")
-        return ref_url
+        logger.error("APIMart upload exception: %s", e)
+    return ""
 
 async def save_ai_image_to_output(image_data, prefix="online_", category="output"):
     filename = f"{prefix}{uuid.uuid4().hex[:10]}.png"
@@ -1508,7 +2083,7 @@ GPT_IMAGE2_MAX_PIXELS = 8_294_400
 GPT_IMAGE2_MIN_PIXELS = 655_360
 
 def is_gpt_image_2_model(model):
-    return str(model or "").strip().lower() == "gpt-image-2"
+    return str(model or "").strip().lower().startswith("gpt-image-2")
 
 def normalize_gpt_image_2_size(size):
     width, height = parse_size_pair(size)
@@ -1717,6 +2292,10 @@ async def generate_ai_image(prompt, size, quality, model, reference_images=None,
         try:
             return extract_image(raw), raw
         except HTTPException:
+            try:
+                logger.error("Image response parse failed provider=%s model=%s raw=%s", provider.get("id"), model, json.dumps(raw, ensure_ascii=False)[:1200])
+            except Exception:
+                logger.error("Image response parse failed provider=%s model=%s", provider.get("id"), model)
             task_id = extract_task_id(raw)
             if not task_id:
                 raise
@@ -1739,9 +2318,226 @@ def upstream_message_from_record(item):
 
 # --- 路由接口 ---
 
+def app_paths_payload():
+    return {
+        "runtime": RUNTIME_DIR,
+        "save": ASSETS_DIR,
+        "input": OUTPUT_INPUT_DIR,
+        "output": OUTPUT_OUTPUT_DIR,
+        "thumbs": ASSET_THUMB_DIR,
+        "legacy_output": OUTPUT_DIR,
+        "data": DATA_DIR,
+        "logs": APP_LOG_DIR,
+        "cache": APP_CACHE_DIR,
+        "static": STATIC_DIR,
+    }
+
+APP_PATH_TARGETS = {
+    "save": {
+        "env": "APP_ASSETS_DIR",
+        "label": "保存目录",
+        "current": lambda: ASSETS_DIR,
+    },
+    "legacy_output": {
+        "env": "APP_OUTPUT_DIR",
+        "label": "兼容输出目录",
+        "current": lambda: OUTPUT_DIR,
+    },
+    "logs": {
+        "env": "APP_LOG_DIR",
+        "label": "日志目录",
+        "current": lambda: APP_LOG_DIR,
+    },
+    "cache": {
+        "env": "APP_CACHE_DIR",
+        "label": "缓存目录",
+        "current": lambda: APP_CACHE_DIR,
+    },
+}
+
+def update_static_mount(mount_path: str, directory: str):
+    for route in app.routes:
+        if getattr(route, "path", "") != mount_path:
+            continue
+        static_app = getattr(route, "app", None)
+        if isinstance(static_app, StaticFiles):
+            static_app.directory = directory
+            static_app.all_directories = [directory]
+
+def reload_app_path_globals():
+    global OUTPUT_DIR, ASSETS_DIR, OUTPUT_INPUT_DIR, OUTPUT_OUTPUT_DIR
+    global ASSET_THUMB_DIR, APP_LOG_DIR, APP_CACHE_DIR
+    OUTPUT_DIR = os.path.abspath(os.getenv("APP_OUTPUT_DIR") or os.path.join(RUNTIME_DIR, "output"))
+    ASSETS_DIR = os.path.abspath(os.getenv("APP_ASSETS_DIR") or os.path.join(RUNTIME_DIR, "assets"))
+    OUTPUT_INPUT_DIR = os.path.join(ASSETS_DIR, "input")
+    OUTPUT_OUTPUT_DIR = os.path.join(ASSETS_DIR, "output")
+    ASSET_THUMB_DIR = os.path.join(ASSETS_DIR, "thumbs")
+    APP_LOG_DIR = os.path.abspath(os.getenv("APP_LOG_DIR") or os.path.join(RUNTIME_DIR, "logs"))
+    APP_CACHE_DIR = os.path.abspath(os.getenv("APP_CACHE_DIR") or os.path.join(RUNTIME_DIR, "cache"))
+    for path in (OUTPUT_DIR, ASSETS_DIR, OUTPUT_INPUT_DIR, OUTPUT_OUTPUT_DIR, ASSET_THUMB_DIR, APP_LOG_DIR, APP_CACHE_DIR):
+        os.makedirs(path, exist_ok=True)
+    update_static_mount("/output", OUTPUT_DIR)
+    update_static_mount("/assets", ASSETS_DIR)
+
+def normalize_selected_path(path: str):
+    selected = os.path.abspath(os.path.expanduser(str(path or "").strip().strip('"')))
+    if not selected:
+        raise HTTPException(status_code=400, detail="请选择有效目录")
+    os.makedirs(selected, exist_ok=True)
+    if not os.path.isdir(selected):
+        raise HTTPException(status_code=400, detail="目标不是文件夹")
+    return selected
+
+def apply_app_path(target: str, path: str):
+    target = (target or "").strip()
+    meta = APP_PATH_TARGETS.get(target)
+    if not meta:
+        raise HTTPException(status_code=400, detail="未知目录类型")
+    selected = normalize_selected_path(path)
+    update_env_values({meta["env"]: selected})
+    reload_app_path_globals()
+    return {"ok": True, "target": target, "path": selected, "paths": app_paths_payload()}
+
+def select_local_directory(initial_path: str):
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        selected = filedialog.askdirectory(initialdir=initial_path if os.path.isdir(initial_path) else RUNTIME_DIR)
+        root.destroy()
+        return selected
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"打开文件夹选择器失败：{exc}")
+
+def open_local_path(path: str):
+    os.makedirs(path, exist_ok=True)
+    if sys.platform.startswith("win"):
+        os.startfile(path)  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", path])
+    else:
+        subprocess.Popen(["xdg-open", path])
+
+def version_tuple(value: str):
+    parts = []
+    for piece in re.split(r"[^0-9]+", value or ""):
+        if piece:
+            parts.append(int(piece))
+    return tuple(parts or [0])
+
+def normalize_update_payload(data: Dict[str, Any]):
+    latest = str(data.get("version") or data.get("latest_version") or data.get("tag_name") or "").strip()
+    if latest.lower().startswith("v"):
+        latest = latest[1:]
+    assets = data.get("assets") or []
+    asset_url = ""
+    if isinstance(assets, list):
+        for asset in assets:
+            if isinstance(asset, dict) and asset.get("browser_download_url") and "desktop" in str(asset.get("name") or "").lower():
+                asset_url = str(asset.get("browser_download_url") or "")
+                break
+        for asset in assets:
+            if isinstance(asset, dict) and asset.get("browser_download_url"):
+                asset_url = str(asset.get("browser_download_url") or "")
+                break
+    return {
+        "latest_version": latest,
+        "download_url": data.get("download_url") or asset_url or data.get("html_url") or data.get("url") or "",
+        "notes": data.get("notes") or data.get("changelog") or data.get("body") or "",
+    }
+
+@app.get("/login.html")
+async def login_page():
+    return FileResponse(os.path.join(STATIC_DIR, "login.html"))
+
 @app.get("/")
 async def index():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+@app.get("/api/app/info")
+async def app_info():
+    return {
+        "name": "Infinite Canvas",
+        "version": APP_VERSION,
+        "desktop": os.getenv("INFINITE_CANVAS_DESKTOP") == "1",
+        "cloud_url": CLOUD_SYNC_BASE_URL,
+        "update_check_configured": bool(APP_UPDATE_CHECK_URL),
+        "update_check_url": APP_UPDATE_CHECK_URL,
+        "paths": app_paths_payload(),
+    }
+
+@app.post("/api/app/open-path")
+async def app_open_path(payload: AppOpenPathRequest):
+    paths = app_paths_payload()
+    target = (payload.target or "").strip()
+    path = paths.get(target)
+    if not path:
+        raise HTTPException(status_code=400, detail="未知目录")
+    try:
+        open_local_path(path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"打开目录失败：{exc}")
+    return {"ok": True, "target": target, "path": path}
+
+@app.post("/api/app/select-path")
+async def app_select_path(payload: AppPathSelectRequest):
+    target = (payload.target or "").strip()
+    meta = APP_PATH_TARGETS.get(target)
+    if not meta:
+        raise HTTPException(status_code=400, detail="未知目录类型")
+    selected = select_local_directory(meta["current"]())
+    if not selected:
+        return {"ok": False, "cancelled": True, "target": target, "paths": app_paths_payload()}
+    return apply_app_path(target, selected)
+
+@app.post("/api/app/update-path")
+async def app_update_path(payload: AppPathUpdateRequest):
+    return apply_app_path(payload.target, payload.path)
+
+@app.post("/api/app/update-settings")
+async def app_update_settings(payload: AppUpdateSettingsRequest):
+    global APP_UPDATE_CHECK_URL
+    url = (payload.update_check_url or "").strip()
+    if url and not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="更新检查地址必须以 http:// 或 https:// 开头")
+    update_env_values({"APP_UPDATE_CHECK_URL": url})
+    APP_UPDATE_CHECK_URL = url
+    return {
+        "ok": True,
+        "current_version": APP_VERSION,
+        "update_check_url": APP_UPDATE_CHECK_URL,
+        "update_check_configured": bool(APP_UPDATE_CHECK_URL),
+    }
+
+@app.get("/api/app/update-check")
+async def app_update_check():
+    if not APP_UPDATE_CHECK_URL:
+        return {
+            "configured": False,
+            "current_version": APP_VERSION,
+            "message": "未配置更新检查地址。发布到 GitHub 后可通过 APP_UPDATE_CHECK_URL 指向 release/version JSON。",
+        }
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            resp = await client.get(APP_UPDATE_CHECK_URL)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"检查更新失败：{exc}")
+    normalized = normalize_update_payload(data if isinstance(data, dict) else {})
+    latest = normalized["latest_version"]
+    return {
+        "configured": True,
+        "current_version": APP_VERSION,
+        "latest_version": latest,
+        "is_newer": bool(latest and version_tuple(latest) > version_tuple(APP_VERSION)),
+        "download_url": normalized["download_url"],
+        "notes": normalized["notes"],
+        "source_url": APP_UPDATE_CHECK_URL,
+        "raw": data,
+    }
 
 @app.get("/api/view")
 async def view_image(filename: str, type: str = "input", subfolder: str = ""):
@@ -1785,6 +2581,192 @@ def download_output(url: str, name: str = ""):
         raise HTTPException(status_code=404, detail="文件不存在")
     filename = os.path.basename(name) if name else os.path.basename(path)
     return FileResponse(path, media_type=content_type_for_path(path), filename=filename)
+
+@app.get("/api/assets")
+def list_assets(type: str = "", q: str = "", favorite: Optional[bool] = None, limit: int = 80, offset: int = 0):
+    limit = max(1, min(int(limit or 80), 200))
+    offset = max(0, int(offset or 0))
+    clauses = []
+    params = []
+    if type in {"image", "video", "file"}:
+        clauses.append("type = ?")
+        params.append(type)
+    if favorite is not None:
+        clauses.append("favorite = ?")
+        params.append(1 if favorite else 0)
+    if q:
+        needle = f"%{q.strip()}%"
+        clauses.append("(title LIKE ? OR prompt LIKE ? OR model LIKE ? OR tags LIKE ?)")
+        params.extend([needle, needle, needle, needle])
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            total = conn.execute(f"SELECT COUNT(*) AS c FROM assets {where}", params).fetchone()["c"]
+            rows = conn.execute(
+                f"SELECT * FROM assets {where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                [*params, limit, offset],
+            ).fetchall()
+    return {"items": [asset_row_to_dict(row) for row in rows], "total": total, "limit": limit, "offset": offset}
+
+@app.post("/api/assets/rescan")
+def rescan_assets_from_history():
+    indexed = []
+    if os.path.exists(HISTORY_FILE):
+        with HISTORY_LOCK:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        for record in history if isinstance(history, list) else []:
+            indexed.extend(index_history_record_assets(record))
+    return {"ok": True, "indexed": len(indexed)}
+
+@app.put("/api/assets/{asset_id}")
+def update_asset(asset_id: str, payload: AssetUpdateRequest):
+    updates = []
+    params = []
+    if payload.title is not None:
+        updates.append("title = ?")
+        params.append(payload.title.strip())
+    if payload.tags is not None:
+        updates.append("tags = ?")
+        params.append(json.dumps(json_list(payload.tags), ensure_ascii=False))
+    if payload.favorite is not None:
+        updates.append("favorite = ?")
+        params.append(1 if payload.favorite else 0)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No changes")
+    updates.append("updated_at = ?")
+    params.append(time.time())
+    params.append(asset_id)
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            cur = conn.execute(f"UPDATE assets SET {', '.join(updates)} WHERE id = ?", params)
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Asset not found")
+            row = conn.execute("SELECT * FROM assets WHERE id = ?", (asset_id,)).fetchone()
+            return asset_row_to_dict(row)
+
+@app.get("/api/assets/{asset_id}/download")
+def download_asset(asset_id: str):
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            row = conn.execute("SELECT * FROM assets WHERE id = ?", (asset_id,)).fetchone()
+    if not row or not os.path.isfile(row["local_path"]):
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return FileResponse(row["local_path"], media_type=content_type_for_path(row["local_path"]), filename=row["title"] or os.path.basename(row["local_path"]))
+
+@app.delete("/api/assets/{asset_id}")
+def delete_asset(asset_id: str, delete_file: bool = False):
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            row = conn.execute("SELECT * FROM assets WHERE id = ?", (asset_id,)).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Asset not found")
+            conn.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
+    if delete_file and os.path.isfile(row["local_path"]):
+        try:
+            os.remove(row["local_path"])
+        except Exception as e:
+            logger.warning("Asset file delete failed for %s: %s", row["local_path"], e)
+    return {"ok": True}
+
+def prompt_row_to_dict(row):
+    data = dict(row)
+    data["tags"] = json_list(data.get("tags"))
+    data["favorite"] = bool(data.get("favorite"))
+    return data
+
+@app.get("/api/prompts")
+def list_prompts(q: str = "", favorite: Optional[bool] = None, limit: int = 100, offset: int = 0):
+    limit = max(1, min(int(limit or 100), 200))
+    offset = max(0, int(offset or 0))
+    clauses = []
+    params = []
+    if favorite is not None:
+        clauses.append("favorite = ?")
+        params.append(1 if favorite else 0)
+    if q:
+        needle = f"%{q.strip()}%"
+        clauses.append("(title LIKE ? OR content LIKE ? OR tags LIKE ?)")
+        params.extend([needle, needle, needle])
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            rows = conn.execute(
+                f"SELECT * FROM prompt_snippets {where} ORDER BY favorite DESC, updated_at DESC LIMIT ? OFFSET ?",
+                [*params, limit, offset],
+            ).fetchall()
+    return {"items": [prompt_row_to_dict(row) for row in rows], "limit": limit, "offset": offset}
+
+@app.post("/api/prompts")
+def create_prompt(payload: PromptSnippetRequest):
+    now = time.time()
+    prompt_id = uuid.uuid4().hex
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            conn.execute(
+                """
+                INSERT INTO prompt_snippets (id, title, content, tags, favorite, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    prompt_id,
+                    payload.title.strip(),
+                    payload.content.strip(),
+                    json.dumps(json_list(payload.tags), ensure_ascii=False),
+                    1 if payload.favorite else 0,
+                    now,
+                    now,
+                ),
+            )
+            row = conn.execute("SELECT * FROM prompt_snippets WHERE id = ?", (prompt_id,)).fetchone()
+    return prompt_row_to_dict(row)
+
+@app.put("/api/prompts/{prompt_id}")
+def update_prompt(prompt_id: str, payload: PromptSnippetRequest):
+    now = time.time()
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            cur = conn.execute(
+                """
+                UPDATE prompt_snippets
+                SET title = ?, content = ?, tags = ?, favorite = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    payload.title.strip(),
+                    payload.content.strip(),
+                    json.dumps(json_list(payload.tags), ensure_ascii=False),
+                    1 if payload.favorite else 0,
+                    now,
+                    prompt_id,
+                ),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Prompt not found")
+            row = conn.execute("SELECT * FROM prompt_snippets WHERE id = ?", (prompt_id,)).fetchone()
+    return prompt_row_to_dict(row)
+
+@app.post("/api/prompts/{prompt_id}/use")
+def use_prompt(prompt_id: str):
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            cur = conn.execute(
+                "UPDATE prompt_snippets SET usage_count = usage_count + 1, updated_at = ? WHERE id = ?",
+                (time.time(), prompt_id),
+            )
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Prompt not found")
+            row = conn.execute("SELECT * FROM prompt_snippets WHERE id = ?", (prompt_id,)).fetchone()
+    return prompt_row_to_dict(row)
+
+@app.delete("/api/prompts/{prompt_id}")
+def delete_prompt(prompt_id: str):
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            cur = conn.execute("DELETE FROM prompt_snippets WHERE id = ?", (prompt_id,))
+            if cur.rowcount == 0:
+                raise HTTPException(status_code=404, detail="Prompt not found")
+    return {"ok": True}
 
 @app.post("/api/upload")
 async def upload_image(files: List[UploadFile] = File(...)):
@@ -1841,8 +2823,55 @@ async def upload_ai_reference(files: List[UploadFile] = File(...)):
         path = output_path_for(filename, "input")
         with open(path, "wb") as f:
             f.write(content)
-        uploaded.append({"url": output_url_for(filename, "input"), "name": file.filename or filename})
+        local_url = output_url_for(filename, "input")
+        index_local_asset(local_url, source_type="upload", tags=["input"])
+        uploaded.append({"url": local_url, "name": file.filename or filename})
     return {"files": uploaded}
+
+@app.post("/api/assets/upload")
+async def upload_assets(files: List[UploadFile] = File(...)):
+    max_bytes = MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    uploaded = []
+    for file in files:
+        content = await file.read()
+        if len(content) > max_bytes:
+            raise HTTPException(status_code=413, detail=f"File too large (max {MAX_UPLOAD_SIZE_MB}MB)")
+        if not content:
+            continue
+        original = os.path.basename(file.filename or "asset")
+        ext = os.path.splitext(original)[1].lower()
+        content_type = (file.content_type or "").lower()
+        if not ext:
+            if "video" in content_type:
+                ext = ".mp4"
+            elif "webp" in content_type:
+                ext = ".webp"
+            elif "jpeg" in content_type or "jpg" in content_type:
+                ext = ".jpg"
+            elif "gif" in content_type:
+                ext = ".gif"
+            else:
+                ext = ".png"
+        category = "output" if ext in VIDEO_EXTENSIONS else "input"
+        filename = f"asset_{uuid.uuid4().hex[:12]}{ext}"
+        path = output_path_for(filename, category)
+        with open(path, "wb") as f:
+            f.write(content)
+        local_url = output_url_for(filename, category)
+        item = index_local_asset(
+            local_url,
+            source_type="upload",
+            tags=["upload"],
+            created_at=time.time(),
+        )
+        if item:
+            with ASSET_LOCK:
+                with asset_db() as conn:
+                    conn.execute("UPDATE assets SET title = ?, updated_at = ? WHERE id = ?", (original, time.time(), item["id"]))
+                    row = conn.execute("SELECT * FROM assets WHERE id = ?", (item["id"],)).fetchone()
+                    item = asset_row_to_dict(row) if row else item
+        uploaded.append(item or {"local_url": local_url, "title": original, "type": asset_type_for_path(path)})
+    return {"ok": True, "items": uploaded}
 
 @app.get("/api/config")
 async def ai_config():
@@ -1856,6 +2885,7 @@ async def ai_config():
         "image_models": IMAGE_MODELS,
         "video_models": VIDEO_MODELS,
         "api_providers": providers,
+        "comfy_instances": COMFYUI_INSTANCES,
         "has_api_key": bool(AI_API_KEY),
         "ms_chat_models": MODELSCOPE_CHAT_MODELS,
         "has_ms_key": bool(MODELSCOPE_API_KEY),
@@ -1902,6 +2932,346 @@ async def save_providers(payload: List[ApiProviderPayload]):
         update_env_values(env_updates)
         reload_env_globals()   # 立即将最新 env 值同步回模块全局变量，无需重启
     return {"providers": [public_provider(p) for p in providers]}
+
+@app.get("/api/cloud/status")
+async def cloud_status():
+    session = load_cloud_session()
+    return {
+        "logged_in": bool(session.get("token")),
+        "email": session.get("email", ""),
+        "email_verified": bool(session.get("email_verified")),
+        "display_name": session.get("display_name", ""),
+        "avatar_url": session.get("avatar_url", ""),
+        "base_url": session.get("base_url", CLOUD_SYNC_BASE_URL),
+        "custom_cloud": bool(session.get("custom_cloud")),
+        "updated_at": session.get("updated_at", 0),
+    }
+
+def cloud_requested_base_url(base_url: str = ""):
+    requested_base_url = (base_url or "").strip().rstrip("/")
+    custom_cloud = bool(requested_base_url)
+    resolved_base_url = (requested_base_url or CLOUD_SYNC_BASE_URL).strip().rstrip("/")
+    if not re.match(r"^https?://", resolved_base_url):
+        raise HTTPException(status_code=400, detail="云端服务地址未配置，请在后端设置 CLOUD_SYNC_BASE_URL")
+    return resolved_base_url, custom_cloud
+
+async def cloud_auth(action: str, payload: CloudAuthRequest):
+    base_url, custom_cloud = cloud_requested_base_url(payload.base_url)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            response = await client.post(
+                f"{base_url}/api/auth/{action}",
+                json={"email": payload.email.strip().lower(), "password": payload.password},
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "云端认证失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
+    token = data.get("token")
+    if not token:
+        raise HTTPException(status_code=502, detail="云端没有返回登录 token")
+    session = {
+        "base_url": base_url,
+        "email": data.get("email") or payload.email.strip().lower(),
+        "email_verified": bool(data.get("email_verified")),
+        "display_name": data.get("display_name", ""),
+        "avatar_url": data.get("avatar_url", ""),
+        "token": token,
+        "custom_cloud": custom_cloud,
+        "updated_at": now_ms(),
+    }
+    save_cloud_session(session)
+    return {
+        "logged_in": True,
+        "email": session["email"],
+        "email_verified": session.get("email_verified", False),
+        "display_name": session.get("display_name", ""),
+        "avatar_url": session.get("avatar_url", ""),
+        "base_url": base_url,
+        "custom_cloud": custom_cloud,
+    }
+
+@app.post("/api/cloud/register")
+async def cloud_register(payload: CloudAuthRequest):
+    return await cloud_auth("register", payload)
+
+@app.post("/api/cloud/login")
+async def cloud_login(payload: CloudAuthRequest):
+    return await cloud_auth("login", payload)
+
+@app.post("/api/cloud/password/forgot")
+async def cloud_forgot_password(payload: CloudPasswordForgotRequest):
+    base_url, custom_cloud = cloud_requested_base_url(payload.base_url)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            response = await client.post(
+                f"{base_url}/api/auth/password/forgot",
+                json={"email": payload.email.strip().lower()},
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "发送重置邮件失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
+    return {**data, "base_url": base_url, "custom_cloud": custom_cloud}
+
+@app.post("/api/cloud/password/reset")
+async def cloud_reset_password(payload: CloudPasswordResetRequest):
+    base_url, custom_cloud = cloud_requested_base_url(payload.base_url)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            response = await client.post(
+                f"{base_url}/api/auth/password/reset",
+                json={
+                    "email": payload.email.strip().lower(),
+                    "token": payload.token.strip(),
+                    "new_password": payload.new_password,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "重置密码失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
+    return {**data, "base_url": base_url, "custom_cloud": custom_cloud}
+
+@app.post("/api/cloud/email/verify/request")
+async def cloud_request_email_verify():
+    session = load_cloud_session()
+    cloud_auth_header(session)
+    base_url = cloud_base_url(session)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            profile_response = await client.get(f"{base_url}/api/me", headers=cloud_auth_header(session))
+            profile_response.raise_for_status()
+            profile = profile_response.json()
+            session["email"] = profile.get("email", session.get("email", ""))
+            session["email_verified"] = bool(profile.get("email_verified"))
+            session["display_name"] = profile.get("display_name", session.get("display_name", ""))
+            session["avatar_url"] = profile.get("avatar_url", session.get("avatar_url", ""))
+            save_cloud_session(session)
+            if session["email_verified"]:
+                return {"ok": True, "email_sent": False, "already_verified": True}
+            response = await client.post(
+                f"{base_url}/api/auth/email/verify/request",
+                json={"email": session.get("email", "")},
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "发送验证邮件失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
+    return data
+
+@app.post("/api/cloud/email/verify/confirm")
+async def cloud_confirm_email_verify(payload: CloudEmailVerifyConfirmRequest):
+    session = load_cloud_session()
+    cloud_auth_header(session)
+    base_url = cloud_base_url(session)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            response = await client.post(
+                f"{base_url}/api/auth/email/verify/confirm",
+                json={"email": session.get("email", ""), "token": payload.token.strip()},
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "验证邮箱失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
+    session["email_verified"] = True
+    save_cloud_session(session)
+    return data
+
+@app.post("/api/cloud/logout")
+async def cloud_logout():
+    save_cloud_session({})
+    return {"ok": True}
+
+@app.get("/api/cloud/profile")
+async def cloud_profile():
+    session = load_cloud_session()
+    base_url = cloud_base_url(session)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            response = await client.get(f"{base_url}/api/me", headers=cloud_auth_header(session))
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "读取账户资料失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
+    session["email"] = data.get("email", session.get("email", ""))
+    session["email_verified"] = bool(data.get("email_verified"))
+    session["display_name"] = data.get("display_name", "")
+    session["avatar_url"] = data.get("avatar_url", "")
+    save_cloud_session(session)
+    return {**data, "base_url": base_url}
+
+@app.put("/api/cloud/profile")
+async def cloud_save_profile(payload: CloudProfileRequest):
+    session = load_cloud_session()
+    base_url = cloud_base_url(session)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            response = await client.put(
+                f"{base_url}/api/me",
+                headers=cloud_auth_header(session),
+                json=payload.dict(),
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "保存账户资料失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
+    session["email"] = data.get("email", session.get("email", ""))
+    session["email_verified"] = bool(data.get("email_verified"))
+    session["display_name"] = data.get("display_name", "")
+    session["avatar_url"] = data.get("avatar_url", "")
+    save_cloud_session(session)
+    return data
+
+@app.post("/api/cloud/profile/avatar")
+async def cloud_upload_avatar(file: UploadFile = File(...)):
+    session = load_cloud_session()
+    base_url = cloud_base_url(session)
+    content = await file.read(CLOUD_AVATAR_MAX_BYTES + 1)
+    if not content:
+        raise HTTPException(status_code=400, detail="请选择头像文件")
+    if len(content) > CLOUD_AVATAR_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="头像文件不能超过 5MB")
+    try:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            response = await client.post(
+                f"{base_url}/api/me/avatar",
+                headers=cloud_auth_header(session),
+                files={"file": (file.filename or "avatar", content, file.content_type or "application/octet-stream")},
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "上传头像失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
+    session["email"] = data.get("email", session.get("email", ""))
+    session["email_verified"] = bool(data.get("email_verified"))
+    session["display_name"] = data.get("display_name", session.get("display_name", ""))
+    session["avatar_url"] = data.get("avatar_url", "")
+    save_cloud_session(session)
+    return data
+
+@app.post("/api/cloud/password")
+async def cloud_change_password(payload: CloudPasswordRequest):
+    session = load_cloud_session()
+    base_url = cloud_base_url(session)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            response = await client.post(
+                f"{base_url}/api/me/password",
+                headers=cloud_auth_header(session),
+                json=payload.dict(),
+            )
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "修改密码失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
+
+@app.post("/api/cloud/upload")
+async def cloud_upload(payload: CloudUploadRequest):
+    session = load_cloud_session()
+    base_url = cloud_base_url(session)
+    config = build_cloud_config(include_secrets=payload.include_secrets)
+    try:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            response = await client.put(
+                f"{base_url}/api/configs/current",
+                headers=cloud_auth_header(session),
+                json={"config": config},
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "上传云端配置失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
+    session["updated_at"] = now_ms()
+    save_cloud_session(session)
+    return {"ok": True, "cloud": data}
+
+@app.post("/api/cloud/download")
+async def cloud_download():
+    session = load_cloud_session()
+    base_url = cloud_base_url(session)
+    try:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            response = await client.get(
+                f"{base_url}/api/configs/current",
+                headers=cloud_auth_header(session),
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "下载云端配置失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
+    config = data.get("config")
+    if not config:
+        raise HTTPException(status_code=404, detail="云端还没有保存配置")
+    applied = apply_cloud_config(config)
+    return {"ok": True, "cloud_updated_at": data.get("updated_at", 0), "applied": applied}
 
 # --- ModelScope Token (从 env 读取，不再支持通过 UI 修改) ---
 
@@ -2249,44 +3619,77 @@ async def canvas_video(payload: CanvasVideoRequest):
         async with httpx.AsyncClient(timeout=VIDEO_POLL_TIMEOUT) as client:
             # --- 构造图片载荷 ---
             if is_apimart:
-                # APIMart 只接受 http/https 或 asset:// URL，先上传本地图片取回网络 URL
                 image_with_roles = []
-                for ref in payload.images[:9]:
+                invalid_images = []
+                requested_model = selected_model(payload.model, "doubao-seedance-2.0")
+                is_veo31 = is_apimart_veo31_model(requested_model)
+                apimart_model = apimart_veo31_model(requested_model) if is_veo31 else ""
+                if apimart_model == "veo3.1-lite" and payload.images:
+                    raise HTTPException(status_code=400, detail="veo3.1-lite 不支持图片输入，请改用 veo3.1-fast 或 veo3.1-quality。")
+                image_limit = 0 if apimart_model == "veo3.1-lite" else (3 if is_veo31 else 9)
+                for ref in payload.images[:image_limit]:
                     if not ref.url:
                         continue
                     role = str(ref.role or "").strip()
-                    if role in {"first_frame", "last_frame", "reference_image"}:
+                    if not is_veo31 and role in {"first_frame", "last_frame", "reference_image"}:
                         up_url = await upload_image_for_apimart(client, provider, ref.url)
-                        if up_url:
+                        if valid_apimart_video_image_input(up_url):
                             image_with_roles.append({"url": up_url, "role": role})
+                        else:
+                            invalid_images.append(ref.url)
                 image_payload = []
                 if not image_with_roles:
-                    for ref in payload.images[:9]:
+                    for ref in payload.images[:image_limit]:
                         if not ref.url:
                             continue
                         up_url = await upload_image_for_apimart(client, provider, ref.url)
-                        if up_url:
+                        if valid_apimart_video_image_input(up_url):
                             image_payload.append(up_url)
-                # --- APIMart 请求体 ---
-                body = {
-                    "prompt": payload.prompt,
-                    "model": selected_model(payload.model, "doubao-seedance-2.0"),
-                    "duration": payload.duration,
-                    "size": apimart_video_size(payload.aspect_ratio or payload.size),
-                    "resolution": payload.resolution or "480p",
-                }
-                if image_with_roles:
-                    body["image_with_roles"] = image_with_roles
-                elif image_payload:
-                    body["image_urls"] = image_payload[:9]
-                if payload.videos:
-                    body["video_urls"] = [v for v in payload.videos if v][:3]
-                if payload.seed is not None:
-                    body["seed"] = payload.seed
-                if payload.return_last_frame:
-                    body["return_last_frame"] = True
-                if payload.generate_audio:
-                    body["generate_audio"] = True
+                        else:
+                            invalid_images.append(ref.url)
+                if payload.images and not image_with_roles and not image_payload:
+                    sample = invalid_video_image_preview(invalid_images[0] if invalid_images else "")
+                    raise HTTPException(status_code=400, detail=f"输入图片无法转换为视频接口支持的格式：{sample}。请确认本地文件存在，且图片不超过 10MB；VEO3.1 需要先上传为 APIMart 可访问的 http/https 或 asset:// 图片。")
+                if is_veo31:
+                    model = apimart_model
+                    body = {
+                        "prompt": payload.prompt,
+                        "model": model,
+                        "duration": 8,
+                        "aspect_ratio": apimart_veo31_aspect(payload.aspect_ratio),
+                        "resolution": apimart_veo31_resolution(payload.resolution),
+                    }
+                    if image_payload and model != "veo3.1-lite":
+                        video_images = image_payload[:3]
+                        if model == "veo3.1-quality" and len(video_images) > 2:
+                            video_images = video_images[:2]
+                        body["image_urls"] = video_images
+                        if len(video_images) == 2:
+                            body["generation_type"] = "frame"
+                        elif len(video_images) >= 3 and model != "veo3.1-quality":
+                            body["generation_type"] = "reference"
+                    if model != "veo3.1-lite":
+                        body["official_fallback"] = False
+                else:
+                    body = {
+                        "prompt": payload.prompt,
+                        "model": requested_model,
+                        "duration": payload.duration,
+                        "size": apimart_video_size(payload.aspect_ratio or payload.size),
+                        "resolution": payload.resolution or "480p",
+                    }
+                    if image_with_roles:
+                        body["image_with_roles"] = image_with_roles
+                    elif image_payload:
+                        body["image_urls"] = image_payload[:9]
+                    if payload.videos:
+                        body["video_urls"] = [v for v in payload.videos if v][:3]
+                    if payload.seed is not None:
+                        body["seed"] = payload.seed
+                    if payload.return_last_frame:
+                        body["return_last_frame"] = True
+                    if payload.generate_audio:
+                        body["generate_audio"] = True
             else:
                 # 非 APIMart：data URL 方式（OpenAI / ComflyAI 接口）
                 image_payload = []
@@ -2780,7 +4183,12 @@ async def delete_history(req: DeleteHistoryRequest):
                 except Exception as e:
                     logger.error("Failed to delete file %s: %s", file_path, e)
                     failed_files.append(file_path)
-        result = {"ok": True}
+        with ASSET_LOCK:
+            with asset_db() as conn:
+                for img_url in target_record.get("images", []):
+                    conn.execute("DELETE FROM assets WHERE local_url = ?", (img_url,))
+
+        result = {"ok": True, "success": True}
         if failed_files:
             result["warnings"] = f"{len(failed_files)} 个文件删除失败"
         return result
@@ -3580,4 +4988,8 @@ async def run_workflow(name: str, payload: WorkflowRunRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=3000)
+    uvicorn.run(
+        app,
+        host=os.getenv("APP_HOST", "0.0.0.0"),
+        port=int(os.getenv("APP_PORT", "3000")),
+    )

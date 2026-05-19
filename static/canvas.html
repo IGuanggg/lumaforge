@@ -73,10 +73,29 @@
         .canvas-restore:hover { background:#ecfdf5; color:#059669; border-color:#a7f3d0; }
         .canvas-item.active .canvas-delete { background:rgba(255,255,255,.14); color:#fff; border-color:rgba(255,255,255,.18); opacity:1; }
         .canvas-item.active .canvas-delete:hover { background:rgba(248,113,113,.22); color:#fecaca; }
-        .toolbar { padding:10px; display:flex; gap:8px; align-items:center; }
-        .tool-btn { height:38px; min-width:38px; padding:0 12px; border-radius:999px; display:flex; align-items:center; justify-content:center; gap:7px; color:var(--muted); background:var(--card-solid); border:1px solid var(--line); font-size:11px; font-weight:700; transition:all .2s var(--ease); pointer-events:auto; }
+        .toolbar { flex:0 1 auto; max-width:min(980px, calc(100vw - 380px)); height:58px; padding:9px 10px; display:flex; gap:8px; align-items:center; overflow-x:auto; overflow-y:hidden; scrollbar-width:none; white-space:nowrap; }
+        .toolbar::-webkit-scrollbar { display:none; }
+        .tool-btn { flex:0 0 auto; height:38px; min-width:38px; padding:0 12px; border-radius:999px; display:flex; align-items:center; justify-content:center; gap:7px; color:var(--muted); background:var(--card-solid); border:1px solid var(--line); font-size:11px; font-weight:700; transition:all .2s var(--ease); pointer-events:auto; }
         .tool-btn:hover { background:var(--soft-2); color:var(--text); }
         .theme-toggle.active { background:var(--strong); color:var(--strong-text); border-color:var(--strong); }
+        .asset-dock { position:absolute; right:24px; top:108px; bottom:24px; z-index:34; width:320px; padding:14px; display:flex; flex-direction:column; gap:12px; transform:translateX(calc(100% + 36px)); opacity:0; pointer-events:none; transition:transform .22s var(--ease), opacity .18s var(--ease); }
+        .asset-dock.open { transform:translateX(0); opacity:1; pointer-events:auto; }
+        .asset-dock-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+        .asset-dock-title { font-size:13px; font-weight:900; letter-spacing:.04em; text-transform:uppercase; color:var(--text); }
+        .asset-dock-actions { display:flex; align-items:center; gap:6px; }
+        .asset-dock-btn { width:34px; height:34px; border:1px solid var(--line); border-radius:999px; background:var(--card-solid); color:var(--muted); display:flex; align-items:center; justify-content:center; }
+        .asset-dock-btn:hover { color:var(--text); background:var(--soft-2); }
+        .asset-dock-search { height:38px; width:100%; border:1px solid var(--line); background:var(--soft); color:var(--text); border-radius:999px; padding:0 13px; outline:none; font-size:12px; font-weight:800; }
+        .asset-dock-grid { min-height:0; overflow:auto; display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; padding-right:2px; }
+        .asset-dock-card { position:relative; min-height:116px; border:1px solid var(--line); background:var(--card-solid); border-radius:16px; overflow:hidden; text-align:left; color:var(--text); box-shadow:0 8px 24px var(--shadow); }
+        .asset-dock-card img,
+        .asset-dock-card video { width:100%; height:104px; display:block; object-fit:cover; background:var(--soft); }
+        .asset-dock-card-name { padding:8px 9px 9px; font-size:10px; font-weight:900; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .asset-dock-card-actions { position:absolute; right:6px; top:6px; display:flex; gap:5px; opacity:0; transform:translateY(-2px); transition:.16s; }
+        .asset-dock-card:hover .asset-dock-card-actions { opacity:1; transform:translateY(0); }
+        .asset-dock-mini { width:28px; height:28px; border:1px solid rgba(255,255,255,.6); border-radius:999px; background:rgba(255,255,255,.94); color:#111827; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 22px rgba(15,23,42,.18); }
+        .theme-dark .asset-dock-mini { background:rgba(15,23,42,.92); color:#f8fafc; border-color:rgba(255,255,255,.12); }
+        .asset-dock-empty { min-height:180px; border:1px dashed var(--line-2); border-radius:16px; color:var(--faint); display:flex; align-items:center; justify-content:center; text-align:center; font-size:12px; font-weight:900; line-height:1.5; padding:18px; }
         .board { position:absolute; inset:0; cursor:grab; background-color:var(--page); background-image:radial-gradient(var(--grid) 1px, transparent 1px); background-size:24px 24px; }
         body.canvas-knife .board,
         body.canvas-knife .node,
@@ -292,6 +311,8 @@
         .node.sized.output-node .output-grid { min-height:100%; grid-auto-rows:auto; }
         .output-img-wrap { position:relative; width:100%; max-width:var(--output-thumb-max); aspect-ratio:1; cursor:zoom-in; }
         .output-img-wrap:hover { transform:none; }
+        .missing-asset { width:100%; height:100%; min-height:72px; border-radius:16px; border:1px dashed var(--line-2); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; background:repeating-linear-gradient(135deg, var(--soft), var(--soft) 8px, var(--card-solid) 8px, var(--card-solid) 16px); color:var(--faint); font-size:10px; font-weight:800; text-align:center; user-select:none; cursor:default; }
+        .missing-asset.compact { min-height:38px; gap:3px; font-size:9px; }
         .output-del { position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,.9); border:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center; color:#64748b; opacity:0; transition:opacity .15s var(--ease); cursor:pointer; z-index:4; font-size:15px; line-height:1; }
         .output-img-wrap:hover .output-del { opacity:1; }
         .output-del:hover { color:#dc2626; border-color:#fecaca; background:#fff5f5; }
@@ -313,9 +334,9 @@
         .node > .port { top:50%; }
         .group-node,.promptGroup-node { min-width:260px; background:rgba(255,255,255,.96); border:1px solid #e8edf3; box-shadow:0 16px 42px rgba(15,23,42,.08); z-index:0; }
         .group-node .node-head,.promptGroup-node .node-head { background:#fff; border-bottom:1px solid #f1f5f9; }
-        .llm-node { width:420px; }
+        .llm-node { width:620px; }
         .llm-body { display:flex; flex-direction:column; gap:10px; min-height:0; }
-        .node.sized.llm-node .llm-body { height:100%; }
+        .node.sized.llm-node .llm-body { height:100%; overflow:hidden; }
         .llm-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
         .llm-model { flex:1; min-width:0; width:1px; }
         .llm-mode { background:#f8fafc; border:1px solid #edf2f7; border-radius:999px; padding:3px; display:flex; gap:2px; }
@@ -328,8 +349,8 @@
         .llm-bubble { max-width:86%; border-radius:14px; padding:7px 9px; font-size:12px; line-height:1.45; white-space:pre-wrap; user-select:text; cursor:text; }
         .llm-bubble.user { align-self:flex-end; background:#111827; color:#fff; }
         .llm-bubble.assistant { align-self:flex-start; background:#fff; color:#475569; border:1px solid #edf2f7; }
-        .llm-output-wrap { position:relative; min-height:70px; flex:0 0 auto; }
-        .llm-output { width:100%; height:100%; overflow:auto; border:1px solid #edf2f7; border-radius:14px; background:#f8fafc; padding:30px 10px 10px; font-size:12px; line-height:1.5; color:#475569; white-space:pre-wrap; user-select:text; cursor:text; }
+        .llm-output-wrap { position:relative; min-height:260px; flex:0 0 auto; }
+        .llm-output { width:100%; height:100%; overflow:auto; border:1px solid #edf2f7; border-radius:14px; background:#f8fafc; padding:32px 12px 12px; font-size:13px; line-height:1.65; color:#475569; white-space:pre-wrap; user-select:text; cursor:text; }
         .llm-pane-label { flex:0 0 auto; color:#94a3b8; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
         .llm-pane-label-row { display:flex; align-items:center; justify-content:space-between; flex:0 0 auto; }
         .llm-copy-btn { display:inline-flex; align-items:center; justify-content:center; gap:3px; border:none; background:transparent; color:#94a3b8; font-size:10px; cursor:pointer; padding:2px 4px; border-radius:6px; transition:color .14s, background .14s; }
@@ -354,7 +375,7 @@
         .llm-sys-toggle.active { background:#111827; color:#fff; border-color:#111827; }
         .theme-dark .llm-sys-toggle { background:var(--soft); border-color:var(--line); color:var(--faint); }
         .theme-dark .llm-sys-toggle.active { background:var(--muted); color:var(--card-solid); border-color:var(--muted); }
-        .llm-input-area { width:100%; resize:none; border:1px solid #edf2f7; border-radius:14px; outline:none; padding:10px; background:#fbfdff; color:#111827; font-size:12px; line-height:1.5; box-sizing:border-box; overflow:auto; }
+        .llm-input-area { width:100%; min-height:170px; resize:none; border:1px solid #edf2f7; border-radius:14px; outline:none; padding:12px; background:#fbfdff; color:#111827; font-size:13px; line-height:1.6; box-sizing:border-box; overflow:auto; }
         .llm-input-area[readonly] { background:#f8fafc; color:#475569; cursor:default; }
         .node.sized.llm-node .llm-input-area { max-height:none; }
         .seg { background:var(--soft); border:1px solid var(--line-2); border-radius:999px; padding:3px; display:flex; gap:2px; }
@@ -382,7 +403,7 @@
         .comfy-run:disabled { background:#e5e7eb; color:#94a3b8; cursor:not-allowed; }
         .comfy-run.running i { color:#facc15; fill:#facc15; animation:zapPulse .8s ease-in-out infinite; }
         @keyframes zapPulse { 0%,100% { transform:scale(1); opacity:.72; } 50% { transform:scale(1.18); opacity:1; } }
-        .hint { position:absolute; left:50%; bottom:24px; transform:translateX(-50%); z-index:25; color:#94a3b8; font-size:11px; font-weight:700; pointer-events:none; }
+        .hint { position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:3; max-width:min(720px, calc(100vw - 220px)); padding:7px 13px; border-radius:999px; background:rgba(248,250,252,.72); border:1px solid rgba(226,232,240,.64); box-shadow:0 8px 20px rgba(148,163,184,.1); color:#94a3b8; font-size:11px; font-weight:800; line-height:1.45; text-align:center; pointer-events:none; backdrop-filter:blur(10px); }
         .drop-overlay { position:absolute; inset:0; z-index:20; display:none; align-items:center; justify-content:center; color:#64748b; background:rgba(248,250,252,.72); backdrop-filter:blur(2px); font-weight:800; letter-spacing:.16em; pointer-events:none; }
         .drop-overlay.active { display:flex; }
         .create-menu { position:absolute; z-index:40; display:none; width:190px; padding:8px; border-radius:18px; background:rgba(255,255,255,.96); border:1px solid #e8edf3; box-shadow:0 20px 50px rgba(15,23,42,.14); backdrop-filter:blur(16px); }
@@ -758,10 +779,25 @@
                 <button class="tool-btn" onclick="addVideoNode()"><i data-lucide="clapperboard" class="w-4 h-4"></i><span data-i18n="canvas.videoGenerate">视频生成</span></button>
                 <button class="tool-btn" onclick="addComfyNode()"><i data-lucide="workflow" class="w-4 h-4"></i>ComfyUI</button>
                 <button class="tool-btn" onclick="addOutputNode()"><i data-lucide="circle-dot" class="w-4 h-4"></i>Output</button>
+                <button class="tool-btn" onclick="toggleAssetDock()"><i data-lucide="images" class="w-4 h-4"></i><span>素材</span></button>
                 <button class="tool-btn" onclick="groupSelectedImages()"><i data-lucide="group" class="w-4 h-4"></i><span data-i18n="canvas.group">分组</span></button>
                 <button class="tool-btn" onclick="openCanvasLog()"><i data-lucide="list-todo" class="w-4 h-4"></i><span data-i18n="canvas.logs">日志</span></button>
             </div>
         </div>
+
+        <aside id="assetDock" class="asset-dock panel editor-only" aria-label="素材库">
+            <div class="asset-dock-head">
+                <div class="asset-dock-title">素材库</div>
+                <div class="asset-dock-actions">
+                    <input id="assetDockUpload" type="file" accept="image/*,video/*" multiple hidden>
+                    <button class="asset-dock-btn" type="button" onclick="document.getElementById('assetDockUpload').click()" title="上传素材"><i data-lucide="upload" class="w-4 h-4"></i></button>
+                    <button class="asset-dock-btn" type="button" onclick="loadCanvasAssets()" title="刷新"><i data-lucide="refresh-cw" class="w-4 h-4"></i></button>
+                    <button class="asset-dock-btn" type="button" onclick="toggleAssetDock(false)" title="关闭"><i data-lucide="x" class="w-4 h-4"></i></button>
+                </div>
+            </div>
+            <input id="assetDockSearch" class="asset-dock-search" type="search" placeholder="搜索素材">
+            <div id="assetDockGrid" class="asset-dock-grid"></div>
+        </aside>
 
         <div id="canvasGate" class="canvas-gate">
             <div class="gate-panel">
@@ -879,12 +915,20 @@
                 </div>
                 <div id="imageMaskTools" class="image-edit-tools">
                     <label><span data-i18n="canvas.brushSize">笔刷</span> <input id="maskBrushSize" type="range" min="4" max="160" value="42"></label>
+                    <button id="maskUndoBtn" class="image-edit-btn secondary" type="button" onclick="undoEditDrawing()" title="撤销"><i data-lucide="undo-2" class="w-4 h-4"></i></button>
+                    <button id="maskRedoBtn" class="image-edit-btn secondary" type="button" onclick="redoEditDrawing()" title="恢复"><i data-lucide="redo-2" class="w-4 h-4"></i></button>
                     <button class="image-edit-btn secondary" type="button" onclick="clearEditDrawing()"><i data-lucide="eraser" class="w-4 h-4"></i><span data-i18n="canvas.clear">清空</span></button>
                     <span class="image-edit-sub" data-i18n="canvas.maskHint">白色区域为要编辑的遮罩</span>
                 </div>
                 <div id="imageBrushTools" class="image-edit-tools">
+                    <button class="image-edit-btn primary" type="button" data-brush-tool="free" onclick="setBrushTool('free')" title="自由画笔"><i data-lucide="paintbrush" class="w-4 h-4"></i></button>
+                    <button class="image-edit-btn secondary" type="button" data-brush-tool="rect" onclick="setBrushTool('rect')" title="矩形"><i data-lucide="square" class="w-4 h-4"></i></button>
+                    <button class="image-edit-btn secondary" type="button" data-brush-tool="ellipse" onclick="setBrushTool('ellipse')" title="椭圆"><i data-lucide="circle" class="w-4 h-4"></i></button>
+                    <button class="image-edit-btn secondary" type="button" data-brush-tool="label" onclick="setBrushTool('label')" title="数字标签"><i data-lucide="list-ordered" class="w-4 h-4"></i></button>
                     <label><span data-i18n="canvas.color">颜色</span> <input id="paintBrushColor" type="color" value="#ff2d55"></label>
                     <label><span data-i18n="canvas.brushSize">笔刷</span> <input id="paintBrushSize" type="range" min="2" max="80" value="14"></label>
+                    <button id="brushUndoBtn" class="image-edit-btn secondary" type="button" onclick="undoEditDrawing()" title="撤销"><i data-lucide="undo-2" class="w-4 h-4"></i></button>
+                    <button id="brushRedoBtn" class="image-edit-btn secondary" type="button" onclick="redoEditDrawing()" title="恢复"><i data-lucide="redo-2" class="w-4 h-4"></i></button>
                     <button class="image-edit-btn secondary" type="button" onclick="clearEditDrawing()"><i data-lucide="eraser" class="w-4 h-4"></i><span data-i18n="canvas.clear">清空</span></button>
                 </div>
                 <div id="imageGridTools" class="image-edit-tools">
@@ -970,6 +1014,8 @@
                 });
                 if(canvas) syncRemoteCanvasNow();
             }
+            if(event.data?.type === 'asset-add-to-canvas') handleAssetAddMessage(event.data.asset, event.data.message_id);
+            if(event.data?.type === 'assets-refresh') loadCanvasAssets().catch(() => {});
         });
         window.addEventListener('studio-lang-change', () => {
             document.title = tr('canvas.title');
@@ -1006,6 +1052,10 @@
         const gateConfirmBtn = document.getElementById('gateConfirmBtn');
         const gateCancelBtn = document.getElementById('gateCancelBtn');
         const backToManagerBtn = document.getElementById('backToManagerBtn');
+        const assetDock = document.getElementById('assetDock');
+        const assetDockGrid = document.getElementById('assetDockGrid');
+        const assetDockSearch = document.getElementById('assetDockSearch');
+        const assetDockUpload = document.getElementById('assetDockUpload');
         const currentCanvasTitle = document.getElementById('currentCanvasTitle');
         const currentCanvasTime = document.getElementById('currentCanvasTime');
         const outputLightbox = document.getElementById('outputLightbox');
@@ -1033,6 +1083,9 @@
         let canvas = null;
         let nodes = [];
         let connections = [];
+        let canvasAssets = [];
+        let assetDockOpen = false;
+        const receivedAssetMessages = new Set();
         let viewport = {x: -1800, y: -1000, scale: 1};
         let dragNode = null;
         let dragBoard = null;
@@ -1057,6 +1110,7 @@
         let emojiPickerCanvasId = null;
         let localCanvasDirty = false;
         let savingCanvasNow = false;
+        let saveCanvasAgain = false;
         let applyingRemoteCanvas = false;
         let remoteSyncTimer = null;
         let remoteSyncInterval = null;
@@ -1068,6 +1122,7 @@
         let videoModels = [];
         let msChatModels = [];
         let apiProviders = [];
+        let comfyBackendCount = 1;
         let comfyWorkflows = [];
         let comfyWorkflowCache = {};
         let managedProviderId = 'comfly';
@@ -1089,6 +1144,7 @@
         let currentOutputMeta = null;
         let currentOutputLightboxOutId = '';
         let currentOutputLightboxUrl = '';
+        const missingAssetUrls = new Set();
         let outputTimer = null;
         let loopContext = null;
         let clipboard = null;
@@ -1103,7 +1159,13 @@
         let cropState = null;
         let cropDrag = null;
         let imageEditMode = 'crop';
+        let imageEditModeTouched = false;
         let editDrawState = null;
+        let editDrawUndoStack = [];
+        let editDrawRedoStack = [];
+        const EDIT_DRAW_HISTORY_MAX = 40;
+        let brushTool = 'free';
+        let brushLabelCounter = 1;
         let gridCustomMode = false;
         let gridCustomLines = []; // [{type:'h'|'v', pos:0-1}] 相对图片尺寸的分数位置
         let gridCustomOrientation = 'h'; // 当前点击放置方向
@@ -1139,11 +1201,12 @@
         const MANAGED_IMAGE_MODELS_KEY = 'canvas_image_models_ordered';
         const MANAGED_CHAT_MODELS_KEY = 'canvas_chat_models_ordered';
         const CANVAS_THEME_KEY = 'canvas_theme';
+        const CANVAS_NODE_DEFAULTS_KEY = 'canvas_node_defaults_v1';
         const DEFAULT_VIDEO_MODELS = [
             // Veo
             'veo2', 'veo2-fast', 'veo2-pro',
             'veo3', 'veo3-fast', 'veo3-pro',
-            'veo3.1', 'veo3.1-fast', 'veo3.1-pro',
+            'veo3.1', 'veo3.1-fast', 'veo3.1-quality', 'veo3.1-lite',
             // Sora
             'sora-2', 'sora-2-pro',
             // 通义万相
@@ -1158,6 +1221,115 @@
             'doubao-seedance-1-0-lite-t2v-250428',
             'doubao-seedance-1-0-lite-i2v-250428'
         ];
+
+        function loadCanvasNodeDefaults(){
+            try {
+                const parsed = JSON.parse(localStorage.getItem(CANVAS_NODE_DEFAULTS_KEY) || '{}');
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch(e) {
+                return {};
+            }
+        }
+        let canvasNodeDefaults = loadCanvasNodeDefaults();
+        function saveCanvasNodeDefaults(){
+            try { localStorage.setItem(CANVAS_NODE_DEFAULTS_KEY, JSON.stringify(canvasNodeDefaults || {})); } catch(e) {}
+        }
+        function defaultsForNode(type){
+            return (canvasNodeDefaults && canvasNodeDefaults[type]) || {};
+        }
+        function rememberNodeDefaults(type, patch){
+            if(!type || !patch) return;
+            canvasNodeDefaults = {...(canvasNodeDefaults || {}), [type]: {...defaultsForNode(type), ...patch}};
+            saveCanvasNodeDefaults();
+        }
+        function preferredListValue(list, value, fallback=''){
+            const clean = String(value || '').trim();
+            return clean && Array.isArray(list) && list.includes(clean) ? clean : ((Array.isArray(list) && list[0]) || fallback);
+        }
+        function clampDefault(value, min, max, fallback){
+            const n = Number(value);
+            if(!Number.isFinite(n)) return fallback;
+            return Math.max(min, Math.min(max, n));
+        }
+        function rememberLLMDefaults(node){
+            rememberNodeDefaults('llm', {
+                provider: node.llmProvider || '',
+                model: node.model || '',
+                mode: node.mode || 'node'
+            });
+        }
+        function rememberGeneratorDefaults(node){
+            rememberNodeDefaults('generator', {
+                provider: node.apiProvider || '',
+                model: node.model || '',
+                ratio: node.ratio || 'square',
+                resolution: node.resolution || '1k',
+                customRatio: node.customRatio || '',
+                customSize: node.customSize || '',
+                customRatioWidth: node.customRatioWidth || '',
+                customRatioHeight: node.customRatioHeight || '',
+                customWidth: node.customWidth || '',
+                customHeight: node.customHeight || '',
+                count: clampDefault(node.count, 1, 8, 1)
+            });
+        }
+        function rememberMsGenDefaults(node){
+            rememberNodeDefaults('msgen', {
+                msgenModel: node.msgenModel || 'zimage',
+                msCustomModel: node.msCustomModel || '',
+                msRatio: node.msRatio || 'square',
+                msResolution: node.msResolution || '1k',
+                msCustomRatio: node.msCustomRatio || '',
+                msCustomSize: node.msCustomSize || '',
+                msCustomRatioWidth: node.msCustomRatioWidth || '',
+                msCustomRatioHeight: node.msCustomRatioHeight || '',
+                msCustomWidth: node.msCustomWidth || '',
+                msCustomHeight: node.msCustomHeight || '',
+                count: clampDefault(node.count, 1, 8, 1),
+                fitImage: Boolean(node.fitImage),
+                msLoraEnabled: Boolean(node.msLoraEnabled),
+                msLoraId: node.msLoraId || '',
+                msLoraStrength: node.msLoraStrength
+            });
+        }
+        function rememberVideoDefaults(node){
+            rememberNodeDefaults('video', {
+                provider: node.apiProvider || '',
+                model: node.model || '',
+                duration: clampDefault(node.duration, 1, 60, 5),
+                aspectRatio: node.aspectRatio || '16:9',
+                resolution: node.resolution || '',
+                enhancePrompt: Boolean(node.enhancePrompt),
+                enableUpsample: Boolean(node.enableUpsample),
+                watermark: Boolean(node.watermark),
+                cameraFixed: Boolean(node.cameraFixed),
+                generateAudio: Boolean(node.generateAudio),
+                useFrameRoles: Boolean(node.useFrameRoles)
+            });
+        }
+        function rememberComfyDefaults(node){
+            rememberNodeDefaults('comfy', {
+                mode: node.mode || 'text',
+                width: clampDefault(node.width, 64, 8192, 1024),
+                height: clampDefault(node.height, 64, 8192, 1024),
+                enhanceStrength: Number(node.enhanceStrength ?? 0.5),
+                enhanceUpscale: Boolean(node.enhanceUpscale),
+                enhanceUpscaleRes: Number(node.enhanceUpscaleRes || 2048),
+                editUpscale: Boolean(node.editUpscale),
+                editUpscaleRes: Number(node.editUpscaleRes || 2048),
+                editModel: node.editModel || '',
+                ratio: node.ratio || 'square',
+                resolution: node.resolution || '1k',
+                customRatio: node.customRatio || '',
+                customSize: node.customSize || '',
+                customRatioWidth: node.customRatioWidth || '',
+                customRatioHeight: node.customRatioHeight || '',
+                customWidth: node.customWidth || '',
+                customHeight: node.customHeight || '',
+                comfyWorkflow: node.comfyWorkflow || '',
+                count: clampDefault(node.count, 1, 8, 1)
+            });
+        }
 
         function uid(prefix='n'){ return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now()}`; }
         function applyTheme(theme){
@@ -1544,6 +1716,10 @@
             localCanvasDirty = true;
             setStatus('Saving...');
             clearTimeout(saveTimer);
+            if(savingCanvasNow){
+                saveCanvasAgain = true;
+                return;
+            }
             saveTimer = setTimeout(saveCanvas, 500);
         }
         function refreshOutputTimer(){
@@ -1572,8 +1748,13 @@
         }
         async function saveCanvas(){
             if(!canvas || applyingRemoteCanvas) return;
+            if(savingCanvasNow){
+                saveCanvasAgain = true;
+                return;
+            }
             sanitizeConnections();
             savingCanvasNow = true;
+            saveCanvasAgain = false;
             try {
                 const res = await fetch(`/api/canvases/${canvas.id}`, {
                     method:'PUT',
@@ -1592,6 +1773,12 @@
                 if(res.status === 409){
                     const data = await res.json().catch(() => ({}));
                     const remote = data.detail?.canvas || data.canvas;
+                    if(localCanvasDirty || saveCanvasAgain){
+                        lastCanvasUpdatedAt = Number(data.detail?.updated_at || data.updated_at || remote?.updated_at || lastCanvasUpdatedAt || 0);
+                        saveCanvasAgain = true;
+                        setStatus('Saving...');
+                        return;
+                    }
                     if(remote) applyRemoteCanvasData(remote);
                     setStatus('Synced');
                     return;
@@ -1601,7 +1788,7 @@
                 if(data.canvas) canvas = {...canvas, ...data.canvas};
                 canvas.updated_at = Number(canvas.updated_at || Date.now());
                 lastCanvasUpdatedAt = canvas.updated_at;
-                localCanvasDirty = false;
+                localCanvasDirty = Boolean(saveCanvasAgain);
                 if(currentCanvasTime) currentCanvasTime.textContent = formatCanvasTime(canvas.updated_at);
                 setStatus('Saved');
                 loadCanvasList(false);
@@ -1610,6 +1797,11 @@
                 console.error(e);
             } finally {
                 savingCanvasNow = false;
+                if(saveCanvasAgain && canvas && !applyingRemoteCanvas){
+                    saveCanvasAgain = false;
+                    localCanvasDirty = true;
+                    setTimeout(saveCanvas, 0);
+                }
             }
         }
 
@@ -1621,6 +1813,7 @@
                 chatModels = cfg.chat_models?.length ? cfg.chat_models : chatModels;
                 videoModels = cfg.video_models?.length ? cfg.video_models : DEFAULT_VIDEO_MODELS;
                 msChatModels = cfg.ms_chat_models?.length ? cfg.ms_chat_models : msChatModels;
+                comfyBackendCount = Math.max(1, (cfg.comfy_instances || []).length || 1);
                 apiProviders = Array.isArray(cfg.api_providers) && cfg.api_providers.length ? cfg.api_providers : defaultApiProviders();
                 models.nano = imageModels.find(m => m.toLowerCase().includes('nano')) || 'nano-banana-pro';
                 models.gpt = imageModels.find(m => !m.toLowerCase().includes('nano')) || cfg.image_model || 'gpt-image-2';
@@ -1963,6 +2156,7 @@
                 nodes.forEach(n => { if(n.running) n.running = false; });
                 sanitizeConnections();
                 pruneMissingComfyWorkflows();
+                await refreshMissingCanvasAssets();
                 selected.clear();
                 setCanvasMode(true);
                 renderCanvasList();
@@ -1989,6 +2183,7 @@
                 nodes.forEach(n => { if(n.running) n.running = false; });
                 sanitizeConnections();
                 pruneMissingComfyWorkflows();
+                refreshMissingCanvasAssets().then(() => render());
                 selected.clear();
                 renderCanvasList();
                 render();
@@ -1998,6 +2193,44 @@
                 setStatus('Synced');
             } finally {
                 applyingRemoteCanvas = false;
+            }
+        }
+        function canvasLocalAssetUrls(){
+            const urls = new Set();
+            const add = value => {
+                const url = outputUrlValue(value);
+                if(url && (url.startsWith('/output/') || url.startsWith('/assets/'))) urls.add(url);
+            };
+            nodes.forEach(node => {
+                if(node.url) add(node.url);
+                (node.images || []).forEach(add);
+                (node.generatedOutputs || []).forEach(add);
+                Object.entries(node.imageComparisons || {}).forEach(([key, value]) => {
+                    add(key);
+                    add(value);
+                });
+            });
+            (canvas?.logs || []).forEach(log => {
+                (log.outputs || []).forEach(add);
+                (log.refs || []).forEach(add);
+                (log.run?.refs || []).forEach(add);
+            });
+            return [...urls];
+        }
+        async function refreshMissingCanvasAssets(){
+            missingAssetUrls.clear();
+            const urls = canvasLocalAssetUrls();
+            if(!urls.length) return;
+            try {
+                const data = await fetch('/api/canvas-assets/check', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({urls})
+                }).then(r => r.json());
+                const exists = data.exists || {};
+                Object.entries(exists).forEach(([url, ok]) => { if(!ok) missingAssetUrls.add(url); });
+            } catch(e) {
+                console.warn('canvas asset check failed', e);
             }
         }
         async function syncRemoteCanvasNow(){
@@ -2182,7 +2415,7 @@
         document.querySelectorAll('[data-image-edit-mode]').forEach(btn => {
             btn.addEventListener('click', event => {
                 event.stopPropagation();
-                setImageEditMode(btn.dataset.imageEditMode || 'crop');
+                setImageEditMode(btn.dataset.imageEditMode || 'crop', true);
             });
         });
         document.getElementById('editDrawCanvas').addEventListener('pointerdown', beginEditDraw);
@@ -2220,6 +2453,15 @@
             if(cropState) syncImageEditOverflow();
         });
         backToManagerBtn.addEventListener('click', returnToCanvasManager);
+        assetDockSearch?.addEventListener('input', () => {
+            clearTimeout(assetDockSearch._timer);
+            assetDockSearch._timer = setTimeout(() => loadCanvasAssets().catch(err => setStatus(err.message || '素材加载失败')), 220);
+        });
+        assetDockUpload?.addEventListener('change', event => {
+            uploadCanvasAssets(event.target.files)
+                .catch(err => setStatus(err.message || '素材上传失败'))
+                .finally(() => { event.target.value = ''; });
+        });
 
         function addNode(node){
             if(!ensureCanvas()) return;
@@ -2257,73 +2499,86 @@
         }
         function addLLMNode(point){
             const p = point || defaultPoint(80, 0);
-            const providerId = chatApiProviders()[0]?.id || 'comfly';
+            const d = defaultsForNode('llm');
+            const providerId = preferredListValue(chatApiProviders().map(p => p.id), d.provider, 'comfly');
+            const chatModelList = providerChatModels(providerId);
+            const model = preferredListValue(chatModelList, d.model, resolveChatModel('', providerId));
             return addNode({
                 id:uid('llm'),
                 type:'llm',
                 x:p.x,
                 y:p.y,
                 llmProvider:providerId,
-                model:resolveChatModel('', providerId),
-                mode:'node',
+                model,
+                mode:d.mode || 'node',
                 systemPrompt:'You are a helpful assistant. Rewrite the input into a concise image prompt.',
                 chatInput:'',
                 messages:[],
                 outputText:'',
-                llmInputHeight:110,
-                llmOutputHeight:150,
+                llmInputHeight:180,
+                llmOutputHeight:280,
                 running:false
             });
         }
         function addGeneratorNode(point){
             const p = point || defaultPoint(120, 0);
-            const providerId = imageApiProviders()[0]?.id || '';
-            return addNode({id:uid('gen'), type:'generator', x:p.x, y:p.y, apiProvider:providerId, model:allImageModels(providerId)[0] || '', ratio:'square', resolution:'1k', customRatio:'', customSize:'', customRatioWidth:'', customRatioHeight:'', customWidth:'', customHeight:'', inputs:[]});
+            const d = defaultsForNode('generator');
+            const providerId = preferredListValue(imageApiProviders().map(p => p.id), d.provider, '');
+            const model = preferredListValue(allImageModels(providerId), d.model, '');
+            return addNode({id:uid('gen'), type:'generator', x:p.x, y:p.y, apiProvider:providerId, model, ratio:d.ratio || 'square', resolution:d.resolution || '1k', customRatio:d.customRatio || '', customSize:d.customSize || '', customRatioWidth:d.customRatioWidth || '', customRatioHeight:d.customRatioHeight || '', customWidth:d.customWidth || '', customHeight:d.customHeight || '', count:clampDefault(d.count, 1, 8, 1), inputs:[]});
         }
         function addMsGenNode(point){
             const p = point || defaultPoint(140, 0);
+            const d = defaultsForNode('msgen');
+            const msModelList = modelscopeImageModels(d.msCustomModel || '');
+            const msgenModel = MS_GEN_MODELS[d.msgenModel] ? d.msgenModel : 'zimage';
             return addNode({
                 id:uid('msgen'),
                 type:'msgen',
                 x:p.x,
                 y:p.y,
-                msgenModel:'zimage',
+                msgenModel,
                 msWidth:1024,
                 msHeight:1024,
-                msCustomModel:modelscopeImageModels()[0] || 'Tongyi-MAI/Z-Image-Turbo',
-                msRatio:'square',
-                msResolution:'1k',
-                msCustomRatio:'',
-                msCustomSize:'',
-                msCustomRatioWidth:'',
-                msCustomRatioHeight:'',
-                msCustomWidth:'',
-                msCustomHeight:'',
-                count:1,
-                fitImage:false,
+                msCustomModel:preferredListValue(msModelList, d.msCustomModel, msModelList[0] || 'Tongyi-MAI/Z-Image-Turbo'),
+                msRatio:d.msRatio || 'square',
+                msResolution:d.msResolution || '1k',
+                msCustomRatio:d.msCustomRatio || '',
+                msCustomSize:d.msCustomSize || '',
+                msCustomRatioWidth:d.msCustomRatioWidth || '',
+                msCustomRatioHeight:d.msCustomRatioHeight || '',
+                msCustomWidth:d.msCustomWidth || '',
+                msCustomHeight:d.msCustomHeight || '',
+                count:clampDefault(d.count, 1, 8, 1),
+                fitImage:Boolean(d.fitImage),
+                msLoraEnabled:Boolean(d.msLoraEnabled),
+                msLoraId:d.msLoraId || '',
+                msLoraStrength:d.msLoraStrength,
                 inputs:[],
                 running:false
             });
         }
         function addVideoNode(point){
             const p = point || defaultPoint(160, 0);
-            const providerId = videoApiProviders()[0]?.id || 'comfly';
+            const d = defaultsForNode('video');
+            const providerId = preferredListValue(videoApiProviders().map(p => p.id), d.provider, 'comfly');
+            const model = preferredListValue(providerVideoModels(providerId), d.model, videoModels[0] || DEFAULT_VIDEO_MODELS[0]);
             return addNode({
                 id:uid('vid'),
                 type:'video',
                 x:p.x,
                 y:p.y,
                 apiProvider:providerId,
-                model:videoModels[0] || DEFAULT_VIDEO_MODELS[0],
-                duration:5,
-                aspectRatio:'16:9',
-                resolution:'',
-                enhancePrompt:false,
-                enableUpsample:false,
-                watermark:false,
-                cameraFixed:false,
-                generateAudio:false,
-                useFrameRoles:false,
+                model,
+                duration:clampDefault(d.duration, 1, 60, 5),
+                aspectRatio:d.aspectRatio || '16:9',
+                resolution:d.resolution || '',
+                enhancePrompt:Boolean(d.enhancePrompt),
+                enableUpsample:Boolean(d.enableUpsample),
+                watermark:Boolean(d.watermark),
+                cameraFixed:Boolean(d.cameraFixed),
+                generateAudio:Boolean(d.generateAudio),
+                useFrameRoles:Boolean(d.useFrameRoles),
                 inputs:[],
                 running:false
             });
@@ -2391,13 +2646,12 @@
                                 <option value="1k">1K</option>
                                 <option value="2k">2K</option>
                                 <option value="4k">4K</option>
-                                <option value="custom">${tr('canvas.custom')}</option>
-                            </select>
-                            <select class="select-lite ratio compact-select" data-field="msRatio">
-                                <option value="">${tr('canvas.emptyRatio')}</option>
-                                <option value="square">1:1</option>
-                                <option value="portrait">2:3</option>
-                                <option value="landscape">3:2</option>
+                            <option value="custom">${tr('canvas.custom')}</option>
+                        </select>
+                        <select class="select-lite ratio compact-select" data-field="msRatio">
+                            <option value="square">1:1</option>
+                            <option value="portrait">2:3</option>
+                            <option value="landscape">3:2</option>
                                 <option value="portrait43">3:4</option>
                                 <option value="landscape43">4:3</option>
                                 <option value="story">9:16</option>
@@ -2475,6 +2729,7 @@
                         node.msLoraEnabled = false;
                     }
                     node.msgenModel = btn.dataset.model;
+                    rememberMsGenDefaults(node);
                     render();
                     scheduleSave();
                 };
@@ -2489,6 +2744,7 @@
                     node.msLoraId = '';
                     delete node.msLoraStrength;
                     node.msLoraEnabled = false;
+                    rememberMsGenDefaults(node);
                     scheduleSave();
                     render();
                 };
@@ -2517,7 +2773,8 @@
                     node.msCustomHeight = node.msCustomHeight || parsed?.height || '';
                 }
                 const syncMsCustomSizeControls = () => {
-                    msRatioSelect.value = node.msRatio ?? 'square';
+                    const ratioValue = node.msRatio && [...msRatioSelect.options].some(opt => opt.value === node.msRatio) ? node.msRatio : 'square';
+                    msRatioSelect.value = ratioValue;
                     msResolutionSelect.value = node.msResolution || '1k';
                     msRatioSelect.disabled = node.msResolution === 'custom';
                     msCustomRatioRow.style.display = node.msRatio === 'custom' ? 'flex' : 'none';
@@ -2539,6 +2796,7 @@
                         node.msCustomRatioHeight = '';
                     }
                     syncMsCustomSizeControls();
+                    rememberMsGenDefaults(node);
                     scheduleSave();
                 };
                 msResolutionSelect.onmousedown = e => e.stopPropagation();
@@ -2559,6 +2817,7 @@
                         node.msCustomHeight = '';
                     }
                     syncMsCustomSizeControls();
+                    rememberMsGenDefaults(node);
                     scheduleSave();
                 };
                 [msCustomRatioWInput, msCustomRatioHInput].forEach(input => {
@@ -2570,6 +2829,7 @@
                         node.msCustomRatio = node.msCustomRatioWidth && node.msCustomRatioHeight ? `${node.msCustomRatioWidth}:${node.msCustomRatioHeight}` : '';
                         node.msRatio = 'custom';
                         syncMsCustomSizeControls();
+                        rememberMsGenDefaults(node);
                         scheduleSave();
                     };
                 });
@@ -2583,6 +2843,7 @@
                         node.msResolution = 'custom';
                         node.msRatio = '';
                         syncMsCustomSizeControls();
+                        rememberMsGenDefaults(node);
                         scheduleSave();
                     };
                 });
@@ -2600,6 +2861,7 @@
                             node.msResolution = 'custom';
                             node.msRatio = '';
                             syncMsCustomSizeControls();
+                            rememberMsGenDefaults(node);
                             scheduleSave();
                         } catch(err) {
                             showErrorModal(tr('canvas.imageReadFailed'));
@@ -2614,6 +2876,7 @@
                 msCountInput.onclick = e => e.stopPropagation();
                 msCountInput.oninput = e => {
                     node.count = Math.max(1, Math.min(8, Number(e.target.value) || 1));
+                    rememberMsGenDefaults(node);
                     scheduleSave();
                 };
                 msCountInput.onblur = e => { e.target.value = String(Math.max(1, Math.min(8, Number(node.count || 1)))); };
@@ -2623,6 +2886,7 @@
                         const next = Math.max(1, Math.min(8, Number(node.count || 1) + Number(btn.dataset.msStep || 0)));
                         node.count = next;
                         msCountInput.value = String(next);
+                        rememberMsGenDefaults(node);
                         scheduleSave();
                     };
                 });
@@ -2635,6 +2899,7 @@
                         node.msLoraId = String(msLoras[0].id || '').trim();
                         node.msLoraStrength = Number(msLoras[0].strength ?? 0.8);
                     }
+                    rememberMsGenDefaults(node);
                     scheduleSave();
                     render();
                 };
@@ -2647,6 +2912,7 @@
                     node.msLoraId = e.target.value;
                     const picked = msLoras.find(lora => String(lora.id || '').trim() === node.msLoraId);
                     node.msLoraStrength = Number(picked?.strength ?? node.msLoraStrength ?? 0.8);
+                    rememberMsGenDefaults(node);
                     scheduleSave();
                     render();
                 };
@@ -2659,6 +2925,7 @@
                     node.msLoraStrength = parseFloat(e.target.value);
                     const val = wrap.querySelector('.ms-lora-strength-val');
                     if(val) val.textContent = node.msLoraStrength.toFixed(2);
+                    rememberMsGenDefaults(node);
                     scheduleSave();
                 };
             }
@@ -2698,12 +2965,16 @@
             if(msModel.supportsImage && !refs.length){ alert(tr('canvas.needImage')); return; }
             const count = Math.max(1, Math.min(8, Number(node.count || 1)));
             // 链路中间节点默认不创建 Output；链尾、手动开启或已有 Output 连接时才输出。
-            let out = outputForNode(node, 460);
+            let out = outputForNode(node, 460, !opts.cascade);
             const pendingIds = Array.from({length:count}, () => uid('p'));
             const run = runSnapshot(node, prompt, refs);
             if(out) out._pending = [...(out._pending || []), ...pendingIds.map(id => makePending(id, run))];
-            if(!opts.cascade){ node.running = true; render(); setTimeout(() => { node.running = false; render(); }, 2000); }
-            else render();
+            if(!opts.cascade){
+                node.running = true;
+                refreshRunNodes(node, out);
+                setTimeout(() => { node.running = false; refreshRunNodes(node, out); }, 2000);
+            }
+            else refreshRunNodes(node, out);
             try {
                 const size = apiImageSize(node.msRatio ?? 'square', node.msResolution || '1k', node.msCustomRatio || '', node.msCustomSize || '');
                 const parsed = parseSizeValue(size);
@@ -2760,23 +3031,26 @@
                 run.request = results[0] ? requestMetaFromResult(results[0]) : {};
                 if(out) out._pending = (out._pending || []).filter(p => !pendingIds.includes(p.id));
                 appendOutputImages(out, outputUrls, refs[0], metas);
-                node.generatedOutputs = outputUrls.filter(url => url && !isVideoUrl(url));
+                mergeGeneratedOutputs(node, outputUrls, Boolean(opts.cascade));
                 addGenerationLog({run, outputs:outputUrls, runMs:Math.max(...metas.map(m => m.runMs || 0), 0)});
                 node.runStatus = 'done'; node.runError = '';
-                render();
+                refreshRunNodes(node, out);
                 scheduleSave();
             } catch(err){
                 const metas = collectRunMetas(out, pendingIds);
                 addGenerationLog({run, outputs:[], runMs:Math.max(...metas.map(m => m.runMs || 0), 0), error:err.message || String(err)});
                 if(out) out._pending = (out._pending || []).filter(p => !pendingIds.includes(p.id));
                 node.runStatus = 'failed'; node.runError = err.message || String(err);
-                render();
+                refreshRunNodes(node, out);
                 if(opts.cascade) throw err;
                 alert(err.message || tr('canvas.msFailed'));
             }
         }
         function addComfyNode(point){
             const p = point || defaultPoint(160, 0);
+            const d = defaultsForNode('comfy');
+            const imageProvider = imageApiProviders()[0]?.id || 'comfly';
+            const comfyMode = ['text','enhance','edit','custom'].includes(d.mode) ? d.mode : 'text';
             return addNode({
                 id:uid('comfy'),
                 type:'comfy',
@@ -2784,26 +3058,26 @@
                 y:p.y,
                 w:420,
                 h:460,
-                mode:'text',
-                width:1024,
-                height:1024,
-                enhanceStrength:0.5,
-                enhanceUpscale:false,
-                enhanceUpscaleRes:2048,
-                editUpscale:false,
-                editUpscaleRes:2048,
-                editModel:allImageModels(imageApiProviders()[0]?.id || 'comfly')[0] || models.gpt,
-                ratio:'square',
-                resolution:'1k',
-                customRatio:'',
-                customSize:'',
-                customRatioWidth:'',
-                customRatioHeight:'',
-                customWidth:'',
-                customHeight:'',
-                comfyWorkflow:'',
+                mode:comfyMode,
+                width:clampDefault(d.width, 64, 8192, 1024),
+                height:clampDefault(d.height, 64, 8192, 1024),
+                enhanceStrength:Number(d.enhanceStrength ?? 0.5),
+                enhanceUpscale:Boolean(d.enhanceUpscale),
+                enhanceUpscaleRes:Number(d.enhanceUpscaleRes || 2048),
+                editUpscale:Boolean(d.editUpscale),
+                editUpscaleRes:Number(d.editUpscaleRes || 2048),
+                editModel:preferredListValue(allImageModels(imageProvider), d.editModel, allImageModels(imageProvider)[0] || models.gpt),
+                ratio:d.ratio || 'square',
+                resolution:d.resolution || '1k',
+                customRatio:d.customRatio || '',
+                customSize:d.customSize || '',
+                customRatioWidth:d.customRatioWidth || '',
+                customRatioHeight:d.customRatioHeight || '',
+                customWidth:d.customWidth || '',
+                customHeight:d.customHeight || '',
+                comfyWorkflow:d.comfyWorkflow || '',
                 comfyParams:{},
-                count:1,
+                count:clampDefault(d.count, 1, 8, 1),
                 inputs:[]
             });
         }
@@ -2943,10 +3217,15 @@
             if(!node || node.type !== 'output') return;
             closeCreateMenu();
             const imageCount = (node.images || []).map(outputUrlValue).filter(url => url && !isVideoUrl(url)).length;
+            const downloadableCount = outputDownloadableImageUrls(node).length;
             imageNodeMenu.classList.add('output-node-menu');
             imageNodeMenu.innerHTML = `
+                <div class="menu-section-title">${tr('canvas.outputGroupActions')}</div>
                 <button class="menu-btn" data-output-convert="${escapeAttr(nodeId)}" ${imageCount ? '' : 'disabled'}><i data-lucide="replace" class="w-4 h-4"></i><span>${tr('canvas.outputConvertToInputGroup')}</span></button>
                 <button class="menu-btn" data-output-copy="${escapeAttr(nodeId)}" ${imageCount ? '' : 'disabled'}><i data-lucide="copy-plus" class="w-4 h-4"></i><span>${tr('canvas.outputCopyToInputGroup')}</span></button>
+                <div class="menu-divider"></div>
+                <div class="menu-section-title">${tr('canvas.outputFileActions')}</div>
+                <button class="menu-btn" data-output-download="${escapeAttr(nodeId)}" ${downloadableCount ? '' : 'disabled'}><i data-lucide="download" class="w-4 h-4"></i><span>${tr('canvas.outputDownloadAllImages')}</span></button>
             `;
             const menuWidth = 260;
             imageNodeMenu.style.left = `${Math.max(10, Math.min(window.innerWidth - menuWidth - 10, clientX))}px`;
@@ -2965,6 +3244,14 @@
                 copyOutputNodeToInputGroup(nodeId);
                 closeImageNodeMenu();
             };
+            const downloadBtn = imageNodeMenu.querySelector('[data-output-download]');
+            if(downloadBtn){
+                downloadBtn.onclick = e => {
+                    e.stopPropagation();
+                    downloadOutputNodeImages(nodeId);
+                    closeImageNodeMenu();
+                };
+            }
             refreshIcons();
         }
         function closeImageNodeMenu(){
@@ -2974,6 +3261,9 @@
         }
         function outputImageUrls(node){
             return (node?.images || []).map(outputUrlValue).filter(url => url && !isVideoUrl(url));
+        }
+        function outputDownloadableImageUrls(node){
+            return outputImageUrls(node).filter(url => !isMissingAssetUrl(url) && (url.startsWith('/output/') || url.startsWith('/assets/')));
         }
         function createInputGroupFromOutput(node, point){
             const urls = outputImageUrls(node);
@@ -3048,6 +3338,35 @@
             render();
             scheduleSave();
         }
+        async function downloadOutputNodeImages(nodeId){
+            const node = nodes.find(n => n.id === nodeId);
+            const urls = outputDownloadableImageUrls(node);
+            if(!node || !urls.length){
+                alert(tr('canvas.outputDownloadEmpty'));
+                return;
+            }
+            try {
+                const res = await fetch('/api/canvas-assets/download', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({
+                        urls,
+                        filename:`${(canvas?.title || 'canvas-output').slice(0, 48)}-${node.id}.zip`
+                    })
+                });
+                if(!res.ok) throw new Error(await responseErrorMessage(res, tr('canvas.outputDownloadEmpty')));
+                const blob = await res.blob();
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `${(canvas?.title || 'canvas-output').slice(0, 48)}-${node.id}.zip`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            } catch(err) {
+                alert(err.message || tr('canvas.outputDownloadEmpty'));
+            }
+        }
         function createLinkedNode(type){
             const state = linkCreateState;
             closeLinkCreateMenu();
@@ -3121,6 +3440,136 @@
                 scheduleSave();
             }
         }
+        function toggleAssetDock(force){
+            assetDockOpen = typeof force === 'boolean' ? force : !assetDockOpen;
+            assetDock?.classList.toggle('open', assetDockOpen);
+            if(assetDockOpen) loadCanvasAssets().catch(err => setStatus(err.message || '素材加载失败'));
+        }
+        async function loadCanvasAssets(){
+            const params = new URLSearchParams({limit:'80'});
+            const q = assetDockSearch?.value?.trim();
+            if(q) params.set('q', q);
+            const data = await fetch('/api/assets?' + params.toString()).then(r => r.json());
+            if(data.detail) throw new Error(data.detail);
+            canvasAssets = data.items || [];
+            renderCanvasAssetDock();
+        }
+        function renderCanvasAssetDock(){
+            if(!assetDockGrid) return;
+            if(!canvasAssets.length){
+                assetDockGrid.innerHTML = '<div class="asset-dock-empty">还没有素材。上传本地图片，或生成一次图片后刷新。</div>';
+                refreshIcons();
+                return;
+            }
+            assetDockGrid.innerHTML = canvasAssets.map(asset => {
+                const url = asset.local_url || asset.url || '';
+                const media = asset.type === 'video' || isVideoUrl(url)
+                    ? `<video src="${escapeAttr(url)}" muted loop playsinline preload="metadata"></video>`
+                    : `<img src="${escapeAttr(asset.thumb_url || url)}" alt="">`;
+                return `
+                    <article class="asset-dock-card" data-asset-id="${escapeAttr(asset.id)}" title="${escapeAttr(asset.title || 'asset')}">
+                        ${media}
+                        <div class="asset-dock-card-actions">
+                            <button class="asset-dock-mini" type="button" data-action="add" title="加入画布"><i data-lucide="plus" class="w-3.5 h-3.5"></i></button>
+                            <button class="asset-dock-mini" type="button" data-action="delete" title="删除素材"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                        </div>
+                        <div class="asset-dock-card-name">${escapeHtml(asset.title || 'asset')}</div>
+                    </article>
+                `;
+            }).join('');
+            assetDockGrid.querySelectorAll('.asset-dock-card').forEach(card => {
+                const asset = canvasAssets.find(item => item.id === card.dataset.assetId);
+                card.addEventListener('click', event => {
+                    const action = event.target.closest('button')?.dataset.action || 'add';
+                    if(action === 'add') addAssetToCanvas(asset);
+                    if(action === 'delete') deleteCanvasAsset(asset).catch(err => setStatus(err.message || '素材删除失败'));
+                });
+                const video = card.querySelector('video');
+                if(video){
+                    card.addEventListener('mouseenter', () => video.play().catch(() => {}));
+                    card.addEventListener('mouseleave', () => { video.pause(); video.currentTime = 0; });
+                }
+            });
+            refreshIcons();
+        }
+        function addAssetToCanvas(asset, point){
+            if(!ensureCanvas() || !asset?.local_url) return;
+            pushUndo();
+            const p = point || screenToWorld(window.innerWidth * 0.58, window.innerHeight * 0.48);
+            let created;
+            if(asset.type === 'video' || isVideoUrl(asset.local_url)){
+                created = {
+                    id:uid('out'),
+                    type:'output',
+                    x:p.x,
+                    y:p.y,
+                    images:[{url:asset.local_url, viewed:false, runMs:0, run:null}]
+                };
+            } else {
+                created = {
+                    id:uid('img'),
+                    type:'image',
+                    x:p.x,
+                    y:p.y,
+                    url:asset.local_url,
+                    name:asset.title || 'asset image'
+                };
+            }
+            nodes.push(created);
+            selected.clear();
+            selected.add(created.id);
+            render();
+            scheduleSave();
+            setStatus('素材已加入画布');
+        }
+        async function deleteCanvasAsset(asset){
+            if(!asset?.id) return;
+            if(!confirm('从素材库删除这个素材，并删除本地文件？')) return;
+            const res = await fetch(`/api/assets/${encodeURIComponent(asset.id)}?delete_file=true`, {method:'DELETE'});
+            if(!res.ok){
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || '素材删除失败');
+            }
+            canvasAssets = canvasAssets.filter(item => item.id !== asset.id);
+            renderCanvasAssetDock();
+            setStatus('素材已删除');
+        }
+        async function uploadCanvasAssets(files){
+            const list = [...(files || [])].filter(file => file.type.startsWith('image/') || file.type.startsWith('video/'));
+            if(!list.length) return;
+            const form = new FormData();
+            list.forEach(file => form.append('files', file));
+            setStatus('Uploading asset...');
+            const res = await fetch('/api/assets/upload', {method:'POST', body:form});
+            if(!res.ok){
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || '素材上传失败');
+            }
+            await loadCanvasAssets();
+            setStatus('素材已上传');
+        }
+        async function handleAssetAddMessage(asset, messageId){
+            if(messageId) {
+                if(receivedAssetMessages.has(messageId)) return;
+                receivedAssetMessages.add(messageId);
+                if(receivedAssetMessages.size > 80) receivedAssetMessages.delete(receivedAssetMessages.values().next().value);
+            }
+            if(!asset?.local_url && asset?.url) asset.local_url = asset.url;
+            if(!asset?.local_url) {
+                setStatus('素材地址为空，无法加入画布');
+                return;
+            }
+            if(!canvas) {
+                setStatus('正在打开画布...');
+                await loadCanvasList(true);
+            }
+            if(!canvas) {
+                setStatus('请先创建或打开一个画布');
+                return;
+            }
+            toggleAssetDock(false);
+            addAssetToCanvas(asset);
+        }
         function setImageNodeFromOutput(nodeId, url){
             const node = nodes.find(n => n.id === nodeId);
             if(!node || node.type !== 'image' || !url || isVideoUrl(url)) return;
@@ -3171,7 +3620,8 @@
             canvasEl.style.height = `${img.clientHeight || 1}px`;
             if(imageEditMode === 'grid') refreshGridSplitPreview();
         }
-        function setImageEditMode(mode){
+        function setImageEditMode(mode, userTouched=false){
+            if(userTouched) imageEditModeTouched = true;
             const prevImageEditMode = imageEditMode;
             imageEditMode = ['crop','mask','brush','grid'].includes(mode) ? mode : 'crop';
             const cropCanvasEl = document.getElementById('cropCanvas');
@@ -3196,13 +3646,77 @@
             apply.innerHTML = `<i data-lucide="${icon}" class="w-4 h-4"></i><span>${tr(labelKey)}</span>`;
             resizeEditDrawCanvas();
             if(imageEditMode === 'grid') refreshGridSplitPreview();
-            else if(imageEditMode === 'crop') clearEditDrawing();
-            else if(prevImageEditMode === 'grid') clearEditDrawing(); // 离开 grid 时主动清掉画布上残留的分割线预览
+            else if(imageEditMode === 'crop') clearEditDrawing(true);
+            else if(prevImageEditMode === 'grid') clearEditDrawing(true); // 离开 grid 时主动清掉画布上残留的分割线预览
+            syncEditDrawingHistoryButtons();
+            syncBrushToolButtons();
             refreshIcons();
         }
-        function clearEditDrawing(){
+        function editDrawSnapshot(){
             const canvasEl = editDrawCanvas();
+            return {
+                imageData: canvasEl.getContext('2d').getImageData(0, 0, canvasEl.width, canvasEl.height),
+                labelCounter: brushLabelCounter,
+            };
+        }
+        function restoreEditDrawSnapshot(snapshot){
+            if(!snapshot) return;
+            const canvasEl = editDrawCanvas();
+            const imageData = snapshot.imageData || snapshot;
+            canvasEl.getContext('2d').putImageData(imageData, 0, 0);
+            if(snapshot.labelCounter) brushLabelCounter = snapshot.labelCounter;
+        }
+        function pushEditDrawHistory(){
+            editDrawUndoStack.push(editDrawSnapshot());
+            if(editDrawUndoStack.length > EDIT_DRAW_HISTORY_MAX) editDrawUndoStack.shift();
+            editDrawRedoStack = [];
+            syncEditDrawingHistoryButtons();
+        }
+        function syncEditDrawingHistoryButtons(){
+            ['maskUndoBtn','brushUndoBtn'].forEach(id => {
+                const btn = document.getElementById(id);
+                if(btn){ btn.disabled = !editDrawUndoStack.length; btn.style.opacity = editDrawUndoStack.length ? '1' : '.42'; }
+            });
+            ['maskRedoBtn','brushRedoBtn'].forEach(id => {
+                const btn = document.getElementById(id);
+                if(btn){ btn.disabled = !editDrawRedoStack.length; btn.style.opacity = editDrawRedoStack.length ? '1' : '.42'; }
+            });
+        }
+        function undoEditDrawing(){
+            if(!editDrawUndoStack.length) return;
+            editDrawRedoStack.push(editDrawSnapshot());
+            restoreEditDrawSnapshot(editDrawUndoStack.pop());
+            syncEditDrawingHistoryButtons();
+        }
+        function redoEditDrawing(){
+            if(!editDrawRedoStack.length) return;
+            editDrawUndoStack.push(editDrawSnapshot());
+            restoreEditDrawSnapshot(editDrawRedoStack.pop());
+            syncEditDrawingHistoryButtons();
+        }
+        function clearEditDrawing(silent=false){
+            const canvasEl = editDrawCanvas();
+            if(!silent && editCanvasHasPixels()) pushEditDrawHistory();
             canvasEl.getContext('2d').clearRect(0, 0, canvasEl.width, canvasEl.height);
+            brushLabelCounter = 1;
+            syncEditDrawingHistoryButtons();
+        }
+        function resetEditDrawingHistory(){
+            editDrawUndoStack = [];
+            editDrawRedoStack = [];
+            brushLabelCounter = 1;
+            syncEditDrawingHistoryButtons();
+        }
+        function setBrushTool(tool){
+            brushTool = ['free','rect','ellipse','label'].includes(tool) ? tool : 'free';
+            syncBrushToolButtons();
+        }
+        function syncBrushToolButtons(){
+            document.querySelectorAll('[data-brush-tool]').forEach(btn => {
+                const active = btn.dataset.brushTool === brushTool;
+                btn.classList.toggle('primary', active);
+                btn.classList.toggle('secondary', !active);
+            });
         }
         function editDrawPoint(event){
             const canvasEl = editDrawCanvas();
@@ -3241,6 +3755,52 @@
             const id = imageEditMode === 'mask' ? 'maskBrushSize' : 'paintBrushSize';
             return Number(document.getElementById(id)?.value || 20);
         }
+        function brushColor(){
+            return document.getElementById('paintBrushColor')?.value || '#ff2d55';
+        }
+        function setupDrawStyle(ctx){
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = editBrushSize();
+            ctx.strokeStyle = imageEditMode === 'mask' ? 'rgba(255,255,255,0.78)' : brushColor();
+            ctx.fillStyle = imageEditMode === 'mask' ? 'rgba(255,255,255,0.78)' : brushColor();
+            ctx.globalCompositeOperation = 'source-over';
+        }
+        function circledNumber(n){
+            if(n >= 1 && n <= 20) return String.fromCharCode(0x2460 + n - 1);
+            return String(n);
+        }
+        function drawBrushShape(ctx, start, end, preview=false){
+            setupDrawStyle(ctx);
+            const x = Math.min(start.x, end.x);
+            const y = Math.min(start.y, end.y);
+            const w = Math.abs(end.x - start.x);
+            const h = Math.abs(end.y - start.y);
+            if(brushTool === 'rect'){
+                ctx.strokeRect(x, y, w, h);
+            } else if(brushTool === 'ellipse'){
+                ctx.beginPath();
+                ctx.ellipse(x + w / 2, y + h / 2, Math.max(1, w / 2), Math.max(1, h / 2), 0, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+        function drawNumberLabel(point){
+            const canvasEl = editDrawCanvas();
+            const ctx = canvasEl.getContext('2d');
+            const size = Math.max(18, editBrushSize() * 2.2);
+            const text = circledNumber(brushLabelCounter++);
+            setupDrawStyle(ctx);
+            ctx.save();
+            ctx.font = `900 ${size}px Arial, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.lineWidth = Math.max(3, size / 8);
+            ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+            ctx.strokeText(text, point.x, point.y);
+            ctx.fillStyle = brushColor();
+            ctx.fillText(text, point.x, point.y);
+            ctx.restore();
+        }
         function beginEditDraw(event){
             if(imageEditMode === 'crop') return;
             if(imageEditMode === 'grid'){
@@ -3275,16 +3835,20 @@
             canvasEl.setPointerCapture?.(event.pointerId);
             const ctx = canvasEl.getContext('2d');
             const p = editDrawPoint(event);
-            editDrawState = {x:p.x, y:p.y, pointerId:event.pointerId};
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.lineWidth = editBrushSize();
-            ctx.strokeStyle = imageEditMode === 'mask' ? 'rgba(255,255,255,0.78)' : (document.getElementById('paintBrushColor')?.value || '#ff2d55');
-            ctx.globalCompositeOperation = 'source-over';
+            pushEditDrawHistory();
+            if(imageEditMode === 'brush' && brushTool === 'label'){
+                drawNumberLabel(p);
+                editDrawState = null;
+                canvasEl.releasePointerCapture?.(event.pointerId);
+                syncEditDrawingHistoryButtons();
+                return;
+            }
+            editDrawState = {x:p.x, y:p.y, sx:p.x, sy:p.y, pointerId:event.pointerId, snapshot:(imageEditMode === 'brush' && brushTool !== 'free') ? editDrawSnapshot() : null};
+            setupDrawStyle(ctx);
             ctx.beginPath();
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(p.x + 0.01, p.y + 0.01);
-            ctx.stroke();
+            if(imageEditMode === 'mask' || brushTool === 'free') ctx.stroke();
         }
         function moveEditDraw(event){
             if(imageEditMode === 'grid' && gridCustomMode && gridCustomDrag){
@@ -3299,7 +3863,12 @@
             event.stopPropagation();
             const ctx = editDrawCanvas().getContext('2d');
             const p = editDrawPoint(event);
-            ctx.lineWidth = editBrushSize();
+            if(imageEditMode === 'brush' && brushTool !== 'free'){
+                restoreEditDrawSnapshot(editDrawState.snapshot);
+                drawBrushShape(ctx, {x:editDrawState.sx, y:editDrawState.sy}, p, true);
+                return;
+            }
+            setupDrawStyle(ctx);
             ctx.beginPath();
             ctx.moveTo(editDrawState.x, editDrawState.y);
             ctx.lineTo(p.x, p.y);
@@ -3312,6 +3881,7 @@
             if(gridCustomDrag && event?.pointerId != null) editDrawCanvas().releasePointerCapture?.(event.pointerId);
             editDrawState = null;
             gridCustomDrag = null;
+            syncEditDrawingHistoryButtons();
         }
         function editCanvasHasPixels(){
             const canvasEl = editDrawCanvas();
@@ -3595,6 +4165,7 @@
             imageEditZoom = 1.0;
             imageEditBaseW = 0;
             imageEditBaseH = 0;
+            imageEditModeTouched = false;
             const toggle = document.getElementById('gridCustomToggle');
             if(toggle){ toggle.classList.add('secondary'); toggle.classList.remove('primary'); }
             const custom = document.getElementById('gridCustomControls');
@@ -3619,9 +4190,10 @@
                 imageEditBaseH = img.clientHeight;
                 _updateZoomLabel();
                 resizeEditDrawCanvas();
-                clearEditDrawing();
+                resetEditDrawingHistory();
+                clearEditDrawing(true);
                 resetCropBox();
-                setImageEditMode('crop');
+                if(!imageEditModeTouched) setImageEditMode('crop');
                 syncImageEditOverflow();
                 refreshIcons();
             };
@@ -3639,14 +4211,16 @@
             img.style.height = '';
             img.style.maxWidth = '';
             img.style.maxHeight = '';
-            clearEditDrawing();
+            clearEditDrawing(true);
             cropState = null;
             cropDrag = null;
             editDrawState = null;
+            resetEditDrawingHistory();
             gridCustomDrag = null;
             imageEditZoom = 1.0;
             imageEditBaseW = 0;
             imageEditBaseH = 0;
+            imageEditModeTouched = false;
             document.getElementById('imageEditStage')?.classList.remove('overflowing', 'overflow-x', 'overflow-y');
             const cropCanvasEl = document.getElementById('cropCanvas');
             cropCanvasEl.classList.remove('grid-custom-h', 'grid-custom-v');
@@ -3811,6 +4385,31 @@
             refreshIcons();
             refreshOutputTimer();
         }
+        function refreshNodes(ids=[]){
+            const uniqueIds = [...new Set((ids || []).filter(Boolean))];
+            if(!uniqueIds.length) return;
+            const outputScrolls = captureOutputScrolls();
+            applyViewport();
+            for(const id of uniqueIds){
+                const node = nodes.find(n => n.id === id);
+                if(!node) continue;
+                if(node.type === 'output' && refreshOutputNodeContent(node)) continue;
+                const current = nodesEl.querySelector(`.node[data-id="${CSS.escape(id)}"]`);
+                if(!current){
+                    render();
+                    return;
+                }
+                current.replaceWith(renderNode(node));
+            }
+            restoreOutputScrolls(outputScrolls);
+            refreshGeometry();
+            refreshGeometryAfterLayout();
+            refreshIcons();
+            refreshOutputTimer();
+        }
+        function refreshRunNodes(node, out=null){
+            refreshNodes([node?.id, out?.id]);
+        }
         function captureOutputScrolls(){
             const state = new Map();
             // output 节点滚动位置
@@ -3888,7 +4487,8 @@
             body.className = 'node-body';
             if(node.type === 'image') {
                 if(node.url) {
-                    body.innerHTML = `<div class="image-preview-wrap"><img src="${escapeAttr(node.url)}" draggable="false"></div><div class="image-caption text-[11px] text-gray-400 truncate">${escapeHtml(node.name || 'image')}</div>`;
+                    const missing = isMissingAssetUrl(node.url);
+                    body.innerHTML = `<div class="image-preview-wrap">${missing ? missingAssetHtml(node.url) : `<img src="${escapeAttr(node.url)}" draggable="false">`}</div><div class="image-caption text-[11px] text-gray-400 truncate">${escapeHtml(node.name || 'image')}${missing ? ` · ${langIsEn() ? 'missing' : '文件缺失'}` : ''}</div>`;
                     const previewWrap = body.querySelector('.image-preview-wrap');
                     const loadedImg = body.querySelector('img');
                     const openEditor = e => {
@@ -3938,14 +4538,16 @@
                         e.stopPropagation();
                         openImageNodeMenu(node.id, e.clientX, e.clientY);
                     };
-                    loadedImg.addEventListener('mousedown', e => {
-                        if(e.detail >= 2) openEditor(e);
-                    }, true);
-                    loadedImg.addEventListener('dblclick', openEditor, true);
+                    if(loadedImg){
+                        loadedImg.addEventListener('mousedown', e => {
+                            if(e.detail >= 2) openEditor(e);
+                        }, true);
+                        loadedImg.addEventListener('dblclick', openEditor, true);
+                    }
                     body.addEventListener('dblclick', openEditor, true);
-                    if(loadedImg.complete && loadedImg.naturalHeight > 0){
+                    if(loadedImg && loadedImg.complete && loadedImg.naturalHeight > 0){
                         requestAnimationFrame(refreshGeometry);
-                    } else {
+                    } else if(loadedImg) {
                         loadedImg.onload = () => refreshGeometryAfterLayout();
                     }
                 } else {
@@ -4011,48 +4613,7 @@
                 body.onwheel = e => {
                     e.stopPropagation();
                 };
-                body.querySelectorAll('.output-img-wrap').forEach(wrap => {
-                    const img = wrap.querySelector('img');
-                    const video = wrap.querySelector('video');
-                    const del = wrap.querySelector('.output-del');
-                    if(img){
-                        img.draggable = true;
-                        img.ondragstart = e => {
-                            e.stopPropagation();
-                            img.dataset.dragging = '1';
-                            setOutputDragPreview(e, img);
-                            e.dataTransfer.effectAllowed = 'copy';
-                            e.dataTransfer.setData('application/x-canvas-output-image', img.dataset.url);
-                            e.dataTransfer.setData('text/uri-list', img.dataset.url);
-                        };
-                        img.ondragend = () => setTimeout(() => { delete img.dataset.dragging; }, 0);
-                        img.onclick = e => {
-                            e.stopPropagation();
-                            if(img.dataset.dragging) return;
-                            openOutputLightbox(img.dataset.url, node);
-                        };
-                    }
-                    if(video){
-                        video.onclick = e => {
-                            e.stopPropagation();
-                            openOutputLightbox(video.dataset.url, node);
-                        };
-                    }
-                    del.onmousedown = e => e.stopPropagation();
-                    del.onclick = e => {
-                        e.stopPropagation();
-                        const pid = wrap.dataset.pendingId;
-                        if(pid){
-                            node._pending = (node._pending || []).filter(p => p.id !== pid);
-                        } else {
-                            const url = img?.dataset.url || video?.dataset.url || '';
-                            node.images = (node.images || []).filter(item => outputUrlValue(item) !== url);
-                            if(node.imageComparisons) delete node.imageComparisons[url];
-                            scheduleSave();
-                        }
-                        render();
-                    };
-                });
+                body.querySelectorAll('.output-img-wrap').forEach(wrap => bindOutputWrap(wrap, node));
             }
             el.appendChild(body);
             el.querySelectorAll('button, select, textarea, input').forEach(control => {
@@ -4077,11 +4638,96 @@
             if(inp) inp.onmousedown = e => { if(e.button === 0 && !e.shiftKey) startLink(e, node.id, 'in'); };
             return el;
         }
+        function bindOutputWrap(wrap, node){
+            const img = wrap.querySelector('img');
+            const video = wrap.querySelector('video');
+            const del = wrap.querySelector('.output-del');
+            if(img){
+                img.draggable = true;
+                img.ondragstart = e => {
+                    e.stopPropagation();
+                    img.dataset.dragging = '1';
+                    setOutputDragPreview(e, img);
+                    e.dataTransfer.effectAllowed = 'copy';
+                    e.dataTransfer.setData('application/x-canvas-output-image', img.dataset.url);
+                    e.dataTransfer.setData('text/uri-list', img.dataset.url);
+                };
+                img.ondragend = () => setTimeout(() => { delete img.dataset.dragging; }, 0);
+                img.onclick = e => {
+                    e.stopPropagation();
+                    if(img.dataset.dragging) return;
+                    openOutputLightbox(img.dataset.url, node);
+                };
+            }
+            if(video){
+                video.onclick = e => {
+                    e.stopPropagation();
+                    openOutputLightbox(video.dataset.url, node);
+                };
+            }
+            if(del){
+                del.onmousedown = e => e.stopPropagation();
+                del.onclick = e => {
+                    e.stopPropagation();
+                    const pid = wrap.dataset.pendingId;
+                    if(pid){
+                        node._pending = (node._pending || []).filter(p => p.id !== pid);
+                    } else {
+                        const url = img?.dataset.url || video?.dataset.url || wrap.dataset.outputUrl || wrap.dataset.missingUrl || '';
+                        node.images = (node.images || []).filter(item => outputUrlValue(item) !== url);
+                        if(node.imageComparisons) delete node.imageComparisons[url];
+                        scheduleSave();
+                    }
+                    refreshNodes([node.id]);
+                };
+            }
+        }
+        function outputDomKeyForItem(item){
+            return `url:${outputUrlValue(item)}`;
+        }
+        function outputDomKeyForPending(pending){
+            return `pending:${pending?.id || ''}`;
+        }
+        function refreshOutputNodeContent(node){
+            const el = nodesEl.querySelector(`.output-node[data-id="${CSS.escape(node.id)}"]`);
+            const body = el?.querySelector('.node-body');
+            const grid = body?.querySelector('.output-grid');
+            if(!body || !grid) return false;
+            body.onwheel = e => { e.stopPropagation(); };
+            const items = [
+                ...(node.images || []).map(item => ({
+                    key:outputDomKeyForItem(item),
+                    html:renderOutputMedia(item)
+                })),
+                ...(node._pending || []).map(p => ({
+                    key:outputDomKeyForPending(p),
+                    html:`<div class="output-img-wrap loading-wrap" data-pending-id="${escapeAttr(p.id)}"><span class="output-time-pill running">${formatRunDuration(nowMs() - Number(p.startedAt || nowMs()))}</span><div class="output-spinner"></div><button class="output-del" title="${tr('common.delete')}">×</button></div>`
+                }))
+            ];
+            const wanted = new Set(items.map(item => item.key));
+            [...grid.children].forEach(child => {
+                const key = child.dataset.pendingId ? outputDomKeyForPending({id:child.dataset.pendingId}) : `url:${child.dataset.outputUrl || child.dataset.missingUrl || child.querySelector('img,video')?.dataset.url || ''}`;
+                if(!wanted.has(key)) child.remove();
+                else child.dataset.outputKey = key;
+            });
+            items.forEach(item => {
+                let child = [...grid.children].find(el => el.dataset.outputKey === item.key);
+                if(!child){
+                    grid.insertAdjacentHTML('beforeend', item.html);
+                    child = grid.lastElementChild;
+                    child.dataset.outputKey = item.key;
+                    bindOutputWrap(child, node);
+                }
+                grid.appendChild(child);
+            });
+            refreshOutputTimer();
+            return true;
+        }
         function defaultNodeSize(type){
             if(type === 'image') return {w:260, h:336};
             if(type === 'prompt') return {w:310, h:0};
             if(type === 'loop') return {w:336, h:0};
-            if(type === 'llm') return {w:420, h:590};
+            if(type === 'llm') return {w:620, h:760};
             if(type === 'generator') return {w:380, h:0};
             if(type === 'msgen') return {w:380, h:0};
             if(type === 'video') return {w:400, h:0};
@@ -4229,7 +4875,7 @@
             const loopTargetId = findLoopCascadeTarget(node.id);
             const loopTargetOrder = loopTargetId ? computeCascadeOrder(loopTargetId) : [];
             const loopRunHtml = loopTargetId ? (cascadeSerialIds.has(loopTargetId)
-                ? `<div class="gen-run-row"><button class="gen-cascade-btn gen-cascade-stop" type="button" data-loop-cascade-stop="${loopTargetId}"><i data-lucide="square" class="w-4 h-4"></i><span>停止循环</span></button></div>`
+                ? `<div class="gen-run-row"><button class="gen-cascade-btn gen-cascade-stop" type="button" data-loop-cascade-stop="${loopTargetId}" ${cascadeStopIds.has(loopTargetId) ? 'disabled' : ''}><i data-lucide="square" class="w-4 h-4"></i><span>${cascadeStopIds.has(loopTargetId) ? '停止中…' : '停止循环'}</span></button></div>`
                 : `<div class="gen-run-row"><button class="gen-cascade-btn" type="button" data-loop-cascade="${loopTargetId}" title="从当前循环节点启动整条工作流"><i data-lucide="play-circle" class="w-4 h-4"></i><span>开始 ${loopTargetOrder.length || 1} 个节点 × ${node.count} ${tr('canvas.loopRounds')}</span></button></div>`)
                 : '';
             wrap.innerHTML = `
@@ -4432,9 +5078,7 @@
                 btn.onmousedown = e => e.stopPropagation();
                 btn.onclick = e => {
                     e.stopPropagation();
-                    cascadeStopIds.add(btn.dataset.loopCascadeStop);
-                    btn.disabled = true;
-                    btn.querySelector('span').textContent = '停止中…';
+                    requestCascadeStop(btn.dataset.loopCascadeStop);
                 };
             });
             return wrap;
@@ -4477,6 +5121,7 @@
                 const models = providerChatModels(node.llmProvider);
                 node.model = models[0] || '';
                 if(node.llmProvider === 'modelscope') node.llmMsModel = node.model;
+                rememberLLMDefaults(node);
                 render();
                 scheduleSave();
             };
@@ -4484,6 +5129,7 @@
                 e.stopPropagation();
                 node.model = e.target.value;
                 if((node.llmProvider||'comfly') === 'modelscope') node.llmMsModel = e.target.value;
+                rememberLLMDefaults(node);
                 scheduleSave();
             };
             wrap.querySelector('.llm-sys-toggle').onclick = e => { e.stopPropagation(); node.showSystem = !node.showSystem; render(); scheduleSave(); };
@@ -4491,7 +5137,7 @@
             if(sysEl){ sysEl.oninput = e => { node.systemPrompt = e.target.value; scheduleSave(); }; bindScrollableText(sysEl); }
             wrap.querySelectorAll('[data-mode]').forEach(btn => {
                 btn.classList.toggle('active', mode === btn.dataset.mode);
-                btn.onclick = e => { e.stopPropagation(); node.mode = btn.dataset.mode; render(); scheduleSave(); };
+                btn.onclick = e => { e.stopPropagation(); node.mode = btn.dataset.mode; rememberLLMDefaults(node); render(); scheduleSave(); };
             });
             const nodePane = wrap.querySelector('.llm-node-pane');
             const chatPane = wrap.querySelector('.llm-chat-pane');
@@ -4508,8 +5154,8 @@
             const connectedInput = llmInputText(node);
             const isReadonly = connectedInput.length > 0;
             const inputValue = connectedInput || node.userInput || '';
-            const inputHeight = Math.max(70, node.llmInputHeight || 110);
-            const outputHeight = Math.max(70, node.llmOutputHeight || 150);
+            const inputHeight = Math.max(170, node.llmInputHeight || 180);
+            const outputHeight = Math.max(260, node.llmOutputHeight || 280);
             const inputPlaceholder = langIsEn() ? 'Type input, or connect a Prompt node…' : '直接输入，或连接提示词节点…';
             container.innerHTML = `
                 <div class="llm-pane-label">Input${isReadonly ? ' <span style="font-size:9px;opacity:.5;font-weight:600;text-transform:none;letter-spacing:0">(来自连接)</span>' : ''}</div>
@@ -4734,7 +5380,6 @@
                             <option value="custom">${tr('canvas.custom')}</option>
                         </select>
                         <select class="select-lite ratio compact-select" data-field="ratio">
-                            <option value="">${tr('canvas.emptyRatio')}</option>
                             <option value="square">1:1</option>
                             <option value="portrait">2:3</option>
                             <option value="landscape">3:2</option>
@@ -4790,6 +5435,7 @@
                 const providerModels = providerImageModels(node.apiProvider);
                 if(!providerModels.includes(resolveImageModel(node.model))) node.model = providerModels[0] || '';
                 modelSelect.innerHTML = imageModelOptions(node.model, node.apiProvider);
+                rememberGeneratorDefaults(node);
                 scheduleSave();
             };
             modelSelect.onmousedown = e => e.stopPropagation();
@@ -4797,6 +5443,7 @@
             modelSelect.onchange = e => {
                 e.stopPropagation();
                 node.model = e.target.value;
+                rememberGeneratorDefaults(node);
                 scheduleSave();
             };
             const ratioSelect = wrap.querySelector('.ratio');
@@ -4826,7 +5473,8 @@
             };
             hydrateCustomParts();
             const syncSizeControls = () => {
-                ratioSelect.value = node.ratio ?? 'square';
+                const ratioValue = node.ratio && [...ratioSelect.options].some(opt => opt.value === node.ratio) ? node.ratio : 'square';
+                ratioSelect.value = ratioValue;
                 resolutionSelect.value = node.resolution || '1k';
                 ratioSelect.disabled = node.resolution === 'custom';
                 customRatioRow.style.display = node.ratio === 'custom' ? 'flex' : 'none';
@@ -4848,6 +5496,7 @@
                     node.customRatioHeight = '';
                 }
                 syncSizeControls();
+                rememberGeneratorDefaults(node);
                 scheduleSave();
             };
             resolutionSelect.onmousedown = e => e.stopPropagation();
@@ -4868,6 +5517,7 @@
                     node.customHeight = '';
                 }
                 syncSizeControls();
+                rememberGeneratorDefaults(node);
                 scheduleSave();
             };
             [customRatioWInput, customRatioHInput].forEach(input => {
@@ -4879,6 +5529,7 @@
                     node.customRatio = node.customRatioWidth && node.customRatioHeight ? `${node.customRatioWidth}:${node.customRatioHeight}` : '';
                     node.ratio = 'custom';
                     syncSizeControls();
+                    rememberGeneratorDefaults(node);
                     scheduleSave();
                 };
             });
@@ -4892,6 +5543,7 @@
                     node.resolution = 'custom';
                     node.ratio = '';
                     syncSizeControls();
+                    rememberGeneratorDefaults(node);
                     scheduleSave();
                 };
             });
@@ -4909,6 +5561,7 @@
                         node.resolution = 'custom';
                         node.ratio = '';
                         syncSizeControls();
+                        rememberGeneratorDefaults(node);
                         scheduleSave();
                     } catch(err) {
                             showErrorModal(tr('canvas.imageReadFailed'));
@@ -4922,6 +5575,7 @@
             countInput.oninput = e => {
                 const value = Math.max(1, Math.min(8, Number(e.target.value) || 1));
                 node.count = value;
+                rememberGeneratorDefaults(node);
                 scheduleSave();
             };
             countInput.onblur = e => { e.target.value = String(Math.max(1, Math.min(8, Number(node.count || 1)))); };
@@ -4931,6 +5585,7 @@
                     const next = Math.max(1, Math.min(8, Number(node.count || 1) + Number(btn.dataset.step || 0)));
                     node.count = next;
                     countInput.value = String(next);
+                    rememberGeneratorDefaults(node);
                     scheduleSave();
                 };
             });
@@ -5023,19 +5678,21 @@
                 const models = providerVideoModels(node.apiProvider);
                 if(!models.includes(node.model)) node.model = models[0] || node.model;
                 modelSelect.innerHTML = videoModelOptions(node.model, node.apiProvider);
+                rememberVideoDefaults(node);
                 scheduleSave();
             };
-            modelSelect.onchange = e => { e.stopPropagation(); node.model = e.target.value; scheduleSave(); };
-            durationSelect.oninput = e => { e.stopPropagation(); node.duration = Math.max(1, Math.min(60, Number(e.target.value || 5))); scheduleSave(); };
+            modelSelect.onchange = e => { e.stopPropagation(); node.model = e.target.value; rememberVideoDefaults(node); scheduleSave(); };
+            durationSelect.oninput = e => { e.stopPropagation(); node.duration = Math.max(1, Math.min(60, Number(e.target.value || 5))); rememberVideoDefaults(node); scheduleSave(); };
             durationSelect.onblur = e => { e.target.value = String(Math.max(1, Math.min(60, Number(node.duration || 5)))); };
-            aspectSelect.onchange = e => { e.stopPropagation(); node.aspectRatio = e.target.value; scheduleSave(); };
-            resolutionSelect.onchange = e => { e.stopPropagation(); node.resolution = e.target.value; scheduleSave(); };
+            aspectSelect.onchange = e => { e.stopPropagation(); node.aspectRatio = e.target.value; rememberVideoDefaults(node); scheduleSave(); };
+            resolutionSelect.onchange = e => { e.stopPropagation(); node.resolution = e.target.value; rememberVideoDefaults(node); scheduleSave(); };
             wrap.querySelectorAll('[data-video-toggle]').forEach(btn => {
                 btn.onmousedown = e => e.stopPropagation();
                 btn.onclick = e => {
                     e.stopPropagation();
                     const field = btn.dataset.videoToggle;
                     node[field] = !node[field];
+                    rememberVideoDefaults(node);
                     render();
                     scheduleSave();
                 };
@@ -5059,7 +5716,8 @@
                 item.className = 'input-item';
                 item.draggable = true;
                 item.dataset.sourceId = src.id;
-                item.innerHTML = `<span class="input-index">${i + 1}</span>${src.preview ? `<img src="${escapeAttr(src.preview)}">` : '<i data-lucide="image" class="w-6 h-6 text-slate-400"></i>'}<span class="input-label">${escapeHtml(src.label)}</span>`;
+                const previewHtml = src.preview && !isMissingAssetUrl(src.preview) ? `<img src="${escapeAttr(src.preview)}">` : (src.preview ? missingAssetHtml(src.preview, true) : '<i data-lucide="image" class="w-6 h-6 text-slate-400"></i>');
+                item.innerHTML = `<span class="input-index">${i + 1}</span>${previewHtml}<span class="input-label">${escapeHtml(src.label)}</span>`;
                 item.ondragstart = e => {
                     e.stopPropagation();
                     internalDrag = true;
@@ -5087,10 +5745,11 @@
                 item.draggable = true;
                 item.dataset.sourceId = src.id;
                 const frameLabel = node.useFrameRoles && i === 0 ? tr('canvas.videoRoleFirstFrame') : node.useFrameRoles && i === 1 ? tr('canvas.videoRoleLastFrame') : '';
+                const previewHtml = src.preview && !isMissingAssetUrl(src.preview) ? `<img src="${escapeAttr(src.preview)}">` : (src.preview ? missingAssetHtml(src.preview, true) : '<i data-lucide="image" class="w-6 h-6 text-slate-400"></i>');
                 item.innerHTML = `
                     <div class="video-input-thumb">
                         <span class="input-index">${i + 1}</span>
-                        ${src.preview ? `<img src="${escapeAttr(src.preview)}">` : '<i data-lucide="image" class="w-6 h-6 text-slate-400"></i>'}
+                        ${previewHtml}
                         <span class="input-label">${escapeHtml(src.label)}</span>
                     </div>
                     ${frameLabel ? `<div class="video-frame-label">${frameLabel}</div>` : ''}
@@ -5201,6 +5860,7 @@
                         node.comfyWorkflow = comfyWorkflows[0].name;
                         ensureComfyWorkflow(node.comfyWorkflow).then(() => render());
                     }
+                    rememberComfyDefaults(node);
                     render();
                     scheduleSave();
                 };
@@ -5219,7 +5879,8 @@
                 item.className = 'input-item';
                 item.draggable = true;
                 item.dataset.sourceId = src.id;
-                item.innerHTML = `<span class="input-index">${i + 1}</span>${src.preview ? `<img src="${src.preview}">` : '<i data-lucide="text" class="w-6 h-6 text-slate-400"></i>'}<span class="input-label">${tr('canvas.image')} ${i + 1}</span>`;
+                const previewHtml = src.preview && !isMissingAssetUrl(src.preview) ? `<img src="${escapeAttr(src.preview)}">` : (src.preview ? missingAssetHtml(src.preview, true) : '<i data-lucide="text" class="w-6 h-6 text-slate-400"></i>');
+                item.innerHTML = `<span class="input-index">${i + 1}</span>${previewHtml}<span class="input-label">${tr('canvas.image')} ${i + 1}</span>`;
                 item.ondragstart = e => {
                     e.stopPropagation();
                     internalDrag = true;
@@ -5294,6 +5955,7 @@
                     e.stopPropagation();
                     const field = btn.dataset.toggleField;
                     node[field] = !node[field];
+                    rememberComfyDefaults(node);
                     render();
                     scheduleSave();
                 };
@@ -5356,6 +6018,7 @@
                 const val = input.closest('.field')?.querySelector('.comfy-param-val');
                 if(val) val.textContent = node.comfyParams[paramId];
                 if(type === 'boolean') render();
+                rememberComfyDefaults(node);
                 scheduleSave();
                 return;
             }
@@ -5365,6 +6028,7 @@
                 node.comfyWorkflow = validComfyWorkflowName(input.value);
                 node.comfyParams = {};
                 ensureComfyWorkflow(node.comfyWorkflow).then(() => render());
+                rememberComfyDefaults(node);
                 scheduleSave();
                 return;
             }
@@ -5379,6 +6043,7 @@
             }
             else if(['width','height','enhanceUpscaleRes','editUpscaleRes','count'].includes(field)) node[field] = Number(input.value) || 1;
             else node[field] = input.value;
+            rememberComfyDefaults(node);
             scheduleSave();
         }
 
@@ -5410,8 +6075,8 @@
             if(hasExplicitOutputConnection(node.id)) return true;
             return !hasDownstreamGenerator(node.id);
         }
-        function outputForNode(node, dx=460){
-            if(!node || !shouldCreateOutputForNode(node)) return null;
+        function outputForNode(node, dx=460, force=false){
+            if(!node || (!force && !shouldCreateOutputForNode(node))) return null;
             let out = connections
                 .filter(c => c.from === node.id)
                 .map(c => nodes.find(n => n.id === c.to))
@@ -5545,7 +6210,7 @@
             const refs = sources.flatMap(s => s.refs || []);
             if(!prompt && !refs.length){ alert(tr('canvas.needPromptOrImage')); return; }
             const count = Math.max(1, Math.min(8, Number(gen.count || 1)));
-            let out = outputForNode(gen, 460);
+            let out = outputForNode(gen, 460, !opts.cascade);
             const run = runSnapshot(gen, prompt || 'Edit the reference images.', refs);
             const payload = {
                 prompt: prompt || 'Edit the reference images.',
@@ -5559,18 +6224,32 @@
             try {
                 const taskInfos = await Promise.all(Array.from({length:count}, () => createCanvasImageTask(payload)));
                 pendingIds = taskInfos.map(() => uid('p'));
-                if(out) out._pending = [
-                    ...(out._pending || []),
-                    ...taskInfos.map((task, index) => makePending(pendingIds[index], run, {
-                        canvasTaskId:task.task_id,
-                        canvasTaskType:'online-image'
-                    }))
-                ];
-                render();
-                scheduleSave();
-                await saveCanvas();
-                const statuses = await Promise.all(taskInfos.map(task => pollCanvasImageTask(task.task_id)));
-                if(statuses.includes('failed')) throw new Error(gen.runError || tr('canvas.generationFailed'));
+                if(out){
+                    out._pending = [
+                        ...(out._pending || []),
+                        ...taskInfos.map((task, index) => makePending(pendingIds[index], run, {
+                            canvasTaskId:task.task_id,
+                            canvasTaskType:'online-image',
+                            appendGenerated:Boolean(opts.cascade)
+                        }))
+                    ];
+                    refreshRunNodes(gen, out);
+                    scheduleSave();
+                    await saveCanvas();
+                    const statuses = await Promise.all(taskInfos.map(task => pollCanvasImageTask(task.task_id)));
+                    if(statuses.includes('failed')) throw new Error(gen.runError || tr('canvas.generationFailed'));
+                } else {
+                    const results = await Promise.all(taskInfos.map(task => pollCanvasImageTaskResult(task.task_id)));
+                    const images = results.flatMap(result => result.images || []);
+                    if(!images.length) throw new Error(tr('canvas.generationFailed'));
+                    mergeGeneratedOutputs(gen, images, Boolean(opts.cascade));
+                    gen.runStatus = 'done';
+                    gen.runError = '';
+                    gen.running = false;
+                    addGenerationLog({run, outputs:images, runMs:0});
+                    refreshRunNodes(gen, null);
+                    scheduleSave();
+                }
             } catch(err) {
                 const remainingIds = pendingIds.filter(id => pendingById(out, id));
                 if(remainingIds.length){
@@ -5580,7 +6259,7 @@
                 }
                 gen.runStatus = 'failed'; gen.runError = err.message || String(err);
                 gen.running = false;
-                render();
+                refreshRunNodes(gen, out);
                 scheduleSave();
                 if(opts.cascade) throw err;
                 showErrorModal(err.message || tr('canvas.generationFailed'), tr('canvas.apiFailed'));
@@ -5594,12 +6273,16 @@
             const refs = sources.flatMap(s => s.refs || []);
             if(!prompt && !refs.length){ alert(tr('canvas.needPromptOrImage')); return; }
             const count = Math.max(1, Math.min(8, Number(gen.count || 1)));
-            let out = outputForNode(gen, 460);
+            let out = outputForNode(gen, 460, !opts.cascade);
             const pendingIds = Array.from({length:count}, () => uid('p'));
             const run = runSnapshot(gen, prompt || 'Edit the reference images.', refs);
             if(out) out._pending = [...(out._pending||[]), ...pendingIds.map(id => makePending(id, run))];
-            if(!opts.cascade){ gen.running = true; render(); setTimeout(() => { gen.running = false; render(); }, 2000); }
-            else render();
+            if(!opts.cascade){
+                gen.running = true;
+                refreshRunNodes(gen, out);
+                setTimeout(() => { gen.running = false; refreshRunNodes(gen, out); }, 2000);
+            }
+            else refreshRunNodes(gen, out);
             try {
                 const payload = {
                     prompt: prompt || 'Edit the reference images.',
@@ -5618,17 +6301,17 @@
                 run.request = results[0] ? requestMetaFromResult(results[0]) : {};
                 if(out) out._pending = (out._pending||[]).filter(p => !pendingIds.includes(p.id));
                 appendOutputImages(out, images, refs[0], metas);
-                gen.generatedOutputs = images.filter(url => url && !isVideoUrl(url));
+                mergeGeneratedOutputs(gen, images, Boolean(opts.cascade));
                 addGenerationLog({run, outputs:images, runMs:Math.max(...metas.map(m => m.runMs || 0), 0)});
                 gen.runStatus = 'done'; gen.runError = '';
-                render();
+                refreshRunNodes(gen, out);
                 scheduleSave();
             } catch(err) {
                 const metas = collectRunMetas(out, pendingIds);
                 addGenerationLog({run, outputs:[], runMs:Math.max(...metas.map(m => m.runMs || 0), 0), error:err.message || String(err)});
                 if(out) out._pending = (out._pending||[]).filter(p => !pendingIds.includes(p.id));
                 gen.runStatus = 'failed'; gen.runError = err.message || String(err);
-                render();
+                refreshRunNodes(gen, out);
                 if(opts.cascade) throw err;
                 showErrorModal(err.message || tr('canvas.generationFailed'), tr('canvas.apiFailed'));
             }
@@ -5642,12 +6325,12 @@
             if(node.useFrameRoles && refs[0]) refs[0] = {...refs[0], role:'first_frame'};
             if(node.useFrameRoles && refs[1]) refs[1] = {...refs[1], role:'last_frame'};
             if(!prompt){ alert(tr('canvas.videoNeedsPrompt')); return; }
-            let out = outputForNode(node, 460);
+            let out = outputForNode(node, 460, !opts.cascade);
             const pendingId = uid('p');
             const run = runSnapshot(node, prompt, refs);
             if(out) out._pending = [...(out._pending || []), makePending(pendingId, run)];
-            if(!opts.cascade){ node.running = true; render(); }
-            else render();
+            if(!opts.cascade){ node.running = true; refreshRunNodes(node, out); }
+            else refreshRunNodes(node, out);
             try {
                 const result = await fetch('/api/canvas-video', {
                     method:'POST',
@@ -5672,22 +6355,22 @@
                 const outputUrls = result.videos || [];
                 run.request = requestMetaFromResult(result);
                 appendOutputImages(out, outputUrls, refs[0], [meta]);
-                node.generatedOutputs = outputUrls.filter(url => url && !isVideoUrl(url));
+                mergeGeneratedOutputs(node, outputUrls, Boolean(opts.cascade));
                 addGenerationLog({run, outputs:outputUrls, runMs:meta.runMs || 0});
                 node.runStatus = 'done'; node.runError = '';
-                render();
+                refreshRunNodes(node, out);
                 scheduleSave();
             } catch(err) {
                 const meta = collectRunMeta(out, pendingId);
                 addGenerationLog({run, outputs:[], runMs:meta.runMs || 0, error:err.message || String(err)});
                 if(out) out._pending = (out._pending || []).filter(p => p.id !== pendingId);
                 node.runStatus = 'failed'; node.runError = err.message || String(err);
-                render();
+                refreshRunNodes(node, out);
                 if(opts.cascade) throw err;
                 alert(err.message || tr('canvas.videoFailed'));
             } finally {
                 node.running = false;
-                render();
+                refreshRunNodes(node, out);
             }
         }
         async function uploadCanvasUrlToComfy(url){
@@ -5745,13 +6428,17 @@
             const customPromptFields = mode === 'custom' ? comfyFields(node, 'prompt') : [];
             if((mode === 'text' || (mode === 'custom' && customPromptFields.length)) && !prompt){ alert(tr('canvas.needPrompt')); return; }
             if((mode !== 'text' && mode !== 'custom' && !refs.length) || (mode === 'custom' && refs.length < customImageFields.length)){ alert(tr('canvas.needImage')); return; }
-            let out = outputForNode(node, 480);
+            let out = outputForNode(node, 480, !opts.cascade);
             const pendingId = uid('p');
             const run = runSnapshot(node, prompt, refs);
             run.taskLabel = comfyRunLabel(node);
             if(out) out._pending = [...(out._pending||[]), makePending(pendingId, run)];
-            if(!opts.cascade){ node.running = true; render(); setTimeout(() => { node.running = false; render(); }, 2000); }
-            else render();
+            if(!opts.cascade){
+                node.running = true;
+                refreshRunNodes(node, out);
+                setTimeout(() => { node.running = false; refreshRunNodes(node, out); }, 2000);
+            }
+            else refreshRunNodes(node, out);
             try {
                 let images = [];
                 if(mode === 'text'){
@@ -5868,17 +6555,17 @@
                 const meta = collectRunMeta(out, pendingId);
                 if(out) out._pending = (out._pending||[]).filter(p => p.id !== pendingId);
                 appendOutputImages(out, images, refs[0], [meta]);
-                node.generatedOutputs = images.filter(url => url && !isVideoUrl(url));
+                mergeGeneratedOutputs(node, images, Boolean(opts.cascade));
                 addGenerationLog({run, outputs:images, runMs:meta.runMs || 0});
                 node.runStatus = 'done'; node.runError = '';
-                render();
+                refreshRunNodes(node, out);
                 scheduleSave();
             } catch(err) {
                 const meta = collectRunMeta(out, pendingId);
                 addGenerationLog({run, outputs:[], runMs:meta.runMs || 0, error:err.message || String(err)});
                 if(out) out._pending = (out._pending||[]).filter(p => p.id !== pendingId);
                 node.runStatus = 'failed'; node.runError = err.message || String(err);
-                render();
+                refreshRunNodes(node, out);
                 if(opts.cascade) throw err;
                 alert(err.message || actionFailed('canvas.comfyGenerate'));
             }
@@ -5915,17 +6602,17 @@
                 if(opts.cascade) throw new Error('LLM 缺少提示词输入');
                 alert(tr('canvas.needPromptToLLM')); return;
             }
-            if(!opts.cascade){ node.running = true; render(); }
+            if(!opts.cascade){ node.running = true; refreshNodes([node.id]); }
             try {
                 node.outputText = await callCanvasLLM(node, input, []);
                 if(!opts.cascade) node.running = false;
                 node.runStatus = 'done'; node.runError = '';
-                render();
+                refreshNodes([node.id]);
                 scheduleSave();
             } catch(err) {
                 if(!opts.cascade) node.running = false;
                 node.runStatus = 'failed'; node.runError = err.message || String(err);
-                render();
+                refreshNodes([node.id]);
                 if(opts.cascade) throw err;
                 alert(err.message || 'LLM 运行失败');
             }
@@ -5976,7 +6663,8 @@
             const suffix = loop ? ` × ${loop.count} ${tr('canvas.loopRounds')}` : '';
             // 仅在以串行模式启动的运行中显示停止按钮
             if(cascadeSerialIds.has(node.id)){
-                return `<button class="gen-cascade-btn gen-cascade-stop" type="button" data-cascade-stop="${node.id}"><i data-lucide="square" class="w-4 h-4"></i><span>停止循环</span></button>`;
+                const stopping = cascadeStopIds.has(node.id);
+                return `<button class="gen-cascade-btn gen-cascade-stop" type="button" data-cascade-stop="${node.id}" ${stopping ? 'disabled' : ''}><i data-lucide="square" class="w-4 h-4"></i><span>${stopping ? '停止中…' : '停止循环'}</span></button>`;
             }
             return `<button class="gen-cascade-btn" type="button" data-cascade="${node.id}" title="一键运行整条工作流（追溯所有上游生成节点）"><i data-lucide="play-circle" class="w-4 h-4"></i><span>一键运行 ${order.length} 个节点${suffix}</span></button>`;
         }
@@ -5996,7 +6684,7 @@
             });
             wrap.querySelectorAll(`[data-cascade-stop="${nodeId}"]`).forEach(b => {
                 b.onmousedown = e => e.stopPropagation();
-                b.onclick = e => { e.stopPropagation(); cascadeStopIds.add(nodeId); b.disabled = true; b.querySelector('span').textContent = '停止中…'; };
+                b.onclick = e => { e.stopPropagation(); requestCascadeStop(nodeId); };
             });
             wrap.querySelectorAll(`[data-retry="${nodeId}"]`).forEach(b => {
                 b.onmousedown = e => e.stopPropagation();
@@ -6016,6 +6704,28 @@
             if(node.type === 'llm') return runLLMNode(node.id, runOpts);
             if(node.type === 'video') return runVideoNode(node.id, runOpts);
             return Promise.resolve();
+        }
+        function runCascadeNodeWithLoopContext(node, ctx, opts={}){
+            const previous = loopContext;
+            loopContext = ctx || null;
+            const promise = runCascadeNodeByType(node, opts);
+            loopContext = previous;
+            return promise;
+        }
+        function cascadeParallelLimit(order, totalRounds){
+            const hasComfy = order.some(id => nodes.find(n => n.id === id)?.type === 'comfy');
+            if(hasComfy) return Math.max(1, Math.min(totalRounds, comfyBackendCount || 1));
+            return Math.max(1, Math.min(totalRounds, 6));
+        }
+        async function runLimitedCascadeRounds(rounds, limit, runner){
+            let next = 0;
+            const workers = Array.from({length:Math.max(1, Math.min(limit, rounds.length))}, async () => {
+                while(next < rounds.length){
+                    const round = rounds[next++];
+                    await runner(round);
+                }
+            });
+            return Promise.allSettled(workers);
         }
         function canvasRunTypes(){
             return ['generator','msgen','comfy','llm','video'];
@@ -6073,12 +6783,12 @@
             const order = computeConnectedWorkflowOrder(nodeId);
             if(order.length > 1){
                 cascadeRunningIds.add(nodeId);
-                render();
+                refreshNodes(order);
                 try {
                     await runOneCascadePass(order);
                 } finally {
                     cascadeRunningIds.delete(nodeId);
-                    render();
+                    refreshNodes(order);
                 }
                 return;
             }
@@ -6131,51 +6841,71 @@
             const loop = loops[loops.length - 1];
             return {node:loop, count:loopCount(loop), mode:loop.mode === 'parallel' ? 'parallel' : 'serial'};
         }
+        function cascadeUiNodeIds(targetId, order=null){
+            const ids = new Set([targetId, ...(order || computeCascadeOrder(targetId))]);
+            const loop = resolveCascadeLoop(targetId);
+            if(loop?.node?.id) ids.add(loop.node.id);
+            return [...ids].filter(Boolean);
+        }
+        function requestCascadeStop(targetId){
+            if(!targetId) return;
+            cascadeStopIds.add(targetId);
+            refreshNodes(cascadeUiNodeIds(targetId));
+        }
         async function runNodeCascade(nodeId){
             const target = nodes.find(n => n.id === nodeId);
             if(!target) return;
             if(target.running){ alert('当前节点正在运行'); return; }
             cascadeRunningIds.add(nodeId);
-            render();
             const order = computeCascadeOrder(nodeId);
+            refreshNodes(cascadeUiNodeIds(nodeId, order));
             if(!order.length){ alert('没有可运行的生成节点'); return; }
             const loop = resolveCascadeLoop(nodeId);
             const totalRounds = loop?.count || 1;
             const startIdx = Math.max(1, Number(loop?.node?.loopStart) || 1);
             const loopBatchSize = loop?.node?.imageInput ? Math.max(1, Math.min(100, Number(loop?.node?.imageBatchSize) || 1)) : 1;
             const endIdx = startIdx + (totalRounds - 1) * loopBatchSize;
+            order.forEach(id => {
+                const n = nodes.find(x => x.id === id);
+                if(n) n.generatedOutputs = [];
+            });
             if(loop?.mode === 'parallel' && totalRounds > 1){
+                cascadeSerialIds.add(nodeId);
                 order.forEach(id => {
                     const n = nodes.find(x => x.id === id);
                     if(n){ n.runStatus = 'queued'; n.runError = ''; n._cascadeFailed = false; n._cascadeIdx = `0/${totalRounds}`; }
                 });
-                render();
+                refreshNodes(cascadeUiNodeIds(nodeId, order));
                 let done = 0;
-                const tasks = Array.from({length:totalRounds}, async (_, idx) => {
-                    const index = startIdx + idx * loopBatchSize;
+                const rounds = Array.from({length:totalRounds}, (_, idx) => ({idx, index:startIdx + idx * loopBatchSize}));
+                const limit = cascadeParallelLimit(order, totalRounds);
+                const results = await runLimitedCascadeRounds(rounds, limit, async ({index}) => {
+                    if(cascadeStopIds.has(nodeId)) return;
                     const ctx = {index, total:endIdx, nodeId:loop.node.id};
                     for(let i = 0; i < order.length; i++){
+                        if(cascadeStopIds.has(nodeId)) return;
                         const id = order[i];
                         const node = nodes.find(n => n.id === id);
                         if(!node) continue;
                         node.runStatus = 'running';
                         node._cascadeIdx = `${order.indexOf(id)+1}/${order.length} · ${index}/${endIdx}`;
-                        render();
-                        loopContext = ctx;
-                        await runCascadeNodeByType(node);
+                        refreshNodes([id]);
+                        await runCascadeNodeWithLoopContext(node, ctx);
                         node.runStatus = 'done';
+                        refreshNodes([id]);
                     }
                     done += 1;
                     order.forEach(id => {
                         const n = nodes.find(x => x.id === id);
                         if(n) n._cascadeIdx = `${done}/${totalRounds}`;
                     });
-                    render();
+                    refreshNodes(order);
                 });
-                const results = await Promise.allSettled(tasks);
                 loopContext = null;
                 cascadeRunningIds.delete(nodeId);
                 cascadeStopIds.delete(nodeId);
+                cascadeSerialIds.delete(nodeId);
+                refreshNodes(cascadeUiNodeIds(nodeId, order));
                 const failed = results.find(r => r.status === 'rejected');
                 if(failed){
                     const err = failed.reason || new Error('parallel loop failed');
@@ -6183,7 +6913,7 @@
                     node.runStatus = 'failed';
                     node.runError = err.message || String(err);
                     node._cascadeFailed = true;
-                    render();
+                    refreshNodes(cascadeUiNodeIds(nodeId, order));
                     return;
                 }
                 setTimeout(() => {
@@ -6191,11 +6921,12 @@
                         const n = nodes.find(x => x.id === id);
                         if(n && n.runStatus === 'done'){ n.runStatus = ''; n._cascadeIdx = ''; }
                     });
-                    render();
+                    refreshNodes(cascadeUiNodeIds(nodeId, order));
                 }, 3000);
                 return;
             }
             cascadeSerialIds.add(nodeId);
+            refreshNodes(cascadeUiNodeIds(nodeId, order));
             for(let round = 1; round <= totalRounds; round++){
                 if(cascadeStopIds.has(nodeId)){
                     cascadeStopIds.delete(nodeId);
@@ -6203,7 +6934,7 @@
                     cascadeSerialIds.delete(nodeId);
                     loopContext = null;
                     order.forEach(id => { const n = nodes.find(x=>x.id===id); if(n){ n.runStatus=''; n._cascadeIdx=''; } });
-                    render();
+                    refreshNodes(cascadeUiNodeIds(nodeId, order));
                     return;
                 }
                 const loopIndex = startIdx + (round - 1) * loopBatchSize;
@@ -6212,17 +6943,17 @@
                     const n = nodes.find(x => x.id === id);
                     if(n){ n.runStatus = 'queued'; n.runError = ''; n._cascadeFailed = false; n._cascadeIdx = `${order.indexOf(id)+1}/${order.length}${totalRounds > 1 ? ` · ${loopIndex}/${endIdx}` : ''}`; }
                 });
-                render();
+                refreshNodes(cascadeUiNodeIds(nodeId, order));
                 for(let i = 0; i < order.length; i++){
                     const id = order[i];
                     const node = nodes.find(n => n.id === id);
                     if(!node) continue;
                     node.runStatus = 'running';
-                    render();
+                    refreshNodes([id]);
                     try {
-                        await runCascadeNodeByType(node);
+                        await runCascadeNodeWithLoopContext(node, loopContext);
                         node.runStatus = 'done';
-                        render();
+                        refreshNodes([id]);
                     } catch(err){
                         loopContext = null;
                         cascadeRunningIds.delete(nodeId);
@@ -6235,7 +6966,7 @@
                             const n2 = nodes.find(x => x.id === order[j]);
                             if(n2){ n2.runStatus = ''; n2._cascadeIdx = ''; }
                         }
-                        render();
+                        refreshNodes(cascadeUiNodeIds(nodeId, order.slice(i)));
                         return;
                     }
                 }
@@ -6244,13 +6975,14 @@
             cascadeRunningIds.delete(nodeId);
             cascadeStopIds.delete(nodeId);
             cascadeSerialIds.delete(nodeId);
+            refreshNodes(cascadeUiNodeIds(nodeId, order));
             // 全部完成：3 秒后清除状态徽章
             setTimeout(() => {
                 order.forEach(id => {
                     const n = nodes.find(x => x.id === id);
                     if(n && n.runStatus === 'done'){ n.runStatus = ''; n._cascadeIdx = ''; }
                 });
-                render();
+                refreshNodes(cascadeUiNodeIds(nodeId, order));
             }, 3000);
         }
         async function runOneCascadePass(order, options={}){
@@ -6258,13 +6990,13 @@
                 const n = nodes.find(x => x.id === id);
                 if(n){ n.runStatus = 'queued'; n.runError = ''; n._cascadeFailed = false; n._cascadeIdx = ''; }
             });
-            render();
+            refreshNodes(order);
             for(let i = 0; i < order.length; i++){
                 const id = order[i];
                 const node = nodes.find(n => n.id === id);
                 if(!node) continue;
                 node.runStatus = 'running';
-                render();
+                refreshNodes([id]);
                 try {
                     if(node.type === 'generator') await runGenerator(id, {cascade:true});
                     else if(node.type === 'msgen') await runMsGenNode(id, {cascade:true});
@@ -6272,7 +7004,7 @@
                     else if(node.type === 'llm') await runLLMNode(id, {cascade:true});
                     else if(node.type === 'video') await runVideoNode(id, {cascade:true});
                     node.runStatus = 'done';
-                    render();
+                    refreshNodes([id]);
                 } catch(err) {
                     node.runStatus = 'failed';
                     node.runError = err.message || String(err);
@@ -6290,13 +7022,13 @@
             const idx = order.indexOf(nodeId);
             const remain = idx >= 0 ? order.slice(idx) : [nodeId];
             try { await runOneCascadePass(remain); }
-            catch(err) { render(); return; }
+            catch(err) { refreshNodes(remain); return; }
             setTimeout(() => {
                 remain.forEach(id => {
                     const n = nodes.find(x => x.id === id);
                     if(n && n.runStatus === 'done'){ n.runStatus = ''; n._cascadeIdx = ''; }
                 });
-                render();
+                refreshNodes(remain);
             }, 3000);
         }
         function cancelCascade(nodeId){
@@ -6308,7 +7040,7 @@
                     n.runStatus = ''; n._cascadeIdx = ''; n.runError = ''; n._cascadeFailed = false;
                 }
             });
-            render();
+            refreshNodes(order);
         }
 
         async function runLLMChat(nodeId){
@@ -6321,17 +7053,17 @@
             node.messages.push({role:'user', content:message});
             node.chatInput = '';
             node.running = true;
-            render();
+            refreshNodes([node.id]);
             try {
                 const text = await callCanvasLLM(node, message, history);
                 node.messages.push({role:'assistant', content:text});
                 node.outputText = text;
                 node.running = false;
-                render();
+                refreshNodes([node.id]);
                 scheduleSave();
             } catch(err) {
                 node.running = false;
-                render();
+                refreshNodes([node.id]);
                 alert(err.message || 'LLM 运行失败');
             }
         }
@@ -6373,6 +7105,12 @@
         function nowMs(){ return Date.now(); }
         function outputUrlValue(item){
             return typeof item === 'string' ? item : item?.url || '';
+        }
+        function isMissingAssetUrl(url){
+            return Boolean(url && missingAssetUrls.has(url));
+        }
+        function missingAssetHtml(url, compact=false){
+            return `<div class="missing-asset ${compact ? 'compact' : ''}" title="${escapeAttr(url || '')}"><i data-lucide="image-off" class="${compact ? 'w-4 h-4' : 'w-6 h-6'}"></i><span>${langIsEn() ? 'Missing file' : '文件缺失'}</span></div>`;
         }
         function outputMetaFor(url, out){
             const item = (out?.images || []).find(x => outputUrlValue(x) === url);
@@ -6467,6 +7205,7 @@
             logList.innerHTML = logs.length ? logs.map(log => {
                 const thumbs = (log.outputs || []).slice(0, 8).map(url => {
                     const safe = escapeAttr(url);
+                    if(isMissingAssetUrl(url)) return `<div class="missing-asset compact" data-url="${safe}"><i data-lucide="image-off" class="w-4 h-4"></i></div>`;
                     return isVideoUrl(url) ? `<video src="${safe}" data-url="${safe}" muted playsinline></video>` : `<img src="${safe}" data-url="${safe}" alt="output">`;
                 }).join('');
                 const date = new Date(log.createdAt || Date.now()).toLocaleString(window.StudioI18n?.lang() === 'en' ? 'en-US' : 'zh-CN');
@@ -6532,6 +7271,16 @@
         function makePending(id, run, task={}){
             return {id, startedAt:nowMs(), run, ...task};
         }
+        function mergeGeneratedOutputs(node, outputs, append=false){
+            if(!node) return;
+            const clean = (outputs || []).filter(url => url && !isVideoUrl(url));
+            if(!append){
+                node.generatedOutputs = clean;
+                return;
+            }
+            const seen = new Set(node.generatedOutputs || []);
+            node.generatedOutputs = [...(node.generatedOutputs || []), ...clean.filter(url => !seen.has(url) && seen.add(url))];
+        }
         function pendingById(out, id){
             return (out?._pending || []).find(p => p.id === id) || null;
         }
@@ -6592,6 +7341,17 @@
                 activeCanvasTaskPolls.delete(taskId);
             }
         }
+        async function pollCanvasImageTaskResult(taskId){
+            if(!taskId) throw new Error(tr('canvas.generationFailed'));
+            while(true){
+                const res = await fetch(`/api/canvas-image-tasks/${encodeURIComponent(taskId)}`);
+                if(!res.ok) throw new Error(await responseErrorMessage(res, tr('canvas.generationFailed')));
+                const data = await res.json();
+                if(data.status === 'succeeded') return data.result || {};
+                if(data.status === 'failed') throw new Error(data.error || tr('canvas.generationFailed'));
+                await sleep(1800);
+            }
+        }
         function completeCanvasImageTask(taskId, result){
             const found = findPendingTask(taskId);
             if(!found) return;
@@ -6606,13 +7366,13 @@
             appendOutputImages(out, images, meta.run?.refs?.[0], [meta]);
             const gen = nodes.find(n => n.id === meta.run?.node?.id);
             if(gen){
-                gen.generatedOutputs = images.filter(url => url && !isVideoUrl(url));
+                mergeGeneratedOutputs(gen, images, Boolean(pending.appendGenerated));
                 gen.runStatus = 'done';
                 gen.runError = '';
                 gen.running = false;
             }
             addGenerationLog({run:meta.run, outputs:images, runMs:meta.runMs || 0});
-            render();
+            refreshRunNodes(gen, out);
             scheduleSave();
         }
         function failCanvasImageTask(taskId, message){
@@ -6629,7 +7389,7 @@
                 gen.running = false;
             }
             addGenerationLog({run, outputs:[], runMs, error:message || tr('canvas.generationFailed')});
-            render();
+            refreshRunNodes(gen, out);
             scheduleSave();
         }
         function resumeCanvasImageTasks(){
@@ -6644,10 +7404,13 @@
             const safe = escapeAttr(url);
             const meta = item && typeof item === 'object' ? item : {};
             const timePill = meta.runMs && !meta.viewed ? `<span class="output-time-pill">${formatRunDuration(meta.runMs)}</span>` : '';
-            if(isVideoUrl(url)){
-                return `<div class="output-img-wrap"><video src="${safe}" data-url="${safe}" preload="metadata" muted playsinline></video>${timePill}<div class="output-video-badge"><i data-lucide="play" class="w-3 h-3"></i>VIDEO</div><button class="output-del" title="${tr('common.delete')}">×</button></div>`;
+            if(isMissingAssetUrl(url)){
+                return `<div class="output-img-wrap" data-output-url="${safe}" data-missing-url="${safe}">${missingAssetHtml(url, true)}${timePill}<button class="output-del" title="${tr('common.delete')}">×</button></div>`;
             }
-            return `<div class="output-img-wrap"><img src="${safe}" data-url="${safe}" alt="generated output">${timePill}<button class="output-del" title="${tr('common.delete')}">×</button></div>`;
+            if(isVideoUrl(url)){
+                return `<div class="output-img-wrap" data-output-url="${safe}"><video src="${safe}" data-url="${safe}" preload="metadata" muted playsinline></video>${timePill}<div class="output-video-badge"><i data-lucide="play" class="w-3 h-3"></i>VIDEO</div><button class="output-del" title="${tr('common.delete')}">×</button></div>`;
+            }
+            return `<div class="output-img-wrap" data-output-url="${safe}"><img src="${safe}" data-url="${safe}" alt="generated output">${timePill}<button class="output-del" title="${tr('common.delete')}">×</button></div>`;
         }
         function outputImageName(url){
             const clean = (url || '').split('?')[0];

@@ -32,7 +32,9 @@
 
     applyTheme(currentTheme());
 
-    document.addEventListener('DOMContentLoaded', () => applyTheme(currentTheme()));
+    document.addEventListener('DOMContentLoaded', () => {
+        applyTheme(currentTheme());
+    });
     window.addEventListener('message', event => {
         if(event.data?.type === 'studio-theme') applyTheme(event.data.theme);
     });

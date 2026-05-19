@@ -24,8 +24,8 @@
         })();
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="/static/theme.js?v=20260516-theme-sync"></script>
-    <script src="/static/i18n.js?v=20260514-provider-protocol"></script>
+    <script src="/static/theme.js?v=20260518-theme-sync2"></script>
+    <script src="/static/i18n.js?v=20260518-app-settings1"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap');
 
@@ -248,6 +248,71 @@
             transition: background 0.3s, border-color 0.3s;
         }
 
+        .stage > .nano-monitor {
+            position:fixed;
+            top:36px;
+            right:40px;
+            z-index:80;
+            width:auto;
+            min-width:168px;
+            height:36px;
+            justify-content:center;
+            pointer-events:none;
+        }
+
+        .stage > .nano-monitor .divider {
+            max-width:1px;
+            opacity:1;
+        }
+
+        .stage > .nano-monitor .stat-group:last-child {
+            max-width:78px;
+            opacity:1;
+        }
+
+        .stage > .nano-monitor .label-nano {
+            max-width:48px;
+            opacity:.5;
+        }
+
+        .stage.is-canvas-page > .nano-monitor {
+            position:fixed;
+            top:auto;
+            right:auto;
+            bottom:22px;
+            left:50%;
+            transform:translateX(-50%);
+            min-width:190px;
+            height:38px;
+            box-shadow:0 14px 34px rgba(15,23,42,.12);
+        }
+
+        body.canvas-compact-nav .sidebar,
+        body.canvas-compact-nav .sidebar:hover {
+            width: 84px;
+            min-width: 84px;
+        }
+
+        body.canvas-compact-nav .sidebar:hover .nav-item {
+            width: 48px;
+            transition-delay: 0s;
+        }
+
+        body.canvas-compact-nav .sidebar:hover .side-pill,
+        body.canvas-compact-nav .sidebar:hover .nano-monitor {
+            width: 44px;
+            justify-content: center;
+        }
+
+        body.canvas-compact-nav .sidebar:hover .nav-text,
+        body.canvas-compact-nav .sidebar:hover .side-pill-text,
+        body.canvas-compact-nav .sidebar:hover .nano-monitor .divider,
+        body.canvas-compact-nav .sidebar:hover .nano-monitor .stat-group:last-child,
+        body.canvas-compact-nav .sidebar:hover .nano-monitor .label-nano {
+            max-width: 0;
+            opacity: 0;
+        }
+
         iframe {
             position: absolute;
             inset: 0;
@@ -268,43 +333,54 @@
             pointer-events: auto;
         }
 
-        /* 左下角监视器 */
+        /* 侧栏状态监视器 */
         .nano-monitor {
-            position: absolute;
-            bottom: 24px;
-            left: 24px;
-            z-index: 100;
+            position: relative;
+            width:44px;
+            height:36px;
+            flex:0 0 36px;
+            z-index: 1;
             display: flex;
             align-items: center;
+            justify-content: center;
             gap: 8px;
             background: var(--monitor-bg);
             backdrop-filter: blur(12px);
-            padding: 6px 14px;
-            border-radius: 16px;
+            padding: 0 11px;
+            border-radius: 999px;
             border: 1px solid var(--monitor-border);
             box-shadow: 0 4px 20px var(--monitor-shadow);
             font-family: monospace;
-            transition: all 0.4s var(--fluid-ease);
+            overflow:hidden;
+            transition: width 0.3s var(--fluid-ease) 0.5s, justify-content 0.3s var(--fluid-ease) 0.5s, background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .sidebar:hover .nano-monitor {
+            width:170px;
+            justify-content:flex-start;
+            transition-delay:0s;
         }
 
         .nano-monitor.is-busy {
-            background: #000;
-            color: #fff;
-            border-color: rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+            background: var(--monitor-bg);
+            color: var(--text);
+            border-color: var(--monitor-border);
+            box-shadow: 0 6px 24px var(--monitor-shadow);
         }
 
         .stat-group {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 5px;
             font-size: 11px;
-            font-weight: 700;
+            font-weight: 900;
             color: var(--text);
+            min-width:0;
+            white-space:nowrap;
         }
 
         .nano-monitor.is-busy .stat-group {
-            color: #fff;
+            color: var(--text);
         }
 
         .divider {
@@ -313,8 +389,35 @@
             background: var(--divider);
         }
 
+        .nano-monitor .divider,
+        .nano-monitor .stat-group:last-child,
+        .nano-monitor .label-nano {
+            max-width:0;
+            opacity:0;
+            overflow:hidden;
+            transition:max-width 0.25s var(--fluid-ease) 0.5s, opacity 0.2s 0.5s;
+        }
+
+        .sidebar:hover .nano-monitor .divider {
+            max-width:1px;
+            opacity:1;
+            transition-delay:0.1s;
+        }
+
+        .sidebar:hover .nano-monitor .stat-group:last-child {
+            max-width:78px;
+            opacity:1;
+            transition-delay:0.1s;
+        }
+
+        .sidebar:hover .nano-monitor .label-nano {
+            max-width:48px;
+            opacity:0.5;
+            transition-delay:0.1s;
+        }
+
         .is-busy .divider {
-            background: rgba(255, 255, 255, 0.2);
+            background: var(--divider);
         }
 
         .pulse-dot {
@@ -327,8 +430,8 @@
         .spinner-nano {
             width: 10px;
             height: 10px;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            border-top-color: #fff;
+            border: 2px solid rgba(148, 163, 184, 0.34);
+            border-top-color: var(--text);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
             display: none;
@@ -345,7 +448,8 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
             opacity: 0.5;
-            font-size: 9px;
+            font-size: 10px;
+            font-weight: 900;
         }
 
         .side-actions {
@@ -413,6 +517,413 @@
         /* 折叠态去除 gap，避免图标被推偏 */
         .side-pill { gap:0; }
         .sidebar:hover .side-pill { gap:8px; }
+
+        .account-pill {
+            border-color: var(--stage-border);
+            background: var(--nav-hover-bg);
+            color: var(--text);
+        }
+
+        .account-avatar {
+            width:20px;
+            height:20px;
+            border-radius:999px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:var(--text);
+            color:var(--bg);
+            font-size:9px;
+            font-weight:900;
+            line-height:1;
+            overflow:hidden;
+            flex:0 0 auto;
+        }
+
+        .account-avatar img {
+            width:100%;
+            height:100%;
+            object-fit:cover;
+            display:block;
+        }
+
+        .account-overlay {
+            position:fixed;
+            inset:0;
+            z-index:300;
+            display:none;
+            align-items:center;
+            justify-content:center;
+            padding:28px;
+            background:rgba(15,23,42,.18);
+            backdrop-filter:blur(10px);
+        }
+
+        .account-overlay.open { display:flex; }
+
+        .account-panel {
+            width:min(760px, calc(100vw - 48px));
+            max-height:min(760px, calc(100vh - 48px));
+            overflow:auto;
+            background:var(--sidebar-bg);
+            color:var(--text);
+            border:1px solid var(--stage-border);
+            border-radius:24px;
+            box-shadow:0 28px 80px rgba(15,23,42,.18);
+        }
+
+        .account-head {
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:18px;
+            padding:22px 24px;
+            border-bottom:1px solid var(--border);
+        }
+
+        .account-identity {
+            display:flex;
+            align-items:center;
+            gap:14px;
+            min-width:0;
+        }
+
+        .account-hero-avatar {
+            width:48px;
+            height:48px;
+            border-radius:18px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            background:var(--text);
+            color:var(--bg);
+            font-size:17px;
+            font-weight:900;
+            overflow:hidden;
+            flex:0 0 auto;
+        }
+
+        .account-hero-avatar img {
+            width:100%;
+            height:100%;
+            object-fit:cover;
+        }
+
+        .account-title {
+            font-size:18px;
+            font-weight:900;
+            line-height:1.15;
+        }
+
+        .account-sub {
+            margin-top:4px;
+            color:var(--muted);
+            font-size:12px;
+            font-weight:700;
+            word-break:break-all;
+        }
+
+        .account-close {
+            width:36px;
+            height:36px;
+            border-radius:12px;
+            border:1px solid var(--border);
+            color:var(--muted);
+            background:transparent;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            cursor:pointer;
+        }
+
+        .account-close:hover {
+            color:var(--text);
+            background:var(--nav-hover-bg);
+        }
+
+        .account-body {
+            padding:20px 24px 24px;
+            display:grid;
+            grid-template-columns:180px minmax(0,1fr);
+            gap:22px;
+        }
+
+        .account-tabs {
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+        }
+
+        .account-tab {
+            height:38px;
+            border-radius:12px;
+            padding:0 12px;
+            display:flex;
+            align-items:center;
+            gap:8px;
+            color:var(--muted);
+            font-size:12px;
+            font-weight:850;
+            border:1px solid transparent;
+            background:transparent;
+            cursor:pointer;
+        }
+
+        .account-tab:hover {
+            color:var(--text);
+            background:var(--nav-hover-bg);
+        }
+
+        .account-tab.active {
+            color:#fff;
+            background:var(--text);
+        }
+
+        html.theme-dark .account-tab.active,
+        body.theme-dark .account-tab.active {
+            color:#0f172a;
+            background:#f1f5f9;
+        }
+
+        .account-content {
+            min-width:0;
+            display:flex;
+            flex-direction:column;
+            gap:14px;
+        }
+
+        .account-login-card {
+            display:flex;
+            flex-direction:column;
+            gap:14px;
+        }
+
+        .account-login-fields,
+        .account-reset-panel {
+            display:flex;
+            flex-direction:column;
+            gap:14px;
+        }
+
+        .account-reset-panel {
+            display:none;
+        }
+
+        .account-login-card.is-resetting .account-login-fields {
+            display:none;
+        }
+
+        .account-login-card.is-resetting .account-reset-panel {
+            display:flex;
+        }
+
+        .account-overlay.is-logged-in .account-login-card {
+            display:none;
+        }
+
+        .account-custom-cloud {
+            display:none;
+            flex-direction:column;
+            gap:10px;
+            padding:10px;
+            border:1px solid var(--border);
+            border-radius:8px;
+            background:var(--panel);
+        }
+
+        .account-login-card.use-custom-cloud .account-custom-cloud {
+            display:flex;
+        }
+
+        .account-overlay:not(.is-logged-in) .account-tabs,
+        .account-overlay:not(.is-logged-in) .account-authed,
+        .account-overlay:not(.is-logged-in) .account-section:not(#account-section-sync) {
+            display:none !important;
+        }
+
+        .account-overlay:not(.is-logged-in) .account-body {
+            grid-template-columns:minmax(0, 1fr);
+        }
+
+        .account-overlay:not(.is-logged-in) .account-panel {
+            width:min(440px, calc(100vw - 48px));
+        }
+
+        .account-section { display:none; flex-direction:column; gap:14px; }
+        .account-section.active { display:flex; }
+
+        .account-row {
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:10px;
+        }
+
+        .account-field {
+            display:flex;
+            flex-direction:column;
+            gap:7px;
+            min-width:0;
+        }
+
+        .account-field.full { grid-column:1/-1; }
+
+        .account-label {
+            color:var(--muted);
+            font-size:11px;
+            font-weight:850;
+        }
+
+        .account-input {
+            height:38px;
+            width:100%;
+            border-radius:12px;
+            border:1px solid var(--border);
+            background:var(--bg);
+            color:var(--text);
+            outline:none;
+            padding:0 12px;
+            font-size:12.5px;
+            font-weight:700;
+        }
+
+        .account-input:focus { border-color:var(--text); }
+
+        .account-input[type="file"] {
+            height:auto;
+            min-height:38px;
+            padding:8px 12px;
+        }
+
+        .account-avatar-help {
+            color:var(--muted);
+            font-size:11px;
+            font-weight:750;
+            line-height:1.5;
+        }
+
+        .account-actions {
+            display:flex;
+            flex-wrap:wrap;
+            align-items:center;
+            gap:8px;
+        }
+
+        .account-action {
+            height:36px;
+            padding:0 13px;
+            border-radius:12px;
+            border:1px solid var(--border);
+            background:var(--sidebar-bg);
+            color:var(--muted);
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:7px;
+            font-size:12px;
+            font-weight:850;
+            cursor:pointer;
+        }
+
+        .account-action:hover {
+            color:var(--text);
+            border-color:var(--stage-border);
+            background:var(--nav-hover-bg);
+        }
+
+        .account-action.primary {
+            background:var(--text);
+            color:var(--bg);
+            border-color:var(--text);
+        }
+
+        .account-action.danger {
+            color:#b91c1c;
+            border-color:#fecaca;
+        }
+
+        .account-email-card {
+            display:none;
+            flex-direction:column;
+            gap:12px;
+            padding:14px;
+            border:1px solid rgba(245, 158, 11, .32);
+            border-radius:14px;
+            background:rgba(245, 158, 11, .08);
+        }
+
+        .account-email-card.verified {
+            border-color:rgba(34, 197, 94, .28);
+            background:rgba(34, 197, 94, .08);
+        }
+
+        .account-email-card.show {
+            display:flex;
+        }
+
+        .account-email-head {
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:12px;
+        }
+
+        .account-email-title {
+            color:var(--text);
+            font-size:13px;
+            font-weight:900;
+        }
+
+        .account-email-pill {
+            flex:0 0 auto;
+            border:1px solid var(--border);
+            border-radius:999px;
+            padding:3px 8px;
+            color:var(--muted);
+            font-size:10px;
+            font-weight:900;
+            background:var(--sidebar-bg);
+        }
+
+        .account-email-card.verified .account-email-pill {
+            color:#047857;
+            border-color:rgba(4,120,87,.25);
+            background:rgba(16,185,129,.12);
+        }
+
+        .account-note,
+        .account-status {
+            color:var(--muted);
+            font-size:11.5px;
+            line-height:1.55;
+            font-weight:700;
+        }
+
+        .account-status strong { color:var(--text); }
+
+        .account-check {
+            display:flex;
+            align-items:center;
+            gap:8px;
+            color:var(--muted);
+            font-size:12px;
+            font-weight:800;
+            user-select:none;
+        }
+
+        .account-check input { width:15px; height:15px; accent-color:var(--text); }
+
+        .account-divider {
+            height:1px;
+            background:var(--border);
+            margin:2px 0;
+        }
+
+        @media (max-width:760px) {
+            .account-body { grid-template-columns:1fr; }
+            .account-tabs { flex-direction:row; overflow:auto; }
+            .account-tab { flex:0 0 auto; }
+            .account-row { grid-template-columns:1fr; }
+        }
     </style>
 </head>
 
@@ -455,7 +966,7 @@
                 <!-- 分隔线 -->
                 <div style="width:32px;height:1px;background:var(--border);margin:8px auto;transition:background 0.3s;"></div>
 
-                <div class="nav-item" onclick="switchUI(this, 'online')">
+                <div class="nav-item" onclick="switchUI(this, 'online')" style="display:none">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"></path>
                         <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
@@ -477,9 +988,27 @@
                     </svg>
                     <span class="nav-text" data-i18n="nav.canvas">无限画布</span>
                 </div>
+                <div class="nav-item" onclick="switchUI(this, 'assets')">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="4" y="5" width="14" height="14" rx="2"></rect>
+                        <path d="M8 13l2.1-2.1a1.4 1.4 0 0 1 2 0L16 15"></path>
+                        <circle cx="9" cy="9" r="1"></circle>
+                        <path d="M8 21h10a2 2 0 0 0 2-2V9"></path>
+                    </svg>
+                    <span class="nav-text" data-i18n="nav.assets">素材库</span>
+                </div>
             </nav>
 
             <div class="side-actions">
+                <button class="side-pill account-pill" onclick="openAccountCenter()" id="account-pill" type="button" title="账户中心">
+                    <span id="account-avatar" class="account-avatar">
+                        <svg id="account-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px">
+                            <path d="M20 21a8 8 0 0 0-16 0"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                    </span>
+                    <span id="account-pill-text" class="side-pill-text">登录</span>
+                </button>
                 <button class="side-pill" onclick="toggleTheme()" id="theme-toggle-btn" type="button" title="切换夜间模式">
                     <svg id="icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -524,6 +1053,13 @@
                     </svg>
                     <span class="side-pill-text" data-i18n="common.comfyuiSettings">ComfyUI 设置</span>
                 </button>
+                <button class="side-pill" onclick="switchUI(this, 'app-settings')" type="button" title="应用设置">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5z"></path>
+                        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.33.32.52.75.6 1.2H21a2 2 0 1 1 0 4h-.09A1.7 1.7 0 0 0 19.4 15z"></path>
+                    </svg>
+                    <span class="side-pill-text" data-i18n="common.appSettings">应用设置</span>
+                </button>
             </div>
 
         </aside>
@@ -532,6 +1068,7 @@
             (function(){
                 try {
                     var pageId = localStorage.getItem('studio_active_page');
+                    if(pageId === 'online') pageId = 'zimage';
                     if(pageId && pageId !== 'zimage') {
                         document.querySelectorAll('.nav-item.active, .side-pill.active').forEach(function(n){
                             n.classList.remove('active');
@@ -544,19 +1081,9 @@
         </script>
 
         <main class="stage">
-            <iframe id="frame-zimage" data-src="/static/zimage.html?v=20260512-i18n2" class="active" scrolling="yes"></iframe>
-            <iframe id="frame-enhance" data-src="/static/enhance.html?v=20260512-i18n2" scrolling="yes"></iframe>
-            <iframe id="frame-klein" data-src="/static/klein.html?v=20260512-i18n2" scrolling="yes"></iframe>
-            <iframe id="frame-angle" data-src="/static/angle.html?v=20260512-i18n2" scrolling="yes"></iframe>
-            <iframe id="frame-online" data-src="/static/online.html?v=20260512-i18n2" scrolling="yes"></iframe>
-            <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html?v=20260514-provider-chat-models" scrolling="yes"></iframe>
-            <iframe id="frame-canvas" data-src="/static/canvas.html?v=20260515-editor-zoom-undo" scrolling="yes"></iframe>
-            <iframe id="frame-api-settings" data-src="/static/api-settings.html?v=20260514-provider-protocol" scrolling="yes"></iframe>
-            <iframe id="frame-comfyui-settings" data-src="/static/comfyui-settings.html?v=20260515-workflow-refresh" scrolling="yes"></iframe>
-
-            <div class="nano-monitor" id="nano-monitor">
+            <div class="nano-monitor" id="nano-monitor" title="服务状态">
                 <div class="stat-group">
-                    <div class="pulse-dot animate-pulse"></div>
+                    <div class="pulse-dot"></div>
                     <div class="spinner-nano"></div>
                     <span class="label-nano">ONLINE</span>
                     <span id="online-val">1</span>
@@ -567,7 +1094,197 @@
                     <span id="queue-val">0</span>
                 </div>
             </div>
+            <iframe id="frame-zimage" data-src="/static/online.html?v=20260519-lightbox-close1" class="active" scrolling="yes"></iframe>
+            <iframe id="frame-enhance" data-src="/static/enhance.html?v=20260512-i18n2" scrolling="yes"></iframe>
+            <iframe id="frame-klein" data-src="/static/klein.html?v=20260512-i18n2" scrolling="yes"></iframe>
+            <iframe id="frame-angle" data-src="/static/angle.html?v=20260512-i18n2" scrolling="yes"></iframe>
+            <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html?v=20260514-provider-chat-models" scrolling="yes"></iframe>
+            <iframe id="frame-canvas" data-src="/static/canvas.html?v=20260519-node-defaults1" scrolling="yes"></iframe>
+            <iframe id="frame-assets" data-src="/static/assets.html?v=20260519-assets-relay1" scrolling="yes"></iframe>
+            <iframe id="frame-api-settings" data-src="/static/api-settings.html?v=20260518-account-center-cloud" scrolling="yes"></iframe>
+            <iframe id="frame-comfyui-settings" data-src="/static/comfyui-settings.html?v=20260515-workflow-refresh" scrolling="yes"></iframe>
+            <iframe id="frame-app-settings" data-src="/static/app-settings.html?v=20260519-update-settings1" scrolling="yes"></iframe>
         </main>
+
+        <div id="account-overlay" class="account-overlay" aria-hidden="true">
+            <section class="account-panel" role="dialog" aria-modal="true" aria-labelledby="account-title">
+                <div class="account-head">
+                    <div class="account-identity">
+                        <div id="account-hero-avatar" class="account-hero-avatar">登</div>
+                        <div>
+                            <div id="account-title" class="account-title">账户中心</div>
+                            <div id="account-sub" class="account-sub">登录后同步云端配置</div>
+                        </div>
+                    </div>
+                    <button class="account-close" type="button" onclick="closeAccountCenter()" aria-label="关闭">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="account-body">
+                    <nav class="account-tabs" aria-label="账户中心">
+                        <button class="account-tab active" type="button" data-account-tab="sync" onclick="selectAccountTab('sync')">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M21 12a9 9 0 0 0-15-6.7L3 8"></path><path d="M3 3v5h5"></path><path d="M3 12a9 9 0 0 0 15 6.7L21 16"></path><path d="M16 16h5v5"></path></svg>
+                            云端同步
+                        </button>
+                        <button class="account-tab" type="button" data-account-tab="profile" onclick="selectAccountTab('profile')">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M20 21a8 8 0 0 0-16 0"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            个人资料
+                        </button>
+                        <button class="account-tab" type="button" data-account-tab="security" onclick="selectAccountTab('security')">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                            安全
+                        </button>
+                    </nav>
+                    <div class="account-content">
+                        <section id="account-section-sync" class="account-section active">
+                            <div class="account-login-card">
+                                <div class="account-login-fields">
+                                <div class="account-note">登录后可从云端下载你的配置，云端服务地址已由后端内置。</div>
+                                <div class="account-row">
+                                <label class="account-field">
+                                    <span class="account-label">邮箱</span>
+                                    <input id="account-cloud-email" class="account-input" type="email" autocomplete="username">
+                                </label>
+                                <label class="account-field">
+                                    <span class="account-label">密码</span>
+                                    <input id="account-cloud-password" class="account-input" type="password" autocomplete="current-password">
+                                </label>
+                                </div>
+                                <label class="account-check">
+                                    <input id="account-remember-password" type="checkbox" onchange="accountToggleRememberPassword()">
+                                    <span>记住密码</span>
+                                </label>
+                                <label class="account-check">
+                                    <input id="account-use-custom-cloud" type="checkbox" onchange="toggleAccountCustomCloud()">
+                                    <span>使用自建云端</span>
+                                </label>
+                                <div id="account-custom-cloud-box" class="account-custom-cloud">
+                                    <label class="account-field full">
+                                        <span class="account-label">自建云端地址</span>
+                                        <input id="account-custom-cloud-url" class="account-input" type="url" placeholder="https://your-domain.com">
+                                    </label>
+                                    <div class="account-note">适合 Docker 部署用户。普通用户保持关闭，会自动连接内置官方云端。</div>
+                                </div>
+                                <div class="account-actions">
+                                    <button class="account-action primary" type="button" onclick="accountLogin(false)">登录</button>
+                                    <button class="account-action" type="button" onclick="accountLogin(true)">注册</button>
+                                    <button class="account-action" type="button" onclick="toggleAccountReset(true)">忘记密码</button>
+                                </div>
+                                </div>
+                                <div class="account-reset-panel">
+                                    <div class="account-note">输入注册邮箱后发送重置邮件，再把邮件里的验证码填回来设置新密码。</div>
+                                    <div class="account-row">
+                                        <label class="account-field">
+                                            <span class="account-label">邮箱</span>
+                                            <input id="account-reset-email" class="account-input" type="email" autocomplete="username">
+                                        </label>
+                                        <label class="account-field">
+                                            <span class="account-label">重置验证码</span>
+                                            <input id="account-reset-token" class="account-input" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code">
+                                        </label>
+                                        <label class="account-field full">
+                                            <span class="account-label">新密码</span>
+                                            <input id="account-reset-new-password" class="account-input" type="password" autocomplete="new-password">
+                                        </label>
+                                    </div>
+                                    <div class="account-actions">
+                                        <button class="account-action primary" type="button" onclick="accountRequestPasswordReset()">发送重置邮件</button>
+                                        <button class="account-action" type="button" onclick="accountResetPassword()">重置密码</button>
+                                        <button class="account-action" type="button" onclick="toggleAccountReset(false)">返回登录</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="account-authed">
+                                <div id="account-email-verify-card" class="account-email-card">
+                                    <div class="account-email-head">
+                                        <div>
+                                            <div id="account-email-verify-title" class="account-email-title">邮箱待验证</div>
+                                            <div id="account-email-verify-desc" class="account-note">请输入邮件里的 6 位验证码，或直接点击邮件里的验证链接。</div>
+                                        </div>
+                                        <span id="account-email-verify-pill" class="account-email-pill">待验证</span>
+                                    </div>
+                                    <label id="account-email-verify-field" class="account-field full">
+                                        <span class="account-label">6 位邮箱验证码</span>
+                                        <input id="account-email-verify-token-main" class="account-input" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="123456">
+                                    </label>
+                                    <div id="account-email-verify-actions" class="account-actions">
+                                        <button class="account-action primary" type="button" onclick="accountConfirmEmailVerify()">确认验证</button>
+                                        <button class="account-action" type="button" onclick="accountRequestEmailVerify()">重新发送验证码</button>
+                                    </div>
+                                    <div id="account-email-verify-card-status" class="account-note">链接验证成功后无需再输入验证码。</div>
+                                </div>
+                                <div class="account-actions">
+                                    <button class="account-action primary" type="button" onclick="accountDownloadConfig()">下载云端配置</button>
+                                    <button class="account-action" type="button" onclick="accountUploadConfig()">上传当前配置</button>
+                                    <button class="account-action danger" type="button" onclick="accountLogout()">退出登录</button>
+                                </div>
+                                <label class="account-check">
+                                    <input id="account-include-secrets" type="checkbox" autocomplete="off">
+                                    <span>上传时包含 API Key（请确认云端部署在 HTTPS 后面）</span>
+                                </label>
+                            </div>
+                            <div id="account-sync-status" class="account-status">未连接云端</div>
+                            <div class="account-note account-authed">当前框架只同步 API 平台、模型列表、ComfyUI 地址和可选 API Key，不同步生成历史、图片、视频和画布大文件。</div>
+                        </section>
+
+                        <section id="account-section-profile" class="account-section">
+                            <div class="account-row">
+                                <label class="account-field">
+                                    <span class="account-label">昵称</span>
+                                    <input id="account-display-name" class="account-input" type="text" placeholder="你的名字">
+                                </label>
+                                <label class="account-field">
+                                    <span class="account-label">绑定邮箱</span>
+                                    <input id="account-profile-email" class="account-input" type="email">
+                                </label>
+                                <label class="account-field full">
+                                    <span class="account-label">头像文件</span>
+                                    <input id="account-avatar-file" class="account-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+                                    <input id="account-avatar-url" type="hidden">
+                                    <span id="account-avatar-help" class="account-avatar-help">支持 JPG、PNG、WebP、GIF，最大 5MB。保存资料时会上传到云端账户。</span>
+                                </label>
+                            </div>
+                            <div class="account-actions">
+                                <button class="account-action primary" type="button" onclick="accountSaveProfile()">保存资料</button>
+                                <button class="account-action" type="button" onclick="accountRefreshProfile()">刷新资料</button>
+                            </div>
+                            <div class="account-note">头像会跟随云端账户保存；换设备登录后会自动读取云端头像。</div>
+                        </section>
+
+                        <section id="account-section-security" class="account-section">
+                            <div class="account-row">
+                                <label class="account-field full">
+                                    <span class="account-label">邮箱验证码</span>
+                                    <input id="account-email-verify-token" class="account-input" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code">
+                                </label>
+                            </div>
+                            <div class="account-actions">
+                                <button class="account-action" type="button" onclick="accountRequestEmailVerify()">发送验证邮件</button>
+                                <button class="account-action" type="button" onclick="accountConfirmEmailVerify()">确认邮箱验证</button>
+                            </div>
+                            <div id="account-email-status" class="account-note">邮箱验证用于找回密码和账户归属确认。</div>
+                            <div class="account-row">
+                                <label class="account-field">
+                                    <span class="account-label">当前密码</span>
+                                    <input id="account-current-password" class="account-input" type="password" autocomplete="current-password">
+                                </label>
+                                <label class="account-field">
+                                    <span class="account-label">新密码</span>
+                                    <input id="account-new-password" class="account-input" type="password" autocomplete="new-password">
+                                </label>
+                            </div>
+                            <div class="account-actions">
+                                <button class="account-action primary" type="button" onclick="accountChangePassword()">修改密码</button>
+                            </div>
+                            <div class="account-note">密码修改会发送到你配置的云端服务，本机只保存登录 token，不保存明文密码。</div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+        </div>
     </div>
 
     <script>
@@ -583,8 +1300,488 @@
         const CID = localStorage.getItem("client_id") || generateUUID();
         localStorage.setItem("client_id", CID);
         const ACTIVE_PAGE_KEY = 'studio_active_page';
+        const ACCOUNT_REMEMBER_KEY = 'studio_account_remember_password';
+        const ACCOUNT_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
         const DEFAULT_PAGE_ID = 'zimage';
-        const PAGE_IDS = ['zimage','enhance','klein','angle','online','gpt-chat','canvas','api-settings','comfyui-settings'];
+        const PAGE_IDS = ['zimage','enhance','klein','angle','gpt-chat','canvas','assets','api-settings','comfyui-settings','app-settings'];
+        let appStatus = { online_count: 1, queue_text: '0', busy: false };
+        let accountState = { logged_in:false, email:'', email_verified:false, display_name:'', avatar_url:'', base_url:'', custom_cloud:false };
+
+        function accountJsonOrError(res, fallback) {
+            return res.json().catch(() => ({})).then(data => {
+                if(!res.ok) throw new Error(data.detail || fallback || '请求失败');
+                return data;
+            });
+        }
+
+        function accountInitial(data = accountState) {
+            const text = (data.display_name || data.email || '登录').trim();
+            return text ? text.slice(0, 1).toUpperCase() : '登';
+        }
+
+        function accountAvatarMarkup(data = accountState, size = 'small') {
+            if(data.avatar_url) return `<img src="${escapeAccountAttr(data.avatar_url)}" alt="">`;
+            if(size === 'small' && !data.logged_in) {
+                return `<svg id="account-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M20 21a8 8 0 0 0-16 0"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+            }
+            return escapeAccountHtml(accountInitial(data));
+        }
+
+        function escapeAccountHtml(value) {
+            return String(value || '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
+        }
+
+        function escapeAccountAttr(value) {
+            return escapeAccountHtml(value).replace(/`/g, '&#96;');
+        }
+
+        function setAccountStatus(text, strong = false) {
+            const el = document.getElementById('account-sync-status');
+            if(!el) return;
+            el.innerHTML = strong ? `<strong>${escapeAccountHtml(text)}</strong>` : escapeAccountHtml(text);
+        }
+
+        function setAccountEmailStatus(text) {
+            const el = document.getElementById('account-email-status');
+            if(el) el.textContent = text;
+            const cardStatus = document.getElementById('account-email-verify-card-status');
+            if(cardStatus) cardStatus.textContent = text;
+        }
+
+        function syncAccountEmailVerifyCard() {
+            const card = document.getElementById('account-email-verify-card');
+            if(!card) return;
+            const isLoggedIn = !!accountState.logged_in;
+            const verified = !!accountState.email_verified;
+            card.classList.toggle('show', isLoggedIn);
+            card.classList.toggle('verified', verified);
+
+            const title = document.getElementById('account-email-verify-title');
+            const desc = document.getElementById('account-email-verify-desc');
+            const pill = document.getElementById('account-email-verify-pill');
+            const field = document.getElementById('account-email-verify-field');
+            const actions = document.getElementById('account-email-verify-actions');
+
+            if(title) title.textContent = verified ? '邮箱已验证' : '邮箱待验证';
+            if(desc) desc.textContent = verified
+                ? `${accountState.email || '当前邮箱'} 已完成验证，可以用于找回密码和账户归属确认。`
+                : `当前邮箱：${accountState.email || '-'}。请输入邮件中的 6 位验证码，或直接点击邮件里的验证链接。`;
+            if(pill) pill.textContent = verified ? '已验证' : '待验证';
+            if(field) field.style.display = verified ? 'none' : '';
+            if(actions) actions.style.display = verified ? 'none' : '';
+            setAccountEmailStatus(verified ? '邮箱已验证。' : '链接验证成功后无需再输入验证码。');
+        }
+
+        function accountVerifyTokenInput() {
+            const main = document.getElementById('account-email-verify-token-main');
+            if(main && main.offsetParent !== null) return main;
+            return document.getElementById('account-email-verify-token') || main;
+        }
+
+        function normalizeSixDigitToken(input) {
+            const value = String(input?.value || '').replace(/\D/g, '').slice(0, 6);
+            if(input && input.value !== value) input.value = value;
+            return value;
+        }
+
+        function toggleAccountCustomCloud(force) {
+            const card = document.querySelector('.account-login-card');
+            const custom = document.getElementById('account-use-custom-cloud');
+            const enabled = typeof force === 'boolean' ? force : !!custom?.checked;
+            if(custom) custom.checked = enabled;
+            if(card) card.classList.toggle('use-custom-cloud', enabled);
+        }
+
+        function accountRememberFields() {
+            return {
+                email: document.getElementById('account-cloud-email'),
+                password: document.getElementById('account-cloud-password'),
+                remember: document.getElementById('account-remember-password'),
+                customCloud: document.getElementById('account-use-custom-cloud'),
+                customCloudUrl: document.getElementById('account-custom-cloud-url')
+            };
+        }
+
+        function applyRememberedAccount() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(ACCOUNT_REMEMBER_KEY) || '{}');
+                if(!saved?.remember) return;
+                const fields = accountRememberFields();
+                if(fields.email && saved.email) fields.email.value = saved.email;
+                if(fields.password && saved.password) fields.password.value = saved.password;
+                if(fields.remember) fields.remember.checked = true;
+                if(saved.custom_cloud) {
+                    if(fields.customCloudUrl && saved.base_url) fields.customCloudUrl.value = saved.base_url;
+                    toggleAccountCustomCloud(true);
+                }
+            } catch(e) {
+                localStorage.removeItem(ACCOUNT_REMEMBER_KEY);
+            }
+        }
+
+        function saveRememberedAccount(email, password) {
+            const fields = accountRememberFields();
+            if(!fields.remember?.checked) {
+                localStorage.removeItem(ACCOUNT_REMEMBER_KEY);
+                return;
+            }
+            localStorage.setItem(ACCOUNT_REMEMBER_KEY, JSON.stringify({
+                remember: true,
+                email,
+                password,
+                custom_cloud: !!fields.customCloud?.checked,
+                base_url: fields.customCloudUrl?.value.trim() || ''
+            }));
+        }
+
+        function accountToggleRememberPassword() {
+            const fields = accountRememberFields();
+            if(!fields.remember?.checked) {
+                localStorage.removeItem(ACCOUNT_REMEMBER_KEY);
+            }
+        }
+
+        function toggleAccountReset(show) {
+            const card = document.querySelector('.account-login-card');
+            if(card) card.classList.toggle('is-resetting', !!show);
+            if(show) {
+                const loginEmail = document.getElementById('account-cloud-email')?.value.trim();
+                const resetEmail = document.getElementById('account-reset-email');
+                if(resetEmail && loginEmail) resetEmail.value = loginEmail;
+            }
+        }
+
+        function accountCloudBasePayload() {
+            const useCustomCloud = !!document.getElementById('account-use-custom-cloud')?.checked;
+            const customCloudUrl = document.getElementById('account-custom-cloud-url')?.value.trim();
+            if(useCustomCloud && !customCloudUrl) {
+                throw new Error('请填写自建云端地址');
+            }
+            return useCustomCloud ? { base_url: customCloudUrl } : {};
+        }
+
+        function renderAccountState(data = {}) {
+            accountState = { ...accountState, ...data };
+            const pillText = document.getElementById('account-pill-text');
+            const pillAvatar = document.getElementById('account-avatar');
+            const heroAvatar = document.getElementById('account-hero-avatar');
+            const sub = document.getElementById('account-sub');
+            const email = document.getElementById('account-cloud-email');
+            const profileEmail = document.getElementById('account-profile-email');
+            const displayName = document.getElementById('account-display-name');
+            const avatarUrl = document.getElementById('account-avatar-url');
+            const customCloudUrl = document.getElementById('account-custom-cloud-url');
+            const overlay = document.getElementById('account-overlay');
+            if(overlay) overlay.classList.toggle('is-logged-in', !!accountState.logged_in);
+            if(pillText) pillText.textContent = accountState.logged_in ? (accountState.display_name || accountState.email || '账户') : '登录';
+            if(pillAvatar) pillAvatar.innerHTML = accountAvatarMarkup(accountState, 'small');
+            if(heroAvatar) heroAvatar.innerHTML = accountAvatarMarkup(accountState, 'hero');
+            if(sub) sub.textContent = accountState.logged_in ? `${accountState.email || ''} · ${accountState.email_verified ? '邮箱已验证' : '邮箱待验证'} · 已连接云端` : '登录后同步云端配置';
+            if(email && accountState.email) email.value = accountState.email;
+            if(profileEmail) profileEmail.value = accountState.email || '';
+            if(displayName) displayName.value = accountState.display_name || '';
+            if(avatarUrl) avatarUrl.value = accountState.avatar_url || '';
+            if(customCloudUrl && accountState.custom_cloud) customCloudUrl.value = accountState.base_url || '';
+            toggleAccountCustomCloud(!!accountState.custom_cloud);
+            syncAccountEmailVerifyCard();
+            if(accountState.logged_in) setAccountStatus(`已登录 ${accountState.email || ''}`);
+            else {
+                selectAccountTab('sync');
+                setAccountStatus('未登录');
+            }
+        }
+
+        async function loadAccountState() {
+            try {
+                const data = await fetch('/api/cloud/status').then(r => accountJsonOrError(r, '读取账户状态失败'));
+                renderAccountState(data);
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+            }
+        }
+
+        function openAccountCenter() {
+            const overlay = document.getElementById('account-overlay');
+            if(overlay) {
+                overlay.classList.add('open');
+                overlay.setAttribute('aria-hidden', 'false');
+            }
+            const includeSecrets = document.getElementById('account-include-secrets');
+            if(includeSecrets) includeSecrets.checked = false;
+            applyRememberedAccount();
+            loadAccountState();
+        }
+
+        function closeAccountCenter() {
+            const overlay = document.getElementById('account-overlay');
+            if(overlay) {
+                overlay.classList.remove('open');
+                overlay.setAttribute('aria-hidden', 'true');
+            }
+        }
+
+        function selectAccountTab(name) {
+            document.querySelectorAll('.account-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.accountTab === name));
+            document.querySelectorAll('.account-section').forEach(section => section.classList.toggle('active', section.id === `account-section-${name}`));
+        }
+
+        async function accountLogin(isRegister) {
+            const email = document.getElementById('account-cloud-email')?.value.trim();
+            const password = document.getElementById('account-cloud-password')?.value || '';
+            if(!email || !password) {
+                setAccountStatus('请填写邮箱和密码');
+                return;
+            }
+            setAccountStatus(isRegister ? '正在注册...' : '正在登录...');
+            try {
+                const payload = { email, password, ...accountCloudBasePayload() };
+                const data = await fetch(isRegister ? '/api/cloud/register' : '/api/cloud/login', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify(payload)
+                }).then(r => accountJsonOrError(r, isRegister ? '注册失败' : '登录失败'));
+                const pwd = document.getElementById('account-cloud-password');
+                saveRememberedAccount(email, password);
+                if(pwd && !document.getElementById('account-remember-password')?.checked) pwd.value = '';
+                renderAccountState(data);
+                await accountRefreshProfile({ quiet:true });
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+            }
+        }
+
+        async function accountRequestPasswordReset() {
+            const email = document.getElementById('account-reset-email')?.value.trim() || document.getElementById('account-cloud-email')?.value.trim();
+            if(!email) {
+                setAccountStatus('请填写注册邮箱');
+                return;
+            }
+            setAccountStatus('正在发送重置邮件...');
+            try {
+                const payload = { email, ...accountCloudBasePayload() };
+                const data = await fetch('/api/cloud/password/forgot', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify(payload)
+                }).then(r => accountJsonOrError(r, '发送重置邮件失败'));
+                const devToken = data.dev_token ? ` 开发验证码：${data.dev_token}` : '';
+                setAccountStatus(`如果账号存在，重置邮件已经发送。${devToken}`);
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+            }
+        }
+
+        async function accountResetPassword() {
+            const email = document.getElementById('account-reset-email')?.value.trim();
+            const tokenInput = document.getElementById('account-reset-token');
+            const token = normalizeSixDigitToken(tokenInput);
+            const newPassword = document.getElementById('account-reset-new-password')?.value || '';
+            if(!email || !token || !newPassword) {
+                setAccountStatus('请填写邮箱、验证码和新密码');
+                return;
+            }
+            if(!/^\d{6}$/.test(token)) {
+                setAccountStatus('验证码应为 6 位数字');
+                return;
+            }
+            setAccountStatus('正在重置密码...');
+            try {
+                const payload = { email, token, new_password:newPassword, ...accountCloudBasePayload() };
+                await fetch('/api/cloud/password/reset', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify(payload)
+                }).then(r => accountJsonOrError(r, '重置密码失败'));
+                const loginEmail = document.getElementById('account-cloud-email');
+                const loginPassword = document.getElementById('account-cloud-password');
+                if(loginEmail) loginEmail.value = email;
+                if(document.getElementById('account-remember-password')?.checked) {
+                    if(loginPassword) loginPassword.value = newPassword;
+                    saveRememberedAccount(email, newPassword);
+                } else if(loginPassword) {
+                    loginPassword.value = '';
+                }
+                const resetToken = document.getElementById('account-reset-token');
+                const resetPassword = document.getElementById('account-reset-new-password');
+                if(resetToken) resetToken.value = '';
+                if(resetPassword) resetPassword.value = '';
+                toggleAccountReset(false);
+                setAccountStatus('密码已重置，请用新密码登录');
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+            }
+        }
+
+        async function accountLogout() {
+            try {
+                await fetch('/api/cloud/logout', { method:'POST' }).then(r => accountJsonOrError(r, '退出失败'));
+                renderAccountState({ logged_in:false, token:'', display_name:'', avatar_url:'', custom_cloud:false });
+                applyRememberedAccount();
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+            }
+        }
+
+        async function accountRequestEmailVerify() {
+            if(accountState.email_verified) {
+                setAccountStatus('邮箱已验证，无需重新发送验证码');
+                setAccountEmailStatus('邮箱已验证。');
+                syncAccountEmailVerifyCard();
+                return;
+            }
+            setAccountStatus('正在发送验证邮件...');
+            try {
+                const data = await fetch('/api/cloud/email/verify/request', { method:'POST' }).then(r => accountJsonOrError(r, '发送验证邮件失败'));
+                if(data.already_verified) {
+                    renderAccountState({ email_verified:true });
+                    setAccountStatus('邮箱已验证，无需重新发送验证码');
+                    return;
+                }
+                const devToken = data.dev_token ? ` 开发验证码：${data.dev_token}` : '';
+                if(data.email_sent === false || !('email_sent' in data)) {
+                    setAccountStatus('云端没有发送新验证码。请刷新账户状态；如果仍未验证，请检查云后端 SMTP 日志。');
+                    setAccountEmailStatus('没有发送新验证码。可能邮箱已验证，或云端 SMTP 未成功发送。');
+                    await accountRefreshProfile({ quiet:true });
+                    return;
+                }
+                setAccountStatus(`验证邮件已发送。${devToken}`);
+                setAccountEmailStatus('验证邮件已发送，请填写邮件里的 6 位验证码。');
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+            }
+        }
+
+        async function accountConfirmEmailVerify() {
+            const input = accountVerifyTokenInput();
+            const token = normalizeSixDigitToken(input);
+            if(!/^\d{6}$/.test(token)) {
+                setAccountStatus('请填写 6 位邮箱验证码');
+                if(input) input.focus();
+                return;
+            }
+            setAccountStatus('正在验证邮箱...');
+            try {
+                await fetch('/api/cloud/email/verify/confirm', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({ token })
+                }).then(r => accountJsonOrError(r, '验证邮箱失败'));
+                if(input) input.value = '';
+                const secondaryInput = document.getElementById('account-email-verify-token');
+                const mainInput = document.getElementById('account-email-verify-token-main');
+                if(secondaryInput) secondaryInput.value = '';
+                if(mainInput) mainInput.value = '';
+                renderAccountState({ email_verified:true });
+                setAccountStatus('邮箱已验证');
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+            }
+        }
+
+        function notifyConfigChanged() {
+            try { new BroadcastChannel('studio-api').postMessage({ type:'providers-changed' }); } catch(e) {}
+            document.querySelectorAll('iframe').forEach(frame => {
+                try { frame.contentWindow?.postMessage({ type:'providers-changed' }, '*'); } catch(e) {}
+            });
+        }
+
+        async function accountUploadConfig() {
+            const include = !!document.getElementById('account-include-secrets')?.checked;
+            if(include && !confirm('确定把 API Key 一起上传到云端吗？请确认你的云端服务已经通过 HTTPS 访问。')) return;
+            setAccountStatus('正在上传当前配置...');
+            try {
+                const data = await fetch('/api/cloud/upload', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({ include_secrets:include })
+                }).then(r => accountJsonOrError(r, '上传失败'));
+                setAccountStatus(`上传成功 · ${new Date(data.cloud?.updated_at || Date.now()).toLocaleString()}`);
+                loadAccountState();
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+            }
+        }
+
+        async function accountDownloadConfig() {
+            if(!confirm('下载云端配置会覆盖本机 API 平台、模型列表和 ComfyUI 地址。确定继续吗？')) return;
+            setAccountStatus('正在下载云端配置...');
+            try {
+                await fetch('/api/cloud/download', { method:'POST' }).then(r => accountJsonOrError(r, '下载失败'));
+                setAccountStatus('下载成功 · 已应用到本机');
+                notifyConfigChanged();
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+            }
+        }
+
+        async function accountRefreshProfile(options = {}) {
+            try {
+                const data = await fetch('/api/cloud/profile').then(r => accountJsonOrError(r, '刷新资料失败'));
+                renderAccountState({ logged_in:true, ...data });
+                if(!options.quiet) setAccountStatus('资料已刷新');
+            } catch(e) {
+                if(!options.quiet) setAccountStatus(e.message || String(e));
+            }
+        }
+
+        async function accountSaveProfile() {
+            const avatarFileInput = document.getElementById('account-avatar-file');
+            const avatarFile = avatarFileInput?.files?.[0] || null;
+            if(avatarFile && avatarFile.size > ACCOUNT_AVATAR_MAX_BYTES) {
+                setAccountStatus('头像文件不能超过 5MB');
+                return;
+            }
+            const payload = {
+                display_name: document.getElementById('account-display-name')?.value.trim() || '',
+                email: document.getElementById('account-profile-email')?.value.trim() || '',
+                avatar_url: document.getElementById('account-avatar-url')?.value.trim() || ''
+            };
+            setAccountStatus('正在保存资料...');
+            try {
+                if(avatarFile) {
+                    setAccountStatus('正在上传头像...');
+                    const form = new FormData();
+                    form.append('file', avatarFile);
+                    const avatarData = await fetch('/api/cloud/profile/avatar', {
+                        method:'POST',
+                        body:form
+                    }).then(r => accountJsonOrError(r, '上传头像失败'));
+                    payload.avatar_url = avatarData.avatar_url || payload.avatar_url;
+                }
+                const data = await fetch('/api/cloud/profile', {
+                    method:'PUT',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify(payload)
+                }).then(r => accountJsonOrError(r, '保存资料失败'));
+                renderAccountState({ logged_in:true, ...data });
+                if(avatarFileInput) avatarFileInput.value = '';
+                setAccountStatus('资料已保存');
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+            }
+        }
+
+        async function accountChangePassword() {
+            const current_password = document.getElementById('account-current-password')?.value || '';
+            const new_password = document.getElementById('account-new-password')?.value || '';
+            if(!current_password || !new_password) {
+                setAccountStatus('请填写当前密码和新密码');
+                return;
+            }
+            setAccountStatus('正在修改密码...');
+            try {
+                await fetch('/api/cloud/password', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({ current_password, new_password })
+                }).then(r => accountJsonOrError(r, '修改密码失败'));
+                document.getElementById('account-current-password').value = '';
+                document.getElementById('account-new-password').value = '';
+                setAccountStatus('密码已修改');
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+            }
+        }
 
         function switchUI(el, id, options = {}) {
             if(!PAGE_IDS.includes(id)) id = DEFAULT_PAGE_ID;
@@ -593,14 +1790,66 @@
             document.querySelectorAll('iframe').forEach(f => f.classList.remove('active'));
             const target = document.getElementById('frame-' + id);
             target.classList.add('active');
+            document.querySelector('.stage')?.classList.toggle('is-canvas-page', id === 'canvas');
+            document.body.classList.toggle('canvas-compact-nav', id === 'canvas');
             if (!target.src) target.src = target.dataset.src;
             if(!options.skipRemember) localStorage.setItem(ACTIVE_PAGE_KEY, id);
             // sync theme to newly activated iframe
             syncThemeToFrame(target);
             syncLanguageToFrame(target);
+            sendAppStatusToFrame(target);
             // 切换到画布时通知刷新工作流列表（防止在 comfyui-settings 修改后画布未及时更新）
             if (id === 'canvas' && target.src) {
                 try { target.contentWindow?.postMessage({ type: 'canvas-focus' }, '*'); } catch(e) {}
+            }
+        }
+
+        window.addEventListener('message', event => {
+            if(event.data?.type === 'app-status-request') {
+                const iframe = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === event.source) || document.querySelector('iframe.active');
+                sendAppStatusToFrame(iframe);
+                return;
+            }
+            if(event.data?.type === 'asset-add-to-canvas') {
+                const trigger = document.querySelector(`[onclick*="'canvas'"],[onclick*='"canvas"']`);
+                switchUI(trigger, 'canvas');
+                const target = document.getElementById('frame-canvas');
+                relayAssetToCanvas(target, event.data.asset, event.data.message_id);
+                return;
+            }
+            if(event.data?.type !== 'asset-insert-prompt') return;
+            const trigger = document.querySelector(`[onclick*="'zimage'"],[onclick*='"zimage"']`);
+            switchUI(trigger, 'zimage');
+            const target = document.getElementById('frame-zimage');
+            const send = () => target.contentWindow?.postMessage({ type:'asset-insert-prompt', prompt:event.data.prompt || '' }, '*');
+            if(target.src) setTimeout(send, 80);
+            else target.addEventListener('load', send, { once:true });
+        });
+
+        function relayAssetToCanvas(target, asset, messageId) {
+            if(!target || !asset) return;
+            const payload = {
+                type:'asset-add-to-canvas',
+                message_id: messageId || `asset-relay-${asset.id || Date.now()}-${Date.now()}`,
+                asset
+            };
+            let sent = false;
+            const send = () => {
+                if(sent) return;
+                sent = true;
+                try { target.contentWindow?.postMessage(payload, '*'); } catch(e) {}
+            };
+            const waitForLoad = () => {
+                target.addEventListener('load', () => setTimeout(send, 90), { once:true });
+                setTimeout(send, 1600);
+            };
+            try {
+                const doc = target.contentDocument;
+                const ready = target.src && target.src.includes('/static/canvas.html') && doc && doc.readyState !== 'loading' && doc.location.href.includes('/static/canvas.html');
+                if(ready) setTimeout(send, 90);
+                else waitForLoad();
+            } catch(e) {
+                waitForLoad();
             }
         }
 
@@ -611,6 +1860,26 @@
             document.documentElement.classList.remove('studio-route-booting');
         }
         document.addEventListener('DOMContentLoaded', restoreActivePage, { once:true });
+        document.addEventListener('DOMContentLoaded', () => {
+            applyRememberedAccount();
+            loadAccountState();
+        }, { once:true });
+        document.addEventListener('keydown', event => {
+            if(event.key === 'Escape') closeAccountCenter();
+        });
+        document.getElementById('account-overlay')?.addEventListener('click', event => {
+            if(event.target?.id === 'account-overlay') closeAccountCenter();
+        });
+
+        function sendAppStatusToFrame(iframe) {
+            try {
+                iframe?.contentWindow?.postMessage({ type:'app-status', ...appStatus }, '*');
+            } catch(e) {}
+        }
+
+        function broadcastAppStatus() {
+            document.querySelectorAll('iframe').forEach(sendAppStatusToFrame);
+        }
 
         async function syncStatus() {
             try {
@@ -621,15 +1890,18 @@
                 const logoDot = document.getElementById('logo-dot');
                 const total = data.total || 0;
                 const pos = data.position || 0;
+                appStatus.busy = pos > 0;
+                appStatus.queue_text = pos > 0 ? `${pos}/${total}` : (total > 0 ? String(total) : '0');
                 if (pos > 0) {
-                    monitor.classList.add('is-busy');
-                    queueVal.innerText = `${pos}/${total}`;
-                    logoDot.style.backgroundColor = '#3b82f6';
+                    if(monitor) monitor.classList.add('is-busy');
+                    if(queueVal) queueVal.innerText = appStatus.queue_text;
+                    if(logoDot) logoDot.style.backgroundColor = '#3b82f6';
                 } else {
-                    monitor.classList.remove('is-busy');
-                    queueVal.innerText = total > 0 ? total : '0';
-                    logoDot.style.backgroundColor = 'var(--text)';
+                    if(monitor) monitor.classList.remove('is-busy');
+                    if(queueVal) queueVal.innerText = appStatus.queue_text;
+                    if(logoDot) logoDot.style.backgroundColor = 'var(--text)';
                 }
+                broadcastAppStatus();
             } catch (e) { }
         }
 
@@ -640,7 +1912,10 @@
             ws.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'stats') {
-                    document.getElementById('online-val').innerText = data.online_count;
+                    appStatus.online_count = data.online_count;
+                    const onlineVal = document.getElementById('online-val');
+                    if(onlineVal) onlineVal.innerText = data.online_count;
+                    broadcastAppStatus();
                 } else if (data.type === 'cloud_status') {
                     const iframe = document.querySelector('iframe.active');
                     if (iframe && iframe.contentWindow) {
@@ -724,6 +1999,22 @@
             updateThemeIcon(theme);
             if(window.StudioI18n) window.StudioI18n.apply();
             broadcastLanguage();
+            ['account-email-verify-token-main', 'account-email-verify-token', 'account-reset-token'].forEach(id => {
+                const input = document.getElementById(id);
+                if(input) input.addEventListener('input', () => normalizeSixDigitToken(input));
+            });
+            const includeSecrets = document.getElementById('account-include-secrets');
+            if(includeSecrets) includeSecrets.checked = false;
+            const avatarFile = document.getElementById('account-avatar-file');
+            if(avatarFile) {
+                avatarFile.addEventListener('change', () => {
+                    const file = avatarFile.files?.[0];
+                    if(file && file.size > ACCOUNT_AVATAR_MAX_BYTES) {
+                        avatarFile.value = '';
+                        setAccountStatus('头像文件不能超过 5MB');
+                    }
+                });
+            }
         });
 
         // sync theme when iframe loads
@@ -731,6 +2022,7 @@
             f.addEventListener('load', () => {
                 syncThemeToFrame(f);
                 syncLanguageToFrame(f);
+                sendAppStatusToFrame(f);
             });
         });
     </script>
