@@ -2,7 +2,7 @@
 
 本地部署的 AI 创作工作台。无限画布 + 节点连线，统一调度 ComfyUI、在线 API、LLM 完成图文视频生成。
 
-> 当前版本：v1.0.1-rc.1
+> 当前版本：v1.0.1
 
 ---
 
@@ -10,8 +10,8 @@
 
 | 版本 | 说明 | 大小 |
 |------|------|------|
-| [桌面窗口版](https://github.com/IGuanggg/Infinite-Canvas/releases/download/v1.0.1-rc.1/Infinite.Canvas.Desktop.zip) | 独立窗口，无终端，推荐正式使用 | ~18 MB |
-| [浏览器版](https://github.com/IGuanggg/Infinite-Canvas/releases/download/v1.0.1-rc.1/Infinite.Canvas.Browser.zip) | 打开浏览器，有终端窗口，推荐调试 | ~14 MB |
+| [桌面窗口版](https://github.com/IGuanggg/Infinite-Canvas/releases/download/v1.0.1/Infinite.Canvas.Desktop.zip) | 独立窗口，无终端，推荐正式使用 | ~27 MB |
+| [浏览器版](https://github.com/IGuanggg/Infinite-Canvas/releases/download/v1.0.1/Infinite.Canvas.Browser.zip) | 打开浏览器，有终端窗口，推荐调试 | ~22 MB |
 
 桌面版需要 [Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)（Windows 11 自带，Win10 可能需安装）。
 
@@ -294,13 +294,14 @@ A: 桌面版备份 `%APPDATA%\Infinite Canvas\`。浏览器版备份 `userdata/`
 
 ## 发布状态
 
-当前版本 **v1.0.1-rc.1**（Release Candidate）。
+当前版本 **v1.0.1**。
 
 - 核心功能完整
-- 安全加固已完成
+- 安全加固已完成（认证、脱敏、路径防护、异步架构）
 - 桌面窗口版 EXE 已验证
+- 浏览器版 EXE 已验证
 - Docker 部署已验证
-- 待验证：大规模并发、长期运行稳定性
+- 云后端已部署运行
 
 ---
 
