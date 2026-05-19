@@ -1308,6 +1308,46 @@
         let appStatus = { online_count: 1, queue_text: '0', busy: false };
         let accountState = { logged_in:false, email:'', email_verified:false, display_name:'', avatar_url:'', base_url:'', custom_cloud:false };
 
+        // --- Email verify polling ---
+        let _emailVerifyPollTimer = null;
+        let _emailVerifyPollCount = 0;
+        const EMAIL_VERIFY_POLL_INTERVAL = 5000;
+        const EMAIL_VERIFY_POLL_MAX = 120; // 5s * 120 = 10 min
+
+        function startEmailVerifyPoll() {
+            stopEmailVerifyPoll();
+            _emailVerifyPollCount = 0;
+            _emailVerifyPollTimer = setInterval(async () => {
+                _emailVerifyPollCount++;
+                if (_emailVerifyPollCount > EMAIL_VERIFY_POLL_MAX) { stopEmailVerifyPoll(); return; }
+                if (!accountState.logged_in || accountState.email_verified) { stopEmailVerifyPoll(); return; }
+                try {
+                    const data = await fetch('/api/cloud/profile').then(r => r.ok ? r.json() : null);
+                    if (data && data.email_verified) {
+                        renderAccountState({ logged_in:true, ...data });
+                        stopEmailVerifyPoll();
+                        setAccountStatus('邮箱已验证');
+                    }
+                } catch(e) { /* ignore transient errors */ }
+            }, EMAIL_VERIFY_POLL_INTERVAL);
+        }
+
+        function stopEmailVerifyPoll() {
+            if (_emailVerifyPollTimer) { clearInterval(_emailVerifyPollTimer); _emailVerifyPollTimer = null; }
+        }
+
+        // Refresh email_verified when user returns to tab
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && accountState.logged_in && !accountState.email_verified) {
+                accountRefreshProfile({ quiet:true });
+            }
+        });
+        window.addEventListener('focus', () => {
+            if (accountState.logged_in && !accountState.email_verified) {
+                accountRefreshProfile({ quiet:true });
+            }
+        });
+
         function accountJsonOrError(res, fallback) {
             return res.json().catch(() => ({})).then(data => {
                 if(!res.ok) throw new Error(data.detail || fallback || '请求失败');
@@ -1546,6 +1586,11 @@
                 if(pwd && !document.getElementById('account-remember-password')?.checked) pwd.value = '';
                 renderAccountState(data);
                 await accountRefreshProfile({ quiet:true });
+                // After registration, if email not verified, start polling
+                if (isRegister && accountState.logged_in && !accountState.email_verified) {
+                    startEmailVerifyPoll();
+                    setAccountStatus('注册成功，请点击邮件链接完成验证，页面会自动刷新验证状态。');
+                }
             } catch(e) {
                 setAccountStatus(e.message || String(e));
             }
@@ -1614,6 +1659,7 @@
         }
 
         async function accountLogout() {
+            stopEmailVerifyPoll();
             try {
                 await fetch('/api/cloud/logout', { method:'POST' }).then(r => accountJsonOrError(r, '退出失败'));
                 renderAccountState({ logged_in:false, token:'', display_name:'', avatar_url:'', custom_cloud:false });
@@ -1673,6 +1719,7 @@
                 if(secondaryInput) secondaryInput.value = '';
                 if(mainInput) mainInput.value = '';
                 renderAccountState({ email_verified:true });
+                stopEmailVerifyPoll();
                 setAccountStatus('邮箱已验证');
             } catch(e) {
                 setAccountStatus(e.message || String(e));

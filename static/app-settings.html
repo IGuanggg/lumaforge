@@ -304,6 +304,17 @@
                             </button>
                         </div>
                         <div class="update-result" id="update-result"></div>
+                        <div class="path-actions" id="update-actions" style="display:none">
+                            <button class="action-btn primary" id="download-update-btn" type="button" style="display:none">
+                                <i data-lucide="download" class="w-4 h-4"></i><span>下载更新</span>
+                            </button>
+                            <button class="action-btn primary" id="install-update-btn" type="button" style="display:none">
+                                <i data-lucide="package" class="w-4 h-4"></i><span>安装更新</span>
+                            </button>
+                            <button class="action-btn primary" id="restart-app-btn" type="button" style="display:none">
+                                <i data-lucide="rotate-cw" class="w-4 h-4"></i><span>重启应用</span>
+                            </button>
+                        </div>
                         <div class="status" id="update-status">等待检查。</div>
                     </section>
 
@@ -449,7 +460,16 @@
 
         function renderUpdateResult(data) {
             const box = document.getElementById('update-result');
+            const actions = document.getElementById('update-actions');
+            const dlBtn = document.getElementById('download-update-btn');
+            const instBtn = document.getElementById('install-update-btn');
+            const restartBtn = document.getElementById('restart-app-btn');
             if(!box) return;
+            // Hide all action buttons by default
+            if(dlBtn) dlBtn.style.display = 'none';
+            if(instBtn) instBtn.style.display = 'none';
+            if(restartBtn) restartBtn.style.display = 'none';
+            if(actions) actions.style.display = 'none';
             if(!data?.configured) {
                 box.classList.remove('show');
                 box.innerHTML = '';
@@ -458,14 +478,78 @@
             const latest = data.latest_version || '-';
             const current = data.current_version || appInfo?.version || '-';
             const title = data.is_newer ? `发现新版本 ${latest}` : `当前已是最新版本 ${current}`;
+            const autoNote = data.auto_update_supported ? '' : `<div class="update-result-meta" style="color:#b45309">⚠ ${escapeHtml(data.auto_update_reason || '当前环境不支持自动更新，请手动下载替换。')}</div>`;
             box.innerHTML = `
                 <div class="update-result-title">${escapeHtml(title)}</div>
                 <div class="update-result-meta">当前：${escapeHtml(current)} · 最新：${escapeHtml(latest)}</div>
                 <div class="update-result-meta">来源：${linkify(data.source_url || appInfo?.update_check_url || '')}</div>
                 ${data.download_url ? `<div class="update-result-meta">下载：${linkify(data.download_url)}</div>` : ''}
+                ${autoNote}
                 ${data.notes ? `<div class="update-result-notes">${escapeHtml(data.notes)}</div>` : ''}
             `;
             box.classList.add('show');
+            // Show appropriate action buttons
+            if(data.is_newer && actions) {
+                actions.style.display = '';
+                if(data.auto_update_supported && dlBtn) dlBtn.style.display = '';
+                if(!data.auto_update_supported && data.download_url) {
+                    // Show direct download link as fallback
+                    box.innerHTML += `<div class="update-result-meta"><a href="${escapeHtml(data.download_url)}" target="_blank" style="color:var(--accent)">点击下载更新包</a></div>`;
+                }
+            }
+        }
+
+        async function downloadUpdate() {
+            const dlBtn = document.getElementById('download-update-btn');
+            if(dlBtn) dlBtn.disabled = true;
+            setStatus('update-status', '正在下载更新包...');
+            try {
+                const data = await fetch('/api/app/update-download', { method:'POST' }).then(jsonOrThrow);
+                setStatus('update-status', `下载完成：${data.filename} (${(data.size/1024/1024).toFixed(1)} MB)`, 'ok');
+                const instBtn = document.getElementById('install-update-btn');
+                if(instBtn) instBtn.style.display = '';
+                if(dlBtn) dlBtn.style.display = 'none';
+            } catch(e) {
+                setStatus('update-status', e.message || String(e), 'error');
+            } finally {
+                if(dlBtn) dlBtn.disabled = false;
+            }
+        }
+
+        async function installUpdate() {
+            const instBtn = document.getElementById('install-update-btn');
+            if(instBtn) instBtn.disabled = true;
+            setStatus('update-status', '正在安装更新（备份旧版本、替换文件）...');
+            try {
+                const data = await fetch('/api/app/update-install', { method:'POST' }).then(jsonOrThrow);
+                setStatus('update-status', `安装完成，已替换 ${data.replaced?.length || 0} 项。备份：${data.backup_dir || '-'}`, 'ok');
+                const restartBtn = document.getElementById('restart-app-btn');
+                if(restartBtn) restartBtn.style.display = '';
+                if(instBtn) instBtn.style.display = 'none';
+            } catch(e) {
+                setStatus('update-status', e.message || String(e), 'error');
+            } finally {
+                if(instBtn) instBtn.disabled = false;
+            }
+        }
+
+        async function restartApp() {
+            const restartBtn = document.getElementById('restart-app-btn');
+            if(restartBtn) restartBtn.disabled = true;
+            setStatus('update-status', '正在重启...');
+            try {
+                const data = await fetch('/api/app/restart', { method:'POST' }).then(jsonOrThrow);
+                if(data.restarting) {
+                    setStatus('update-status', '服务正在重启，请稍后刷新页面...', 'ok');
+                    setTimeout(() => { try { location.reload(); } catch(e) {} }, 5000);
+                } else {
+                    setStatus('update-status', data.message || '需要手动重启。', 'warn');
+                }
+            } catch(e) {
+                setStatus('update-status', e.message || String(e), 'error');
+            } finally {
+                if(restartBtn) restartBtn.disabled = false;
+            }
         }
 
         async function saveUpdateSettings() {
@@ -511,6 +595,9 @@
         });
         document.getElementById('save-update-url-btn').addEventListener('click', saveUpdateSettings);
         document.getElementById('check-update-btn').addEventListener('click', checkUpdate);
+        document.getElementById('download-update-btn').addEventListener('click', downloadUpdate);
+        document.getElementById('install-update-btn').addEventListener('click', installUpdate);
+        document.getElementById('restart-app-btn').addEventListener('click', restartApp);
         window.addEventListener('DOMContentLoaded', () => {
             loadInfo();
             if(window.lucide) lucide.createIcons();

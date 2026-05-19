@@ -10,6 +10,7 @@ import shutil
 import asyncio
 import logging
 import secrets
+import zipfile
 import sys
 import sqlite3
 import hashlib
@@ -324,6 +325,10 @@ OUTPUT_OUTPUT_DIR = os.path.abspath(os.getenv("APP_ASSET_OUTPUT_DIR") or os.path
 ASSET_THUMB_DIR = os.path.abspath(os.getenv("APP_ASSET_THUMBS_DIR") or os.path.join(ASSETS_DIR, "thumbs"))
 APP_LOG_DIR = os.path.abspath(os.getenv("APP_LOG_DIR") or os.path.join(RUNTIME_DIR, "logs"))
 APP_CACHE_DIR = os.path.abspath(os.getenv("APP_CACHE_DIR") or os.path.join(RUNTIME_DIR, "cache"))
+UPDATE_DIR = os.path.join(RUNTIME_DIR, "updates")
+UPDATE_DOWNLOADS_DIR = os.path.join(UPDATE_DIR, "downloads")
+UPDATE_STAGING_DIR = os.path.join(UPDATE_DIR, "staging")
+UPDATE_BACKUPS_DIR = os.path.join(UPDATE_DIR, "backups")
 HISTORY_FILE = os.path.join(RUNTIME_DIR, "history.json")
 DATA_DIR = os.path.join(RUNTIME_DIR, "data")
 ASSET_DB_FILE = os.path.join(DATA_DIR, "assets.db")
@@ -2535,21 +2540,51 @@ def normalize_update_payload(data: Dict[str, Any]):
     latest = str(data.get("version") or data.get("latest_version") or data.get("tag_name") or "").strip()
     if latest.lower().startswith("v"):
         latest = latest[1:]
-    assets = data.get("assets") or []
-    asset_url = ""
-    if isinstance(assets, list):
-        for asset in assets:
-            if isinstance(asset, dict) and asset.get("browser_download_url") and "desktop" in str(asset.get("name") or "").lower():
-                asset_url = str(asset.get("browser_download_url") or "")
-                break
-        for asset in assets:
-            if isinstance(asset, dict) and asset.get("browser_download_url"):
-                asset_url = str(asset.get("browser_download_url") or "")
-                break
+    raw_assets = data.get("assets") or []
+    parsed_assets = []
+    if isinstance(raw_assets, list):
+        for asset in raw_assets:
+            if not isinstance(asset, dict):
+                continue
+            name = str(asset.get("name") or "")
+            url = str(asset.get("browser_download_url") or asset.get("url") or "")
+            if not url:
+                continue
+            name_lower = name.lower()
+            atype = "unknown"
+            if "desktop" in name_lower:
+                atype = "desktop"
+            elif "browser" in name_lower:
+                atype = "browser"
+            elif name_lower.endswith(".zip"):
+                atype = "zip"
+            parsed_assets.append({"name": name, "url": url, "type": atype, "size": asset.get("size", 0)})
+    is_desktop = os.getenv("INFINITE_CANVAS_DESKTOP") == "1"
+    selected = None
+    for a in parsed_assets:
+        if is_desktop and a["type"] == "desktop":
+            selected = a; break
+        if not is_desktop and a["type"] == "browser":
+            selected = a; break
+    if not selected:
+        for a in parsed_assets:
+            if a["type"] == "zip":
+                selected = a; break
+    if not selected and parsed_assets:
+        selected = parsed_assets[0]
+    download_url = ""
+    if selected:
+        download_url = selected["url"]
+    elif parsed_assets:
+        download_url = parsed_assets[0]["url"]
+    else:
+        download_url = data.get("download_url") or data.get("html_url") or data.get("url") or ""
     return {
         "latest_version": latest,
-        "download_url": data.get("download_url") or asset_url or data.get("html_url") or data.get("url") or "",
+        "download_url": download_url,
         "notes": data.get("notes") or data.get("changelog") or data.get("body") or "",
+        "assets": parsed_assets,
+        "selected_asset": selected,
     }
 
 @app.get("/login.html")
@@ -2632,16 +2667,212 @@ async def app_update_check():
         raise HTTPException(status_code=502, detail=f"检查更新失败：{exc}")
     normalized = normalize_update_payload(data if isinstance(data, dict) else {})
     latest = normalized["latest_version"]
+    is_newer = bool(latest and version_tuple(latest) > version_tuple(APP_VERSION))
+    is_frozen = getattr(sys, "frozen", False)
+    is_desktop = os.getenv("INFINITE_CANVAS_DESKTOP") == "1"
+    auto_update_supported = not is_frozen  # Python source can self-update; EXE cannot
+    reason = ""
+    if is_frozen:
+        reason = "当前环境是打包 EXE，需要独立 updater 或手动替换。"
+    selected = normalized.get("selected_asset")
     return {
         "configured": True,
         "current_version": APP_VERSION,
         "latest_version": latest,
-        "is_newer": bool(latest and version_tuple(latest) > version_tuple(APP_VERSION)),
+        "is_newer": is_newer,
         "download_url": normalized["download_url"],
         "notes": normalized["notes"],
         "source_url": APP_UPDATE_CHECK_URL,
+        "assets": normalized.get("assets", []),
+        "selected_asset": selected,
+        "auto_update_supported": auto_update_supported,
+        "auto_update_reason": reason,
         "raw": data,
     }
+
+
+def _safe_extract_zip(zip_path: str, dest_dir: str):
+    """Extract zip with zip-slip protection."""
+    dest_abs = os.path.abspath(dest_dir)
+    with zipfile.ZipFile(zip_path, "r") as zf:
+        for info in zf.infolist():
+            member_path = os.path.abspath(os.path.join(dest_dir, info.filename))
+            if not member_path.startswith(dest_abs + os.sep) and member_path != dest_abs:
+                raise HTTPException(status_code=400, detail=f"ZIP 包含不安全路径：{info.filename}")
+            if info.filename.startswith("/") or ".." in info.filename.split("/"):
+                raise HTTPException(status_code=400, detail=f"ZIP 包含不安全路径：{info.filename}")
+        zf.extractall(dest_dir)
+
+
+UPDATE_PROTECT_DIRS = {"API", "data", "assets", "logs", "cache", "cloud-data", "releases", "updates", "userdata", "output"}
+UPDATE_REPLACE_FILES = {"main.py", "cloud_config_server.py", "launcher.py", "desktop_launcher.py",
+                        "requirements.txt", "requirements-cloud.txt", "build_windows.bat", "build_desktop.bat",
+                        "infinite_canvas.spec", "desktop_canvas.spec", "Dockerfile", "Dockerfile.cloud",
+                        "docker-compose.yml", "docker-compose.cloud.yml", ".env.example", ".env.cloud.example",
+                        "docker-entrypoint.sh", "docker-entrypoint-cloud.sh", "README.md", "APP_PACKAGING.md", ".gitignore"}
+UPDATE_REPLACE_DIRS = {"static", "workflows"}
+
+
+@app.post("/api/app/update-download")
+async def app_update_download():
+    if not APP_UPDATE_CHECK_URL:
+        raise HTTPException(status_code=400, detail="未配置更新检查地址")
+    try:
+        async with httpx.AsyncClient(timeout=8) as client:
+            resp = await client.get(APP_UPDATE_CHECK_URL)
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"检查更新失败：{exc}")
+    normalized = normalize_update_payload(data if isinstance(data, dict) else {})
+    latest = normalized["latest_version"]
+    if not latest or not (version_tuple(latest) > version_tuple(APP_VERSION)):
+        raise HTTPException(status_code=400, detail=f"当前已是最新版本 {APP_VERSION}")
+    selected = normalized.get("selected_asset")
+    if not selected or not selected.get("url"):
+        raise HTTPException(status_code=400, detail="未找到可下载的更新包")
+    download_url = selected["url"]
+    os.makedirs(UPDATE_DOWNLOADS_DIR, exist_ok=True)
+    filename = selected.get("name") or f"infinite-canvas-{latest}.zip"
+    local_path = os.path.join(UPDATE_DOWNLOADS_DIR, filename)
+    try:
+        async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
+            dl_resp = await client.get(download_url)
+            dl_resp.raise_for_status()
+            with open(local_path, "wb") as f:
+                f.write(dl_resp.content)
+    except Exception as exc:
+        if os.path.exists(local_path):
+            os.remove(local_path)
+        raise HTTPException(status_code=502, detail=f"下载更新包失败：{exc}")
+    file_size = os.path.getsize(local_path)
+    return {
+        "ok": True,
+        "version": latest,
+        "filename": filename,
+        "path": local_path,
+        "size": file_size,
+        "asset_type": selected.get("type", "unknown"),
+    }
+
+
+@app.post("/api/app/update-install")
+async def app_update_install():
+    is_frozen = getattr(sys, "frozen", False)
+    if is_frozen:
+        raise HTTPException(status_code=400, detail="当前环境是打包 EXE，不支持原地更新，需要独立 updater。")
+    # Find downloaded zip
+    os.makedirs(UPDATE_DOWNLOADS_DIR, exist_ok=True)
+    zip_files = sorted([f for f in os.listdir(UPDATE_DOWNLOADS_DIR) if f.endswith(".zip")], key=lambda f: os.path.getmtime(os.path.join(UPDATE_DOWNLOADS_DIR, f)), reverse=True)
+    if not zip_files:
+        raise HTTPException(status_code=400, detail="未找到已下载的更新包，请先执行「下载更新」")
+    zip_path = os.path.join(UPDATE_DOWNLOADS_DIR, zip_files[0])
+    # Extract to staging
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            top_names = set()
+            for info in zf.infolist():
+                parts = info.filename.split("/")
+                if parts and parts[0]:
+                    top_names.add(parts[0])
+            # Detect if zip has a single top-level folder
+            if len(top_names) == 1:
+                staging_name = list(top_names)[0]
+            else:
+                staging_name = "update"
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"无法读取更新包：{exc}")
+    staging_dir = os.path.join(UPDATE_STAGING_DIR, staging_name)
+    if os.path.exists(staging_dir):
+        shutil.rmtree(staging_dir)
+    os.makedirs(UPDATE_STAGING_DIR, exist_ok=True)
+    try:
+        _safe_extract_zip(zip_path, UPDATE_STAGING_DIR)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"解压更新包失败：{exc}")
+    # Validate: must contain main.py or static/index.html
+    has_main = os.path.isfile(os.path.join(staging_dir, "main.py"))
+    has_index = os.path.isfile(os.path.join(staging_dir, "static", "index.html"))
+    if not has_main and not has_index:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail="更新包结构不正确，缺少 main.py 或 static/index.html")
+    # Backup current files
+    timestamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    backup_dir = os.path.join(UPDATE_BACKUPS_DIR, f"backup-{timestamp}")
+    os.makedirs(backup_dir, exist_ok=True)
+    try:
+        for name in UPDATE_REPLACE_FILES:
+            src = os.path.join(BASE_DIR, name)
+            if os.path.isfile(src):
+                shutil.copy2(src, os.path.join(backup_dir, name))
+        for name in UPDATE_REPLACE_DIRS:
+            src = os.path.join(BASE_DIR, name)
+            if os.path.isdir(src):
+                dst = os.path.join(backup_dir, name)
+                shutil.copytree(src, dst, dirs_exist_ok=True)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"备份当前版本失败：{exc}")
+    # Replace files
+    replaced = []
+    errors = []
+    try:
+        for name in UPDATE_REPLACE_FILES:
+            src = os.path.join(staging_dir, name)
+            dst = os.path.join(BASE_DIR, name)
+            if os.path.isfile(src):
+                shutil.copy2(src, dst)
+                replaced.append(name)
+        for name in UPDATE_REPLACE_DIRS:
+            src = os.path.join(staging_dir, name)
+            dst = os.path.join(BASE_DIR, name)
+            if os.path.isdir(src):
+                if os.path.isdir(dst):
+                    shutil.rmtree(dst)
+                shutil.copytree(src, dst)
+                replaced.append(name + "/")
+    except Exception as exc:
+        # Rollback
+        logger.error("Update install failed, rolling back: %s", exc)
+        for name in replaced:
+            backup_src = os.path.join(backup_dir, name.rstrip("/"))
+            dst = os.path.join(BASE_DIR, name.rstrip("/"))
+            try:
+                if os.path.isfile(backup_src):
+                    shutil.copy2(backup_src, dst)
+                elif os.path.isdir(backup_src):
+                    if os.path.isdir(dst):
+                        shutil.rmtree(dst)
+                    shutil.copytree(backup_src, dst)
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"安装更新失败，已回滚：{exc}")
+    # Cleanup staging
+    shutil.rmtree(staging_dir, ignore_errors=True)
+    return {
+        "ok": True,
+        "installed": True,
+        "restart_required": True,
+        "replaced": replaced,
+        "backup_dir": backup_dir,
+    }
+
+
+@app.post("/api/app/restart")
+async def app_restart():
+    is_frozen = getattr(sys, "frozen", False)
+    if is_frozen:
+        return {"ok": False, "restart_required": True, "message": "EXE 环境不支持自动重启，请手动关闭并重新打开。"}
+    # Schedule restart after response is sent
+    async def _delayed_restart():
+        await asyncio.sleep(1)
+        python_exe = sys.executable
+        script = os.path.join(BASE_DIR, "main.py")
+        if os.path.isfile(script):
+            os.execv(python_exe, [python_exe, script])
+    asyncio.create_task(_delayed_restart())
+    return {"ok": True, "restarting": True}
 
 @app.get("/api/view")
 async def view_image(filename: str, type: str = "input", subfolder: str = ""):
