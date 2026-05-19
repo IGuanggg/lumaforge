@@ -279,11 +279,12 @@
             position:fixed;
             top:auto;
             right:auto;
-            bottom:22px;
+            bottom:18px;
             left:50%;
             transform:translateX(-50%);
             min-width:190px;
             height:38px;
+            font-weight:900;
             box-shadow:0 14px 34px rgba(15,23,42,.12);
         }
 
@@ -1099,8 +1100,8 @@
             <iframe id="frame-klein" data-src="/static/klein.html?v=20260512-i18n2" scrolling="yes"></iframe>
             <iframe id="frame-angle" data-src="/static/angle.html?v=20260512-i18n2" scrolling="yes"></iframe>
             <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html?v=20260514-provider-chat-models" scrolling="yes"></iframe>
-            <iframe id="frame-canvas" data-src="/static/canvas.html?v=20260519-node-defaults1" scrolling="yes"></iframe>
-            <iframe id="frame-assets" data-src="/static/assets.html?v=20260519-assets-relay1" scrolling="yes"></iframe>
+            <iframe id="frame-canvas" data-src="/static/canvas.html?v=20260519-layout-sync3" scrolling="yes"></iframe>
+            <iframe id="frame-assets" data-src="/static/assets.html?v=20260519-assets-r2-sync1" scrolling="yes"></iframe>
             <iframe id="frame-api-settings" data-src="/static/api-settings.html?v=20260518-account-center-cloud" scrolling="yes"></iframe>
             <iframe id="frame-comfyui-settings" data-src="/static/comfyui-settings.html?v=20260515-workflow-refresh" scrolling="yes"></iframe>
             <iframe id="frame-app-settings" data-src="/static/app-settings.html?v=20260519-update-settings1" scrolling="yes"></iframe>
@@ -1218,16 +1219,16 @@
                                 </div>
                                 <div class="account-actions">
                                     <button class="account-action primary" type="button" onclick="accountDownloadConfig()">下载云端配置</button>
-                                    <button class="account-action" type="button" onclick="accountUploadConfig()">上传当前配置</button>
+                                    <button class="account-action" type="button" onclick="accountUploadConfig()">立即同步配置</button>
                                     <button class="account-action danger" type="button" onclick="accountLogout()">退出登录</button>
                                 </div>
                                 <label class="account-check">
-                                    <input id="account-include-secrets" type="checkbox" autocomplete="off">
-                                    <span>上传时包含 API Key（请确认云端部署在 HTTPS 后面）</span>
+                                    <input id="account-include-secrets" type="checkbox" autocomplete="off" checked disabled>
+                                    <span>自动同步包含 API Key（请确认云端部署在 HTTPS 后面）</span>
                                 </label>
                             </div>
                             <div id="account-sync-status" class="account-status">未连接云端</div>
-                            <div class="account-note account-authed">当前框架只同步 API 平台、模型列表、ComfyUI 地址和可选 API Key，不同步生成历史、图片、视频和画布大文件。</div>
+                            <div class="account-note account-authed">配置会自动同步 API 平台、模型列表、ComfyUI 地址和 API Key；素材库图片/视频会按缺失文件增量同步到云端对象存储。</div>
                         </section>
 
                         <section id="account-section-profile" class="account-section">
@@ -1507,7 +1508,7 @@
                 overlay.setAttribute('aria-hidden', 'false');
             }
             const includeSecrets = document.getElementById('account-include-secrets');
-            if(includeSecrets) includeSecrets.checked = false;
+            if(includeSecrets) includeSecrets.checked = true;
             applyRememberedAccount();
             loadAccountState();
         }
@@ -1686,8 +1687,7 @@
         }
 
         async function accountUploadConfig() {
-            const include = !!document.getElementById('account-include-secrets')?.checked;
-            if(include && !confirm('确定把 API Key 一起上传到云端吗？请确认你的云端服务已经通过 HTTPS 访问。')) return;
+            const include = true;
             setAccountStatus('正在上传当前配置...');
             try {
                 const data = await fetch('/api/cloud/upload', {
@@ -2004,7 +2004,7 @@
                 if(input) input.addEventListener('input', () => normalizeSixDigitToken(input));
             });
             const includeSecrets = document.getElementById('account-include-secrets');
-            if(includeSecrets) includeSecrets.checked = false;
+            if(includeSecrets) includeSecrets.checked = true;
             const avatarFile = document.getElementById('account-avatar-file');
             if(avatarFile) {
                 avatarFile.addEventListener('change', () => {

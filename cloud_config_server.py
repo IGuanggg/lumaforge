@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import html
@@ -34,7 +35,7 @@ AVATAR_TYPES = {
 TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_TOKEN_TTL_SECONDS", str(30 * 24 * 60 * 60)))
 RESET_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_RESET_TOKEN_TTL_SECONDS", str(30 * 60)))
 EMAIL_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_EMAIL_TOKEN_TTL_SECONDS", str(24 * 60 * 60)))
-CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "1.0.3").strip() or "1.0.3"
+CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "1.0.5").strip() or "1.0.5"
 CLOUD_PUBLIC_URL = os.getenv("CLOUD_PUBLIC_URL", "").strip().rstrip("/")
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
@@ -53,15 +54,38 @@ CONFIG_MAX_BYTES = int(os.getenv("CLOUD_CONFIG_MAX_BYTES", str(1024 * 1024)))
 RATE_LIMIT_BUCKETS = {}
 BACKUP_PROVIDER_IDS = {"custom_s3", "cloudflare_r2", "aliyun_oss", "aws_s3", "minio"}
 BACKUP_ADDRESSING_STYLES = {"auto", "path", "virtual"}
+CLOUD_BACKUP_AUTO_INTERVAL_SECONDS = int(os.getenv("CLOUD_BACKUP_AUTO_INTERVAL_SECONDS", str(60 * 60)))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    create_upgrade_safety_snapshot()
     init_db()
-    yield
+    backup_task = asyncio.create_task(auto_backup_loop())
+    try:
+        yield
+    finally:
+        backup_task.cancel()
+        try:
+            await backup_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Infinite Canvas Cloud Config", lifespan=lifespan)
+
+
+FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#111111"/>
+  <text x="32" y="41" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="900" fill="#ffffff">IC</text>
+  <rect x="24" y="19" width="4" height="26" rx="2" fill="#3b82f6"/>
+  <rect x="40" y="19" width="4" height="26" rx="2" fill="#f59e0b"/>
+</svg>"""
+
+
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon_svg():
+    return Response(content=FAVICON_SVG, media_type="image/svg+xml")
 
 
 class AuthPayload(BaseModel):
@@ -139,10 +163,20 @@ class BackupSettingsPayload(BaseModel):
     secret_access_key: str = Field(default="", max_length=1000)
     encryption_passphrase: str = Field(default="", max_length=1000)
     retention_count: int = Field(default=14, ge=1, le=200)
+    auto_interval_seconds: int = Field(default=3600, ge=0, le=7 * 24 * 60 * 60)
 
 
 class BackupObjectPayload(BaseModel):
     object_key: str = Field(min_length=1, max_length=1024)
+    confirm: bool = False
+
+
+class MediaExistsPayload(BaseModel):
+    hashes: list[str] = Field(default_factory=list)
+
+
+class MediaPrunePayload(BaseModel):
+    keep_hashes: list[str] = Field(default_factory=list)
     confirm: bool = False
 
 
@@ -155,6 +189,19 @@ def db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def create_upgrade_safety_snapshot():
+    if not os.path.exists(DB_PATH):
+        return
+    snapshot = f"{DB_PATH}.before-upgrade-{CLOUD_APP_VERSION}"
+    if os.path.exists(snapshot):
+        return
+    try:
+        shutil.copy2(DB_PATH, snapshot)
+        print(f"[cloud-db] created upgrade safety snapshot: {snapshot}")
+    except Exception as exc:
+        print(f"[cloud-db] upgrade safety snapshot failed: {exc}")
 
 
 def detect_avatar_type(content: bytes, content_type: str = "") -> tuple[str, str]:
@@ -209,6 +256,7 @@ DEFAULT_APP_SETTINGS = {
     "backup_secret_access_key": os.getenv("CLOUD_BACKUP_SECRET_ACCESS_KEY", ""),
     "backup_encryption_passphrase": os.getenv("CLOUD_BACKUP_ENCRYPTION_PASSPHRASE", ""),
     "backup_retention_count": os.getenv("CLOUD_BACKUP_RETENTION_COUNT", "14"),
+    "backup_auto_interval_seconds": os.getenv("CLOUD_BACKUP_AUTO_INTERVAL_SECONDS", str(CLOUD_BACKUP_AUTO_INTERVAL_SECONDS)),
 }
 
 
@@ -346,6 +394,32 @@ def init_db():
         )
         conn.execute(
             """
+            CREATE TABLE IF NOT EXISTS user_media (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                sha256 TEXT NOT NULL,
+                title TEXT NOT NULL DEFAULT '',
+                media_type TEXT NOT NULL DEFAULT 'file',
+                content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+                size_bytes INTEGER NOT NULL DEFAULT 0,
+                width INTEGER NOT NULL DEFAULT 0,
+                height INTEGER NOT NULL DEFAULT 0,
+                object_key TEXT NOT NULL,
+                public_url TEXT NOT NULL DEFAULT '',
+                source_type TEXT NOT NULL DEFAULT '',
+                prompt TEXT NOT NULL DEFAULT '',
+                model TEXT NOT NULL DEFAULT '',
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id),
+                UNIQUE(user_id, sha256)
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_user_media_user_updated ON user_media(user_id, updated_at DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_user_media_user_sha ON user_media(user_id, sha256)")
+        conn.execute(
+            """
             CREATE TABLE IF NOT EXISTS app_settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
@@ -425,6 +499,7 @@ def render_simple_result_page(title: str, message: str) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(title)}</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
 body{{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f7f8fb;color:#15171d;display:grid;place-items:center;min-height:100vh}}
 .card{{width:min(520px,calc(100vw - 32px));background:white;border:1px solid #e6e8ee;border-radius:14px;padding:28px;box-shadow:0 18px 50px rgba(15,23,42,.08)}}
@@ -513,6 +588,11 @@ def issue_admin_session(admin_id: int, response: Response) -> str:
         secure=secure_cookie,
     )
     return token
+
+
+def clear_admin_session_cookies(response: Response):
+    response.delete_cookie(ADMIN_SESSION_COOKIE)
+    response.delete_cookie(ADMIN_CSRF_COOKIE)
 
 
 def get_admin_from_request(request: Request):
@@ -769,6 +849,7 @@ def public_backup_settings() -> dict:
         "secret_access_key_set": bool(settings.get("backup_secret_access_key", "")),
         "encryption_passphrase_set": bool(settings.get("backup_encryption_passphrase", "")),
         "retention_count": setting_int("backup_retention_count", 14),
+        "auto_interval_seconds": setting_int("backup_auto_interval_seconds", CLOUD_BACKUP_AUTO_INTERVAL_SECONDS),
     }
 
 
@@ -828,6 +909,41 @@ def backup_key(filename: str, settings: dict) -> str:
     return f"{prefix}/{filename}" if prefix else filename
 
 
+def media_backup_prefix(settings: dict) -> str:
+    prefix = normalize_backup_prefix(settings.get("prefix", "infinite-canvas/backups"))
+    if prefix.endswith("/backups"):
+        prefix = prefix[:-len("/backups")]
+    return f"{prefix}/media".strip("/")
+
+
+def media_object_key(user_id: int, sha256: str, filename: str, settings: dict) -> str:
+    ext = os.path.splitext(filename or "")[1].lower()[:16]
+    safe_ext = ext if re.match(r"^\.[a-z0-9]+$", ext) else ""
+    prefix = media_backup_prefix(settings)
+    return f"{prefix}/user-{user_id}/{sha256[:2]}/{sha256}{safe_ext}"
+
+
+def media_public_url(object_key: str, settings: dict) -> str:
+    # R2/S3 private buckets do not guarantee public URLs. Keep the object key as the stable cloud locator.
+    return f"r2://{settings.get('bucket', '')}/{object_key}"
+
+
+def media_row_to_dict(row) -> dict:
+    return {
+        "id": row["id"],
+        "sha256": row["sha256"],
+        "title": row["title"],
+        "type": row["media_type"],
+        "content_type": row["content_type"],
+        "size_bytes": int(row["size_bytes"] or 0),
+        "width": int(row["width"] or 0),
+        "height": int(row["height"] or 0),
+        "object_key": row["object_key"],
+        "cloud_url": row["public_url"],
+        "updated_at": int(row["updated_at"] or 0),
+    }
+
+
 def encrypt_backup_blob(data: bytes, passphrase: str) -> bytes:
     _, _, AESGCM, PBKDF2HMAC, hashes = backup_deps()
     salt = secrets.token_bytes(16)
@@ -850,7 +966,7 @@ def decrypt_backup_blob(blob: bytes, passphrase: str) -> bytes:
     try:
         return AESGCM(key).decrypt(nonce, encrypted, None)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="备份解密失败，请检查加密密码") from exc
+        raise HTTPException(status_code=400, detail="备份解密失败，请确认当前填写的加密密码和创建该备份时完全一致") from exc
 
 
 def create_sqlite_backup_bytes() -> bytes:
@@ -878,7 +994,9 @@ def create_sqlite_backup_bytes() -> bytes:
 def validate_sqlite_backup_bytes(data: bytes) -> str:
     temp_path = ""
     try:
-        with tempfile.NamedTemporaryFile(prefix="cloud-restore-", suffix=".sqlite", delete=False) as tmp:
+        restore_dir = os.path.dirname(DB_PATH) or "."
+        os.makedirs(restore_dir, exist_ok=True)
+        with tempfile.NamedTemporaryFile(prefix="cloud-restore-", suffix=".sqlite", dir=restore_dir, delete=False) as tmp:
             temp_path = tmp.name
             tmp.write(data)
         conn = sqlite3.connect(temp_path)
@@ -932,10 +1050,15 @@ def restore_sqlite_backup_bytes(raw: bytes) -> str:
     restored_temp = validate_sqlite_backup_bytes(raw)
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     safety_backup = f"{DB_PATH}.before-restore-{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}"
-    if os.path.exists(DB_PATH):
-        shutil.copy2(DB_PATH, safety_backup)
-    os.replace(restored_temp, DB_PATH)
-    return safety_backup
+    try:
+        if os.path.exists(DB_PATH):
+            shutil.copy2(DB_PATH, safety_backup)
+        os.replace(restored_temp, DB_PATH)
+        return safety_backup
+    except Exception:
+        if restored_temp and os.path.exists(restored_temp):
+            os.remove(restored_temp)
+        raise
 
 
 def list_backup_objects(settings: dict, limit: int = 100) -> list:
@@ -973,6 +1096,42 @@ def prune_backup_objects(settings: dict):
         client.delete_object(Bucket=settings["bucket"], Key=item["key"])
         deleted.append(item["key"])
     return deleted
+
+
+def run_backup_to_object_storage() -> dict:
+    settings = require_backup_settings()
+    encrypted, filename, _ = create_backup_package(encrypt=True)
+    key = backup_key(filename, settings)
+    client = backup_s3_client(settings)
+    try:
+        client.put_object(
+            Bucket=settings["bucket"],
+            Key=key,
+            Body=encrypted,
+            ContentType="application/octet-stream",
+            Metadata={"app": "infinite-canvas", "format": "sqlite-gzip-aesgcm"},
+        )
+        deleted = prune_backup_objects(settings)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"涓婁紶浜戝浠藉け璐ワ細{exc}") from exc
+    return {"ok": True, "key": key, "size": len(encrypted), "deleted": deleted}
+
+
+async def auto_backup_loop():
+    await asyncio.sleep(30)
+    while True:
+        interval = max(0, setting_int("backup_auto_interval_seconds", CLOUD_BACKUP_AUTO_INTERVAL_SECONDS))
+        if interval <= 0:
+            await asyncio.sleep(60)
+            continue
+        try:
+            result = await asyncio.to_thread(run_backup_to_object_storage)
+            print(f"[cloud-backup] auto backup ok: {result.get('key')} ({result.get('size')} bytes)")
+        except HTTPException as exc:
+            print(f"[cloud-backup] auto backup skipped: {exc.detail}")
+        except Exception as exc:
+            print(f"[cloud-backup] auto backup failed: {exc}")
+        await asyncio.sleep(interval)
 
 
 def mask_sensitive_config(value):
@@ -1051,6 +1210,7 @@ def render_dashboard_html() -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Infinite Canvas Cloud</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>
     :root {{
       --bg:#ffffff;
@@ -1347,6 +1507,7 @@ def render_admin_login_html() -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Infinite Canvas Cloud Admin</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>
     :root{--bg:#fff;--stage:#fcfcfc;--panel:#fff;--border:#f2f2f2;--text:#121212;--muted:#8f8f8f;--hover:#fafafa;--danger:#b91c1c;--shadow:rgba(0,0,0,.04)}
     @media (prefers-color-scheme:dark){:root{--bg:#0f141d;--stage:#111722;--panel:#151c28;--border:#242d3b;--text:#e5e9f0;--muted:#8f9aab;--hover:#171d29;--danger:#fca5a5;--shadow:rgba(0,0,0,.3)}}
@@ -1418,6 +1579,7 @@ def render_admin_console_html(admin: dict) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Infinite Canvas Cloud Admin</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>
     :root{{--bg:#fff;--stage:#fcfcfc;--panel:#fff;--border:#f2f2f2;--text:#121212;--muted:#8f8f8f;--hover:#fafafa;--ok:#0f766e;--warn:#b45309;--danger:#b91c1c;--shadow:rgba(0,0,0,.04)}}
     @media (prefers-color-scheme:dark){{:root{{--bg:#0f141d;--stage:#111722;--panel:#151c28;--border:#242d3b;--text:#e5e9f0;--muted:#8f9aab;--hover:#171d29;--ok:#5eead4;--warn:#fbbf24;--danger:#fca5a5;--shadow:rgba(0,0,0,.3)}}}}
@@ -1638,6 +1800,7 @@ def render_admin_console_html(admin: dict) -> str:
                 <label>Secret Key<input id="backupSecretKey" type="password" autocomplete="new-password" placeholder="{'已设置，留空则不修改' if backup['secret_access_key_set'] else '请输入 Secret Key'}"></label>
                 <label>加密密码<input id="backupPassphrase" type="password" autocomplete="new-password" placeholder="{'已设置，留空则不修改' if backup['encryption_passphrase_set'] else '用于加密备份文件'}"></label>
                 <label>保留份数<input id="backupRetention" type="number" value="{backup["retention_count"]}" min="1" max="200"></label>
+                <label>自动备份间隔（秒）<input id="backupAutoInterval" type="number" value="{backup["auto_interval_seconds"]}" min="0" max="604800"></label>
               </div>
               <div class="actions">
                 <button class="primary" onclick="saveBackupSettings()">保存备份配置</button>
@@ -1781,8 +1944,9 @@ def render_admin_console_html(admin: dict) -> str:
         const res=await fetch('/admin/password',{{method:'POST',headers:csrfHeaders(),body:JSON.stringify({{current_password:currentPassword.value,username:newUsername.value,new_password:newPassword.value}})}});
         const data=await res.json().catch(()=>({{}}));
         if(!res.ok) throw new Error(data.detail||'保存失败');
-        status.textContent='管理员账号已更新，请使用新账号密码继续管理。';
+        status.textContent='管理员账号已更新，正在返回登录页，请使用新账号密码登录。';
         currentPassword.value='';newPassword.value='';
+        setTimeout(()=>{{location.href='/';}},1000);
       }}catch(e){{status.textContent=e.message||String(e)}}
     }}
     async function saveSettings(){{
@@ -1821,7 +1985,8 @@ def render_admin_console_html(admin: dict) -> str:
         access_key_id:backupAccessKey.value.trim(),
         secret_access_key:backupSecretKey.value,
         encryption_passphrase:backupPassphrase.value,
-        retention_count:Number(backupRetention.value||14)
+        retention_count:Number(backupRetention.value||14),
+        auto_interval_seconds:Number(backupAutoInterval.value||3600)
       }};
     }}
     async function saveBackupSettings(){{
@@ -1868,6 +2033,16 @@ def render_admin_console_html(admin: dict) -> str:
     function chooseRestoreFile(){{
       document.getElementById('restoreBackupFile')?.click();
     }}
+    async function readBackupResponse(res, fallback){{
+      const text=await res.text();
+      let data={{}};
+      if(text){{
+        try{{data=JSON.parse(text);}}
+        catch(e){{data={{detail:text.slice(0,500)}};}}
+      }}
+      if(!res.ok) throw new Error(data.detail||fallback);
+      return data;
+    }}
     async function restoreLocalBackupFile(file){{
       if(!file) return;
       if(!confirm('导入恢复会替换当前数据库。系统会先创建本地安全快照，确定继续吗？')) return;
@@ -1878,9 +2053,9 @@ def render_admin_console_html(admin: dict) -> str:
         form.append('file',file);
         const headers={{'X-CSRF-Token':decodeURIComponent(cookieValue('{ADMIN_CSRF_COOKIE}'))}};
         const res=await fetch('/admin/backup/import',{{method:'POST',headers,body:form}});
-        const data=await res.json().catch(()=>({{}}));
-        if(!res.ok) throw new Error(data.detail||'导入恢复失败');
-        status.textContent=`恢复完成，本地安全快照：${{data.safety_backup||'-'}}。请刷新后台确认。`;
+        const data=await readBackupResponse(res,'导入恢复失败');
+        status.textContent=`恢复完成，本地安全快照：${{data.safety_backup||'-'}}。正在返回登录页...`;
+        setTimeout(()=>{{location.href='/';}},1000);
       }}catch(e){{status.textContent=e.message||String(e)}}
       finally{{const input=document.getElementById('restoreBackupFile'); if(input) input.value='';}}
     }}
@@ -1921,9 +2096,9 @@ def render_admin_console_html(admin: dict) -> str:
       status.textContent='正在下载、解密并恢复备份...';
       try{{
         const res=await fetch('/admin/backup/restore',{{method:'POST',headers:csrfHeaders(),body:JSON.stringify({{object_key:key,confirm:true}})}});
-        const data=await res.json().catch(()=>({{}}));
-        if(!res.ok) throw new Error(data.detail||'恢复失败');
-        status.textContent=`恢复完成，本地安全快照：${{data.safety_backup||'-'}}。请重新登录后台确认。`;
+        const data=await readBackupResponse(res,'恢复失败');
+        status.textContent=`恢复完成，本地安全快照：${{data.safety_backup||'-'}}。正在返回登录页...`;
+        setTimeout(()=>{{location.href='/';}},1000);
       }}catch(e){{status.textContent=e.message||String(e)}}
     }}
     async function deleteBackup(key){{
@@ -1975,8 +2150,7 @@ def admin_logout(request: Request, response: Response):
     if token:
         with db() as conn:
             conn.execute("DELETE FROM admin_sessions WHERE token_hash = ?", (hash_token(token),))
-    response.delete_cookie(ADMIN_SESSION_COOKIE)
-    response.delete_cookie(ADMIN_CSRF_COOKIE)
+    clear_admin_session_cookies(response)
     return {"ok": True}
 
 
@@ -2057,6 +2231,7 @@ def admin_backup_save_settings(payload: BackupSettingsPayload, request: Request)
             "backup_secret_access_key": secret,
             "backup_encryption_passphrase": passphrase,
             "backup_retention_count": str(payload.retention_count),
+            "backup_auto_interval_seconds": str(payload.auto_interval_seconds),
         }
     )
     return {"ok": True, "settings": public_backup_settings()}
@@ -2095,16 +2270,22 @@ def admin_backup_export(request: Request, encrypted: bool = Query(default=True))
 
 
 @app.post("/admin/backup/import")
-async def admin_backup_import(request: Request, file: UploadFile = File(...)):
+async def admin_backup_import(request: Request, response: Response, file: UploadFile = File(...)):
     require_admin(request, csrf=True)
     content = await file.read()
     if not content:
         raise HTTPException(status_code=400, detail="备份文件为空")
     if len(content) > 50 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="备份文件太大，最大支持 50MB")
-    raw = decode_backup_package(content)
-    safety_backup = restore_sqlite_backup_bytes(raw)
-    return {"ok": True, "safety_backup": safety_backup}
+    try:
+        raw = decode_backup_package(content)
+        safety_backup = restore_sqlite_backup_bytes(raw)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"导入恢复失败：{type(exc).__name__}: {exc}") from exc
+    clear_admin_session_cookies(response)
+    return {"ok": True, "safety_backup": safety_backup, "logout_required": True}
 
 
 @app.get("/admin/backup/download")
@@ -2147,7 +2328,7 @@ def admin_backup_run(request: Request):
 
 
 @app.post("/admin/backup/restore")
-def admin_backup_restore(payload: BackupObjectPayload, request: Request):
+def admin_backup_restore(payload: BackupObjectPayload, request: Request, response: Response):
     require_admin(request, csrf=True)
     if not payload.confirm:
         raise HTTPException(status_code=400, detail="恢复数据库需要二次确认")
@@ -2158,9 +2339,15 @@ def admin_backup_restore(payload: BackupObjectPayload, request: Request):
         encrypted = response["Body"].read()
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"下载云备份失败：{exc}") from exc
-    raw = decode_backup_package(encrypted)
-    safety_backup = restore_sqlite_backup_bytes(raw)
-    return {"ok": True, "safety_backup": safety_backup}
+    try:
+        raw = decode_backup_package(encrypted)
+        safety_backup = restore_sqlite_backup_bytes(raw)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"恢复备份失败：{type(exc).__name__}: {exc}") from exc
+    clear_admin_session_cookies(response)
+    return {"ok": True, "safety_backup": safety_backup, "logout_required": True}
 
 
 @app.post("/admin/backup/delete")
@@ -2285,7 +2472,7 @@ def admin_reset_user_password(user_id: int, payload: AdminUserPasswordPayload, r
 
 
 @app.post("/admin/password")
-def admin_change_password(payload: AdminPasswordPayload, request: Request):
+def admin_change_password(payload: AdminPasswordPayload, request: Request, response: Response):
     admin = require_admin(request, csrf=True)
     username = normalize_admin_username(payload.username)
     with db() as conn:
@@ -2309,7 +2496,8 @@ def admin_change_password(payload: AdminPasswordPayload, request: Request):
         except sqlite3.IntegrityError as exc:
             raise HTTPException(status_code=409, detail="这个管理员账号已存在") from exc
         conn.execute("DELETE FROM admin_sessions WHERE admin_id = ?", (admin["id"],))
-    return {"ok": True, "username": username}
+    clear_admin_session_cookies(response)
+    return {"ok": True, "username": username, "logout_required": True}
 
 
 @app.post("/api/auth/register")
@@ -2585,7 +2773,149 @@ def put_config(payload: ConfigPayload, user=Depends(current_user)):
     return {"ok": True, "updated_at": ts}
 
 
+@app.get("/api/media/status")
+def media_status(user=Depends(current_user)):
+    with db() as conn:
+        total = conn.execute("SELECT COUNT(*) AS c FROM user_media WHERE user_id = ?", (user["id"],)).fetchone()["c"]
+        size = conn.execute("SELECT COALESCE(SUM(size_bytes), 0) AS s FROM user_media WHERE user_id = ?", (user["id"],)).fetchone()["s"]
+        rows = conn.execute(
+            """
+            SELECT media_type, COUNT(*) AS c, COALESCE(SUM(size_bytes), 0) AS s
+            FROM user_media
+            WHERE user_id = ?
+            GROUP BY media_type
+            """,
+            (user["id"],),
+        ).fetchall()
+    by_type = {row["media_type"]: {"count": int(row["c"] or 0), "size_bytes": int(row["s"] or 0)} for row in rows}
+    return {
+        "ok": True,
+        "total": int(total or 0),
+        "size_bytes": int(size or 0),
+        "by_type": by_type,
+        "r2_free_hint": {"storage_bytes": 10 * 1024 * 1024 * 1024, "class_a_monthly": 1_000_000, "class_b_monthly": 10_000_000},
+    }
+
+
+@app.post("/api/media/exists")
+def media_exists(payload: MediaExistsPayload, user=Depends(current_user)):
+    hashes = [str(x).strip().lower() for x in payload.hashes if re.match(r"^[a-f0-9]{64}$", str(x).strip().lower())]
+    if not hashes:
+        return {"items": {}}
+    found = {}
+    with db() as conn:
+        for i in range(0, len(hashes), 400):
+            chunk = hashes[i:i + 400]
+            placeholders = ",".join(["?"] * len(chunk))
+            rows = conn.execute(
+                f"SELECT * FROM user_media WHERE user_id = ? AND sha256 IN ({placeholders})",
+                (user["id"], *chunk),
+            ).fetchall()
+            found.update({row["sha256"]: media_row_to_dict(row) for row in rows})
+    return {"items": found}
+
+
+@app.post("/api/media/upload")
+async def media_upload(request: Request, file: UploadFile = File(...), metadata: str = "", user=Depends(current_user)):
+    settings = require_backup_settings()
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="empty file")
+    sha = hashlib.sha256(raw).hexdigest()
+    meta = {}
+    if metadata:
+        try:
+            meta = json.loads(metadata)
+        except Exception:
+            meta = {}
+    title = str(meta.get("title") or file.filename or sha)[:300]
+    media_type = str(meta.get("type") or "file")[:40]
+    if media_type not in {"image", "video", "file"}:
+        media_type = "file"
+    content_type = (file.content_type or meta.get("content_type") or "application/octet-stream").split(";", 1)[0].strip()
+    width = int(meta.get("width") or 0)
+    height = int(meta.get("height") or 0)
+    existing = None
+    with db() as conn:
+        existing = conn.execute("SELECT * FROM user_media WHERE user_id = ? AND sha256 = ?", (user["id"], sha)).fetchone()
+    if existing:
+        return {"ok": True, "skipped": True, "item": media_row_to_dict(existing)}
+
+    object_key = media_object_key(user["id"], sha, file.filename or title, settings)
+    client = backup_s3_client(settings)
+    try:
+        client.put_object(
+            Bucket=settings["bucket"],
+            Key=object_key,
+            Body=raw,
+            ContentType=content_type,
+            Metadata={
+                "user_id": str(user["id"]),
+                "sha256": sha,
+                "title": title.encode("utf-8", "ignore").decode("utf-8")[:120],
+            },
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"upload to object storage failed: {exc}") from exc
+
+    ts = now_ms()
+    media_id = sha[:20]
+    public_url = media_public_url(object_key, settings)
+    with db() as conn:
+        conn.execute(
+            """
+            INSERT INTO user_media (
+                id, user_id, sha256, title, media_type, content_type, size_bytes, width, height,
+                object_key, public_url, source_type, prompt, model, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, sha256) DO UPDATE SET
+                title=excluded.title,
+                media_type=excluded.media_type,
+                content_type=excluded.content_type,
+                size_bytes=excluded.size_bytes,
+                width=excluded.width,
+                height=excluded.height,
+                object_key=excluded.object_key,
+                public_url=excluded.public_url,
+                source_type=excluded.source_type,
+                prompt=excluded.prompt,
+                model=excluded.model,
+                updated_at=excluded.updated_at
+            """,
+            (
+                media_id, user["id"], sha, title, media_type, content_type, len(raw), width, height,
+                object_key, public_url, str(meta.get("source_type") or "")[:80],
+                str(meta.get("prompt") or "")[:4000], str(meta.get("model") or "")[:300], ts, ts,
+            ),
+        )
+        row = conn.execute("SELECT * FROM user_media WHERE user_id = ? AND sha256 = ?", (user["id"], sha)).fetchone()
+    return {"ok": True, "skipped": False, "item": media_row_to_dict(row)}
+
+
+@app.post("/api/media/prune")
+def media_prune(payload: MediaPrunePayload, user=Depends(current_user)):
+    if not payload.confirm:
+        raise HTTPException(status_code=400, detail="confirm required")
+    keep = {str(x).strip().lower() for x in payload.keep_hashes if re.match(r"^[a-f0-9]{64}$", str(x).strip().lower())}
+    settings = require_backup_settings()
+    client = backup_s3_client(settings)
+    deleted = []
+    with db() as conn:
+        rows = conn.execute("SELECT * FROM user_media WHERE user_id = ?", (user["id"],)).fetchall()
+        for row in rows:
+            if row["sha256"] in keep:
+                continue
+            try:
+                client.delete_object(Bucket=settings["bucket"], Key=row["object_key"])
+            except Exception:
+                pass
+            conn.execute("DELETE FROM user_media WHERE user_id = ? AND sha256 = ?", (user["id"], row["sha256"]))
+            deleted.append(row["sha256"])
+    return {"ok": True, "deleted": len(deleted), "hashes": deleted}
+
+
 if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("CLOUD_CONFIG_PORT", "8787")))
+

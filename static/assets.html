@@ -88,6 +88,13 @@
         .prompt-content { color:var(--muted); font-size:12px; line-height:1.45; white-space:pre-wrap; }
         .mini-actions { display:flex; gap:8px; flex-wrap:wrap; }
         .mini { height:30px; border:1px solid var(--line); background:var(--panel); color:var(--text); border-radius:999px; padding:0 10px; font-size:12px; font-weight:900; display:inline-flex; gap:6px; align-items:center; }
+        .sync-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0 12px; }
+        .sync-stat { border:1px solid var(--line); background:var(--bg); border-radius:14px; padding:10px; }
+        .sync-stat b { display:block; font-size:16px; color:var(--text); margin-top:4px; }
+        .sync-stat span, .sync-note { color:var(--muted); font-size:11px; font-weight:900; line-height:1.45; }
+        .sync-note { margin-top:10px; }
+        .badge.cloud-ok { color:#059669; border-color:rgba(5,150,105,.24); background:rgba(16,185,129,.08); }
+        .badge.cloud-fail { color:var(--danger); border-color:rgba(239,68,68,.24); background:rgba(239,68,68,.08); }
         .empty { border:1px dashed var(--line); border-radius:18px; min-height:260px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-weight:900; text-align:center; padding:24px; background:rgba(255,255,255,.35); }
         .context-menu { position:fixed; z-index:50; width:206px; background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:0 18px 44px rgba(15,23,42,.18); padding:7px; display:none; }
         .context-menu.open { display:block; }
@@ -145,6 +152,23 @@
 
             <aside class="side">
                 <section class="panel">
+                    <h2>云素材同步</h2>
+                    <div id="cloudMediaStatus" class="sync-note">正在读取同步状态...</div>
+                    <div class="sync-grid" aria-live="polite">
+                        <div class="sync-stat"><span>本地素材</span><b id="syncLocalCount">-</b></div>
+                        <div class="sync-stat"><span>本地容量</span><b id="syncLocalSize">-</b></div>
+                        <div class="sync-stat"><span>云端素材</span><b id="syncRemoteCount">-</b></div>
+                        <div class="sync-stat"><span>云端容量</span><b id="syncRemoteSize">-</b></div>
+                    </div>
+                    <div class="mini-actions">
+                        <button class="mini" id="syncMissingBtn" type="button"><i data-lucide="cloud-upload" size="13"></i><span>立即同步</span></button>
+                        <button class="mini" id="syncRetryBtn" type="button"><i data-lucide="rotate-ccw" size="13"></i><span>重试失败</span></button>
+                        <button class="mini" id="syncPruneBtn" type="button"><i data-lucide="cloud-off" size="13"></i><span>清理云端</span></button>
+                    </div>
+                    <div class="sync-note">新生成、上传和扫描到的图片/视频会自动同步；按钮用于手动补偿和清理云端孤儿文件。</div>
+                </section>
+
+                <section class="panel">
                     <h2>提示词库</h2>
                     <div class="field">
                         <label for="promptTitle">标题</label>
@@ -194,7 +218,7 @@
     <div id="toast" class="toast"></div>
 
     <script>
-        const state = { type:'', q:'', favorite:null, assets:[], prompts:[], activeAsset:null, previewAsset:null };
+        const state = { type:'', q:'', favorite:null, assets:[], prompts:[], activeAsset:null, previewAsset:null, syncBusy:false };
         const $ = id => document.getElementById(id);
 
         function showToast(text){
@@ -214,6 +238,18 @@
         }
         function tagArray(value){ return String(value || '').split(',').map(x => x.trim()).filter(Boolean); }
         function dimsFor(asset){ return asset.width && asset.height ? `${asset.width} x ${asset.height}` : asset.type; }
+        function formatBytes(bytes){
+            const value = Number(bytes || 0);
+            if(!Number.isFinite(value) || value <= 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+            return `${(value / Math.pow(1024, index)).toFixed(index ? 1 : 0)} ${units[index]}`;
+        }
+        function cloudBadge(asset){
+            if(asset.cloud_error) return '<span class="badge cloud-fail">同步失败</span>';
+            if(asset.cloud_synced_at) return '<span class="badge cloud-ok">已同步</span>';
+            return '<span class="badge">未同步</span>';
+        }
 
         async function loadAssets(){
             const params = new URLSearchParams({ limit:'160' });
@@ -249,6 +285,7 @@
                             <div class="asset-badges">
                                 <span class="badge">${esc(dimsFor(asset))}</span>
                                 ${asset.model ? `<span class="badge">${esc(asset.model)}</span>` : ''}
+                                ${cloudBadge(asset)}
                             </div>
                         </div>
                     </article>
@@ -387,6 +424,61 @@
             showToast(`已上传 ${data.items?.length || list.length} 个素材`);
         }
 
+        function setSyncBusy(busy){
+            state.syncBusy = busy;
+            ['syncMissingBtn', 'syncRetryBtn', 'syncPruneBtn'].forEach(id => {
+                const btn = $(id);
+                if(btn) btn.disabled = busy;
+            });
+        }
+
+        function renderCloudMediaStatus(data){
+            const local = data?.local || {};
+            const remote = data?.remote || {};
+            const remoteCount = remote.count ?? remote.total ?? 0;
+            $('syncLocalCount').textContent = String(local.count || 0);
+            $('syncLocalSize').textContent = formatBytes(local.size_bytes || 0);
+            $('syncRemoteCount').textContent = data?.logged_in ? String(remoteCount) : '-';
+            $('syncRemoteSize').textContent = data?.logged_in ? formatBytes(remote.size_bytes || 0) : '-';
+            $('cloudMediaStatus').textContent = data?.logged_in
+                ? `云端已连接，已同步 ${remoteCount} 个文件。`
+                : '登录云端账户后可以同步素材到 R2。';
+        }
+
+        async function loadCloudMediaStatus(){
+            try {
+                const data = await fetch('/api/cloud/media/status').then(jsonOrThrow);
+                renderCloudMediaStatus(data);
+            } catch (err) {
+                $('cloudMediaStatus').textContent = err.message || '读取云素材状态失败';
+            }
+        }
+
+        async function runCloudMediaSync(options = {}){
+            if(state.syncBusy) return;
+            if(options.delete_remote_missing && !confirm('会删除云端不在本地素材库里的文件，确定继续？')) return;
+            setSyncBusy(true);
+            showToast('正在同步云素材...');
+            try {
+                const data = await fetch('/api/cloud/media/sync', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({
+                        missing_only: options.missing_only !== false,
+                        retry_failed: options.retry_failed !== false,
+                        delete_remote_missing: !!options.delete_remote_missing,
+                        limit: 5000
+                    })
+                }).then(jsonOrThrow);
+                await loadAssets();
+                await loadCloudMediaStatus();
+                const failed = data.failed?.length || 0;
+                showToast(`同步完成：上传 ${data.uploaded || 0}，跳过 ${data.skipped || 0}，失败 ${failed}`);
+            } finally {
+                setSyncBusy(false);
+            }
+        }
+
         async function loadPrompts(){
             const data = await fetch('/api/prompts?limit=120').then(jsonOrThrow);
             state.prompts = data.items || [];
@@ -491,6 +583,9 @@
         $('newPromptFocusBtn').addEventListener('click', () => $('promptTitle').focus());
         $('savePromptBtn').addEventListener('click', () => savePrompt().catch(err => showToast(err.message)));
         $('clearPromptBtn').addEventListener('click', clearPromptForm);
+        $('syncMissingBtn').addEventListener('click', () => runCloudMediaSync({ missing_only:true, retry_failed:false }).catch(err => showToast(err.message)));
+        $('syncRetryBtn').addEventListener('click', () => runCloudMediaSync({ missing_only:true, retry_failed:true }).catch(err => showToast(err.message)));
+        $('syncPruneBtn').addEventListener('click', () => runCloudMediaSync({ missing_only:true, retry_failed:false, delete_remote_missing:true }).catch(err => showToast(err.message)));
         $('contextMenu').addEventListener('click', event => {
             const action = event.target.closest('button')?.dataset.action;
             handleAssetAction(action, state.activeAsset);
@@ -506,7 +601,7 @@
             if(event.data?.type === 'assets-refresh') loadAssets().catch(err => showToast(err.message));
         });
 
-        Promise.all([loadAssets(), loadPrompts()]).catch(err => showToast(err.message));
+        Promise.all([loadAssets(), loadPrompts(), loadCloudMediaStatus()]).catch(err => showToast(err.message));
         lucide.createIcons();
     </script>
 </body>

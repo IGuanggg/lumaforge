@@ -28,7 +28,7 @@ from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger("infinite_canvas")
-APP_VERSION = os.getenv("APP_VERSION", "1.0.3")
+APP_VERSION = os.getenv("APP_VERSION", "1.0.4")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/Infinite-Canvas/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
@@ -293,19 +293,38 @@ CLIENT_ID = str(uuid.uuid4())
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BUNDLE_DIR = getattr(sys, "_MEIPASS", BASE_DIR)
 RUNTIME_DIR = os.path.abspath(os.getenv("APP_RUNTIME_DIR") or os.getenv("INFINITE_CANVAS_HOME") or BASE_DIR)
+API_ENV_FILE = os.path.join(RUNTIME_DIR, "API", ".env")
+
+def load_env_file_from_path(path):
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            for raw_line in f.read().splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                os.environ.setdefault(key, value)
+    except Exception as e:
+        logger.error(f"加载 API/.env 失败: {e}")
+
+load_env_file_from_path(API_ENV_FILE)
+
 WORKFLOW_SOURCE_DIR = os.path.join(BUNDLE_DIR, "workflows")
 WORKFLOW_DIR = os.path.abspath(os.getenv("APP_WORKFLOW_DIR") or os.path.join(RUNTIME_DIR, "workflows"))
 WORKFLOW_PATH = os.path.join(WORKFLOW_DIR, "Z-Image.json")
 STATIC_DIR = os.path.join(BUNDLE_DIR, "static")
 OUTPUT_DIR = os.path.abspath(os.getenv("APP_OUTPUT_DIR") or os.path.join(RUNTIME_DIR, "output"))
 ASSETS_DIR = os.path.abspath(os.getenv("APP_ASSETS_DIR") or os.path.join(RUNTIME_DIR, "assets"))
-OUTPUT_INPUT_DIR = os.path.join(ASSETS_DIR, "input")
-OUTPUT_OUTPUT_DIR = os.path.join(ASSETS_DIR, "output")
-ASSET_THUMB_DIR = os.path.join(ASSETS_DIR, "thumbs")
+OUTPUT_INPUT_DIR = os.path.abspath(os.getenv("APP_ASSET_INPUT_DIR") or os.path.join(ASSETS_DIR, "input"))
+OUTPUT_OUTPUT_DIR = os.path.abspath(os.getenv("APP_ASSET_OUTPUT_DIR") or os.path.join(ASSETS_DIR, "output"))
+ASSET_THUMB_DIR = os.path.abspath(os.getenv("APP_ASSET_THUMBS_DIR") or os.path.join(ASSETS_DIR, "thumbs"))
 APP_LOG_DIR = os.path.abspath(os.getenv("APP_LOG_DIR") or os.path.join(RUNTIME_DIR, "logs"))
 APP_CACHE_DIR = os.path.abspath(os.getenv("APP_CACHE_DIR") or os.path.join(RUNTIME_DIR, "cache"))
 HISTORY_FILE = os.path.join(RUNTIME_DIR, "history.json")
-API_ENV_FILE = os.path.join(RUNTIME_DIR, "API", ".env")
 DATA_DIR = os.path.join(RUNTIME_DIR, "data")
 ASSET_DB_FILE = os.path.join(DATA_DIR, "assets.db")
 CONVERSATION_DIR = os.path.join(DATA_DIR, "conversations")
@@ -325,6 +344,8 @@ GLOBAL_CONFIG_LOCK = Lock()
 CONVERSATION_LOCK = Lock()
 CANVAS_LOCK = Lock()
 LOAD_LOCK = Lock()
+CLOUD_MEDIA_SYNC_TASK = None
+CLOUD_CONFIG_SYNC_TASK = None
 NEXT_TASK_ID = 1
 
 PROVIDER_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{2,40}$")
@@ -677,6 +698,56 @@ def cloud_base_url(session):
         raise HTTPException(status_code=400, detail="云端服务地址未配置，请在后端设置 CLOUD_SYNC_BASE_URL")
     return base_url
 
+async def upload_cloud_config(include_secrets=True):
+    session = load_cloud_session()
+    base_url = cloud_base_url(session)
+    config = build_cloud_config(include_secrets=True)
+    try:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            response = await client.put(
+                f"{base_url}/api/configs/current",
+                headers=cloud_auth_header(session),
+                json={"config": config},
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "Cloud config upload failed") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Cannot connect to cloud service: {exc}") from exc
+    session["updated_at"] = now_ms()
+    save_cloud_session(session)
+    return {"ok": True, "cloud": data}
+
+async def run_cloud_config_auto_sync(delay: float = 8.0):
+    global CLOUD_CONFIG_SYNC_TASK
+    try:
+        await asyncio.sleep(delay)
+        session = load_cloud_session()
+        if not session.get("token"):
+            return
+        await upload_cloud_config(include_secrets=True)
+    except HTTPException as exc:
+        logger.info("Auto cloud config sync skipped: %s", exc.detail)
+    except Exception as exc:
+        logger.warning("Auto cloud config sync failed: %s", exc)
+    finally:
+        CLOUD_CONFIG_SYNC_TASK = None
+
+def schedule_cloud_config_sync():
+    global CLOUD_CONFIG_SYNC_TASK
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    if CLOUD_CONFIG_SYNC_TASK and not CLOUD_CONFIG_SYNC_TASK.done():
+        return
+    CLOUD_CONFIG_SYNC_TASK = loop.create_task(run_cloud_config_auto_sync())
+
 def build_cloud_config(include_secrets=False):
     providers = load_api_providers()
     env_values = {
@@ -894,6 +965,15 @@ def init_asset_library():
                 );
                 CREATE INDEX IF NOT EXISTS idx_prompt_snippets_favorite ON prompt_snippets(favorite, updated_at DESC);
             """)
+            existing = {row["name"] for row in conn.execute("PRAGMA table_info(assets)").fetchall()}
+            for column, ddl in {
+                "cloud_key": "ALTER TABLE assets ADD COLUMN cloud_key TEXT DEFAULT ''",
+                "cloud_url": "ALTER TABLE assets ADD COLUMN cloud_url TEXT DEFAULT ''",
+                "cloud_synced_at": "ALTER TABLE assets ADD COLUMN cloud_synced_at REAL DEFAULT 0",
+                "cloud_error": "ALTER TABLE assets ADD COLUMN cloud_error TEXT DEFAULT ''",
+            }.items():
+                if column not in existing:
+                    conn.execute(ddl)
 
 def json_list(value):
     if isinstance(value, list):
@@ -1004,7 +1084,10 @@ def index_local_asset(local_url, *, source_type="", prompt="", model="", source_
                     ),
                 )
                 row = conn.execute("SELECT * FROM assets WHERE local_url = ?", (local_url,)).fetchone()
-                return asset_row_to_dict(row) if row else None
+                item = asset_row_to_dict(row) if row else None
+        if item:
+            schedule_cloud_media_sync()
+        return item
     except Exception as e:
         logger.warning("Index asset failed for %s: %s", local_url, e)
         return None
@@ -1139,6 +1222,12 @@ class CloudAuthRequest(BaseModel):
 
 class CloudUploadRequest(BaseModel):
     include_secrets: bool = False
+
+class CloudMediaSyncRequest(BaseModel):
+    missing_only: bool = True
+    retry_failed: bool = True
+    delete_remote_missing: bool = False
+    limit: int = Field(default=500, ge=1, le=5000)
 
 class CloudProfileRequest(BaseModel):
     email: str = Field(default="", max_length=200)
@@ -2343,6 +2432,21 @@ APP_PATH_TARGETS = {
         "label": "兼容输出目录",
         "current": lambda: OUTPUT_DIR,
     },
+    "input": {
+        "env": "APP_ASSET_INPUT_DIR",
+        "label": "导入素材目录",
+        "current": lambda: OUTPUT_INPUT_DIR,
+    },
+    "output": {
+        "env": "APP_ASSET_OUTPUT_DIR",
+        "label": "生成输出目录",
+        "current": lambda: OUTPUT_OUTPUT_DIR,
+    },
+    "thumbs": {
+        "env": "APP_ASSET_THUMBS_DIR",
+        "label": "thumbs",
+        "current": lambda: ASSET_THUMB_DIR,
+    },
     "logs": {
         "env": "APP_LOG_DIR",
         "label": "日志目录",
@@ -2369,9 +2473,9 @@ def reload_app_path_globals():
     global ASSET_THUMB_DIR, APP_LOG_DIR, APP_CACHE_DIR
     OUTPUT_DIR = os.path.abspath(os.getenv("APP_OUTPUT_DIR") or os.path.join(RUNTIME_DIR, "output"))
     ASSETS_DIR = os.path.abspath(os.getenv("APP_ASSETS_DIR") or os.path.join(RUNTIME_DIR, "assets"))
-    OUTPUT_INPUT_DIR = os.path.join(ASSETS_DIR, "input")
-    OUTPUT_OUTPUT_DIR = os.path.join(ASSETS_DIR, "output")
-    ASSET_THUMB_DIR = os.path.join(ASSETS_DIR, "thumbs")
+    OUTPUT_INPUT_DIR = os.path.abspath(os.getenv("APP_ASSET_INPUT_DIR") or os.path.join(ASSETS_DIR, "input"))
+    OUTPUT_OUTPUT_DIR = os.path.abspath(os.getenv("APP_ASSET_OUTPUT_DIR") or os.path.join(ASSETS_DIR, "output"))
+    ASSET_THUMB_DIR = os.path.abspath(os.getenv("APP_ASSET_THUMBS_DIR") or os.path.join(ASSETS_DIR, "thumbs"))
     APP_LOG_DIR = os.path.abspath(os.getenv("APP_LOG_DIR") or os.path.join(RUNTIME_DIR, "logs"))
     APP_CACHE_DIR = os.path.abspath(os.getenv("APP_CACHE_DIR") or os.path.join(RUNTIME_DIR, "cache"))
     for path in (OUTPUT_DIR, ASSETS_DIR, OUTPUT_INPUT_DIR, OUTPUT_OUTPUT_DIR, ASSET_THUMB_DIR, APP_LOG_DIR, APP_CACHE_DIR):
@@ -2931,6 +3035,7 @@ async def save_providers(payload: List[ApiProviderPayload]):
     if env_updates:
         update_env_values(env_updates)
         reload_env_globals()   # 立即将最新 env 值同步回模块全局变量，无需重启
+    schedule_cloud_config_sync()
     return {"providers": [public_provider(p) for p in providers]}
 
 @app.get("/api/cloud/status")
@@ -2987,6 +3092,7 @@ async def cloud_auth(action: str, payload: CloudAuthRequest):
         "updated_at": now_ms(),
     }
     save_cloud_session(session)
+    schedule_cloud_config_sync()
     return {
         "logged_in": True,
         "email": session["email"],
@@ -3225,7 +3331,7 @@ async def cloud_change_password(payload: CloudPasswordRequest):
 async def cloud_upload(payload: CloudUploadRequest):
     session = load_cloud_session()
     base_url = cloud_base_url(session)
-    config = build_cloud_config(include_secrets=payload.include_secrets)
+    config = build_cloud_config(include_secrets=True)
     try:
         async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
             response = await client.put(
@@ -3272,6 +3378,160 @@ async def cloud_download():
         raise HTTPException(status_code=404, detail="云端还没有保存配置")
     applied = apply_cloud_config(config)
     return {"ok": True, "cloud_updated_at": data.get("updated_at", 0), "applied": applied}
+
+
+def local_media_assets(limit: int = 5000):
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM assets
+                WHERE type IN ('image', 'video') AND COALESCE(sha256, '') != ''
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (max(1, min(int(limit or 5000), 5000)),),
+            ).fetchall()
+    items = []
+    for row in rows:
+        item = asset_row_to_dict(row)
+        if item.get("local_path") and os.path.isfile(item["local_path"]):
+            items.append(item)
+    return items
+
+
+async def cloud_media_remote_status(client, base_url: str, session: dict):
+    response = await client.get(f"{base_url}/api/media/status", headers=cloud_auth_header(session))
+    response.raise_for_status()
+    return response.json()
+
+
+@app.get("/api/cloud/media/status")
+async def cloud_media_status():
+    local_items = local_media_assets()
+    local_size = sum(int(item.get("size_bytes") or 0) for item in local_items)
+    session = load_cloud_session()
+    if not session.get("token"):
+        return {"ok": True, "logged_in": False, "local": {"count": len(local_items), "size_bytes": local_size}, "remote": None}
+    base_url = cloud_base_url(session)
+    try:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+            remote = await cloud_media_remote_status(client, base_url, session)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"读取云素材状态失败：{exc}") from exc
+    return {"ok": True, "logged_in": True, "local": {"count": len(local_items), "size_bytes": local_size}, "remote": remote}
+
+
+@app.post("/api/cloud/media/sync")
+async def cloud_media_sync(payload: CloudMediaSyncRequest):
+    session = load_cloud_session()
+    base_url = cloud_base_url(session)
+    items = local_media_assets(payload.limit)
+    hashes = [item["sha256"] for item in items if item.get("sha256")]
+    uploaded, skipped, failed = [], [], []
+    deleted_remote = 0
+    remote_items = {}
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=20, read=180, write=180, pool=20), follow_redirects=True) as client:
+            for i in range(0, len(hashes), 400):
+                response = await client.post(f"{base_url}/api/media/exists", headers=cloud_auth_header(session), json={"hashes": hashes[i:i + 400]})
+                response.raise_for_status()
+                remote_items.update(response.json().get("items") or {})
+
+            for item in items:
+                sha = item.get("sha256") or ""
+                local_error = item.get("cloud_error") or ""
+                if payload.missing_only and sha in remote_items and not (payload.retry_failed and local_error):
+                    skipped.append(item["id"])
+                    remote = remote_items.get(sha) or {}
+                    with ASSET_LOCK:
+                        with asset_db() as conn:
+                            conn.execute(
+                                "UPDATE assets SET cloud_key = ?, cloud_url = ?, cloud_synced_at = ?, cloud_error = '' WHERE id = ?",
+                                (remote.get("object_key", ""), remote.get("cloud_url", ""), time.time(), item["id"]),
+                            )
+                    continue
+                path = item.get("local_path")
+                if not path or not os.path.isfile(path):
+                    failed.append({"id": item.get("id"), "title": item.get("title"), "error": "local file missing"})
+                    continue
+                metadata = {
+                    "id": item.get("id"),
+                    "title": item.get("title") or os.path.basename(path),
+                    "type": item.get("type") or asset_type_for_path(path),
+                    "content_type": content_type_for_path(path),
+                    "width": item.get("width") or 0,
+                    "height": item.get("height") or 0,
+                    "source_type": item.get("source_type") or "",
+                    "prompt": item.get("prompt") or "",
+                    "model": item.get("model") or "",
+                }
+                try:
+                    with open(path, "rb") as fh:
+                        response = await client.post(
+                            f"{base_url}/api/media/upload",
+                            headers=cloud_auth_header(session),
+                            data={"metadata": json.dumps(metadata, ensure_ascii=False)},
+                            files={"file": (os.path.basename(path), fh, content_type_for_path(path))},
+                        )
+                    response.raise_for_status()
+                    data = response.json()
+                    remote = data.get("item") or {}
+                    with ASSET_LOCK:
+                        with asset_db() as conn:
+                            conn.execute(
+                                "UPDATE assets SET cloud_key = ?, cloud_url = ?, cloud_synced_at = ?, cloud_error = '' WHERE id = ?",
+                                (remote.get("object_key", ""), remote.get("cloud_url", ""), time.time(), item["id"]),
+                            )
+                    (skipped if data.get("skipped") else uploaded).append(item["id"])
+                except Exception as exc:
+                    err = str(exc)
+                    failed.append({"id": item.get("id"), "title": item.get("title"), "error": err})
+                    with ASSET_LOCK:
+                        with asset_db() as conn:
+                            conn.execute("UPDATE assets SET cloud_error = ? WHERE id = ?", (err[:1000], item["id"]))
+
+            if payload.delete_remote_missing:
+                response = await client.post(f"{base_url}/api/media/prune", headers=cloud_auth_header(session), json={"keep_hashes": hashes, "confirm": True})
+                response.raise_for_status()
+                deleted_remote = int(response.json().get("deleted") or 0)
+            remote_status = await cloud_media_remote_status(client, base_url, session)
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "云素材同步失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"云素材同步请求失败：{exc}") from exc
+    return {"ok": True, "local_count": len(items), "uploaded": len(uploaded), "skipped": len(skipped), "failed": failed, "deleted_remote": deleted_remote, "remote": remote_status}
+
+
+async def run_cloud_media_auto_sync(delay: float = 4.0):
+    global CLOUD_MEDIA_SYNC_TASK
+    try:
+        await asyncio.sleep(delay)
+        session = load_cloud_session()
+        if not session.get("token"):
+            return
+        await cloud_media_sync(CloudMediaSyncRequest(missing_only=True, retry_failed=False, delete_remote_missing=False, limit=5000))
+    except HTTPException as exc:
+        logger.info("Auto cloud media sync skipped: %s", exc.detail)
+    except Exception as exc:
+        logger.warning("Auto cloud media sync failed: %s", exc)
+    finally:
+        CLOUD_MEDIA_SYNC_TASK = None
+
+
+def schedule_cloud_media_sync():
+    global CLOUD_MEDIA_SYNC_TASK
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return
+    if CLOUD_MEDIA_SYNC_TASK and not CLOUD_MEDIA_SYNC_TASK.done():
+        return
+    CLOUD_MEDIA_SYNC_TASK = loop.create_task(run_cloud_media_auto_sync())
 
 # --- ModelScope Token (从 env 读取，不再支持通过 UI 修改) ---
 
@@ -4844,6 +5104,7 @@ def save_comfyui_instances(payload: ComfyInstancesPayload):
             if addr in new_load:
                 new_load[addr] = n
         BACKEND_LOCAL_LOAD = new_load
+    schedule_cloud_config_sync()
     return {"instances": COMFYUI_INSTANCES}
 
 @app.get("/api/workflows")
