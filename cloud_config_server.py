@@ -35,7 +35,7 @@ AVATAR_TYPES = {
 TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_TOKEN_TTL_SECONDS", str(30 * 24 * 60 * 60)))
 RESET_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_RESET_TOKEN_TTL_SECONDS", str(30 * 60)))
 EMAIL_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_EMAIL_TOKEN_TTL_SECONDS", str(24 * 60 * 60)))
-CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "1.0.5").strip() or "1.0.5"
+CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "1.0.6").strip() or "1.0.6"
 CLOUD_PUBLIC_URL = os.getenv("CLOUD_PUBLIC_URL", "").strip().rstrip("/")
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
@@ -940,6 +940,10 @@ def media_row_to_dict(row) -> dict:
         "height": int(row["height"] or 0),
         "object_key": row["object_key"],
         "cloud_url": row["public_url"],
+        "source_type": row["source_type"],
+        "prompt": row["prompt"],
+        "model": row["model"],
+        "created_at": int(row["created_at"] or 0),
         "updated_at": int(row["updated_at"] or 0),
     }
 
@@ -2813,6 +2817,57 @@ def media_exists(payload: MediaExistsPayload, user=Depends(current_user)):
             ).fetchall()
             found.update({row["sha256"]: media_row_to_dict(row) for row in rows})
     return {"items": found}
+
+
+@app.get("/api/media/list")
+def media_list(
+    limit: int = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0, le=1000000),
+    user=Depends(current_user),
+):
+    with db() as conn:
+        total = conn.execute("SELECT COUNT(*) AS c FROM user_media WHERE user_id = ?", (user["id"],)).fetchone()["c"]
+        rows = conn.execute(
+            """
+            SELECT * FROM user_media
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+            LIMIT ? OFFSET ?
+            """,
+            (user["id"], limit, offset),
+        ).fetchall()
+    return {"ok": True, "total": int(total or 0), "items": [media_row_to_dict(row) for row in rows]}
+
+
+@app.get("/api/media/download/{sha256}")
+def media_download(sha256: str, user=Depends(current_user)):
+    sha = sha256.strip().lower()
+    if not re.match(r"^[a-f0-9]{64}$", sha):
+        raise HTTPException(status_code=400, detail="invalid sha256")
+    settings = require_backup_settings()
+    with db() as conn:
+        row = conn.execute("SELECT * FROM user_media WHERE user_id = ? AND sha256 = ?", (user["id"], sha)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="media not found")
+    client = backup_s3_client(settings)
+    try:
+        response = client.get_object(Bucket=settings["bucket"], Key=row["object_key"])
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"download from object storage failed: {exc}") from exc
+    filename = os.path.basename(row["object_key"]) or row["title"] or f"{sha}.bin"
+    if "." not in filename and row["title"]:
+        title_ext = os.path.splitext(row["title"])[1]
+        if re.match(r"^\.[a-zA-Z0-9]+$", title_ext):
+            filename = f"{sha}{title_ext.lower()}"
+    headers = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{filename}",
+        "X-IC-Media-Sha256": sha,
+    }
+    return Response(
+        content=response["Body"].read(),
+        media_type=row["content_type"] or "application/octet-stream",
+        headers=headers,
+    )
 
 
 @app.post("/api/media/upload")
