@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger("infinite_canvas")
-APP_VERSION = os.getenv("APP_VERSION", "1.0.4")
+APP_VERSION = os.getenv("APP_VERSION", "1.0.5")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/Infinite-Canvas/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
@@ -2536,6 +2536,18 @@ def version_tuple(value: str):
             parts.append(int(piece))
     return tuple(parts or [0])
 
+def _is_zip_download_url(url: str) -> bool:
+    """Check if a URL points to a .zip download (by inspecting the URL path, ignoring query params)."""
+    try:
+        parsed = urllib.parse.urlparse(str(url or "").strip())
+    except Exception:
+        return False
+    if parsed.scheme.lower() not in {"http", "https"}:
+        return False
+    path = urllib.parse.unquote(parsed.path or "").lower()
+    return path.endswith(".zip")
+
+
 def normalize_update_payload(data: Dict[str, Any]):
     latest = str(data.get("version") or data.get("latest_version") or data.get("tag_name") or "").strip()
     if latest.lower().startswith("v"):
@@ -2546,10 +2558,13 @@ def normalize_update_payload(data: Dict[str, Any]):
         for asset in raw_assets:
             if not isinstance(asset, dict):
                 continue
-            name = str(asset.get("name") or "")
-            url = str(asset.get("browser_download_url") or asset.get("url") or "")
-            if not url:
+            raw_url = str(asset.get("browser_download_url") or asset.get("url") or "")
+            if not raw_url:
                 continue
+            # Only assets whose URL is a zip download can be auto-update targets
+            if not _is_zip_download_url(raw_url):
+                continue
+            name = str(asset.get("name") or "")
             name_lower = name.lower()
             atype = "unknown"
             if "desktop" in name_lower:
@@ -2558,7 +2573,15 @@ def normalize_update_payload(data: Dict[str, Any]):
                 atype = "browser"
             elif name_lower.endswith(".zip"):
                 atype = "zip"
-            parsed_assets.append({"name": name, "url": url, "type": atype, "size": asset.get("size", 0)})
+            # Extract sha256 from various formats
+            sha256_val = ""
+            raw_digest = str(asset.get("digest") or "")
+            if raw_digest.startswith("sha256:"):
+                sha256_val = raw_digest.split(":", 1)[1]
+            if not sha256_val:
+                sha256_val = str(asset.get("sha256") or "")
+            parsed_assets.append({"name": name, "url": raw_url, "type": atype, "size": asset.get("size", 0), "sha256": sha256_val})
+    # Select best asset for auto-update
     is_desktop = os.getenv("INFINITE_CANVAS_DESKTOP") == "1"
     selected = None
     for a in parsed_assets:
@@ -2572,16 +2595,28 @@ def normalize_update_payload(data: Dict[str, Any]):
                 selected = a; break
     if not selected and parsed_assets:
         selected = parsed_assets[0]
-    download_url = ""
+    # Fallback: top-level download_url if it's a safe zip URL and no asset was selected
+    if not selected:
+        top_dl = str(data.get("download_url") or "").strip()
+        if top_dl and _is_zip_download_url(top_dl):
+            url_basename = urllib.parse.unquote(urllib.parse.urlparse(top_dl).path.rsplit("/", 1)[-1]) if "/" in top_dl else ""
+            fname = _sanitize_update_filename(url_basename, latest)
+            top_sha256 = ""
+            top_digest = str(data.get("digest") or "")
+            if top_digest.startswith("sha256:"):
+                top_sha256 = top_digest.split(":", 1)[1]
+            if not top_sha256:
+                top_sha256 = str(data.get("sha256") or "")
+            selected = {"name": fname, "url": top_dl, "type": "zip", "size": 0, "sha256": top_sha256}
+    # display_url: for UI display, can be html_url / page link (not for downloading)
+    display_url = ""
     if selected:
-        download_url = selected["url"]
-    elif parsed_assets:
-        download_url = parsed_assets[0]["url"]
+        display_url = selected["url"]
     else:
-        download_url = data.get("download_url") or data.get("html_url") or data.get("url") or ""
+        display_url = data.get("html_url") or data.get("download_url") or data.get("url") or ""
     return {
         "latest_version": latest,
-        "download_url": download_url,
+        "download_url": display_url,
         "notes": data.get("notes") or data.get("changelog") or data.get("body") or "",
         "assets": parsed_assets,
         "selected_asset": selected,
@@ -2692,16 +2727,130 @@ async def app_update_check():
 
 
 def _safe_extract_zip(zip_path: str, dest_dir: str):
-    """Extract zip with zip-slip protection."""
+    """Extract zip with comprehensive zip-slip protection."""
     dest_abs = os.path.abspath(dest_dir)
     with zipfile.ZipFile(zip_path, "r") as zf:
         for info in zf.infolist():
-            member_path = os.path.abspath(os.path.join(dest_dir, info.filename))
-            if not member_path.startswith(dest_abs + os.sep) and member_path != dest_abs:
-                raise HTTPException(status_code=400, detail=f"ZIP 包含不安全路径：{info.filename}")
-            if info.filename.startswith("/") or ".." in info.filename.split("/"):
-                raise HTTPException(status_code=400, detail=f"ZIP 包含不安全路径：{info.filename}")
+            fname = info.filename
+            # Reject absolute paths (Unix and Windows)
+            if fname.startswith("/") or fname.startswith("\\"):
+                raise HTTPException(status_code=400, detail=f"ZIP 包含绝对路径：{fname}")
+            if len(fname) >= 2 and fname[1] == ":":
+                raise HTTPException(status_code=400, detail=f"ZIP 包含 Windows 盘符路径：{fname}")
+            # Reject path traversal (forward and backslash)
+            parts = fname.replace("\\", "/").split("/")
+            if ".." in parts:
+                raise HTTPException(status_code=400, detail=f"ZIP 包含路径遍历：{fname}")
+            # Reject empty component names
+            if any(p == "" for p in parts[:-1] if info.is_dir()):
+                pass  # trailing slash is OK for dirs
+            # Final check: resolved path must be within dest_dir
+            member_path = os.path.normpath(os.path.join(dest_dir, fname.replace("\\", "/")))
+            member_abs = os.path.abspath(member_path)
+            if not (member_abs == dest_abs or member_abs.startswith(dest_abs + os.sep)):
+                raise HTTPException(status_code=400, detail=f"ZIP 解压目标越界：{fname}")
         zf.extractall(dest_dir)
+
+
+def _sha256_file(path: str) -> str:
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _sanitize_update_filename(name: str, version: str) -> str:
+    """Keep only safe characters in filename; fall back to a known-good name."""
+    safe = re.sub(r"[^a-zA-Z0-9._\- ]", "", name or "")
+    if not safe or not safe.lower().endswith(".zip"):
+        safe = f"infinite-canvas-{version}.zip"
+    return safe
+
+
+def _detect_package_root(staging_dir: str) -> str:
+    """Find the real package root inside a staging dir after extraction."""
+    # A. staging_dir itself has main.py or static/index.html
+    if os.path.isfile(os.path.join(staging_dir, "main.py")):
+        return staging_dir
+    if os.path.isfile(os.path.join(staging_dir, "static", "index.html")):
+        return staging_dir
+    # B/C. single subfolder with main.py or static/index.html
+    children = [d for d in os.listdir(staging_dir) if os.path.isdir(os.path.join(staging_dir, d))]
+    if len(children) == 1:
+        sub = os.path.join(staging_dir, children[0])
+        if os.path.isfile(os.path.join(sub, "main.py")):
+            return sub
+        if os.path.isfile(os.path.join(sub, "static", "index.html")):
+            return sub
+    # D. not found
+    return ""
+
+
+def _atomic_replace_file(src: str, dst: str):
+    """Copy src to dst atomically: write to temp in same directory, then os.replace."""
+    tmp = dst + ".__update_new__"
+    try:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        shutil.copy2(src, tmp)
+        os.replace(tmp, dst)
+    except Exception:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
+        raise
+
+
+def _atomic_replace_dir(src: str, dst: str, name: str):
+    """Replace directory dst with src using rename-based atomic swap.
+
+    1. Copy new content to dst.__update_new__ (same parent as dst)
+    2. dst → dst.__update_old__ (rename)
+    3. dst.__update_new__ → dst (rename)
+    4. On success: delete dst.__update_old__
+    On failure: restore dst.__update_old__ → dst if needed.
+    """
+    old_tag = dst + ".__update_old__"
+    dst_parent = os.path.dirname(dst)
+    new_staging = os.path.join(dst_parent, name + ".__update_new__")
+    # Pre-cleanup: remove stale residuals
+    if os.path.exists(new_staging):
+        shutil.rmtree(new_staging)
+    if os.path.exists(old_tag):
+        if not os.path.exists(dst):
+            # dst missing but old_tag exists → restore it first
+            os.rename(old_tag, dst)
+        else:
+            # both dst and old_tag exist → old is stale, remove
+            shutil.rmtree(old_tag)
+    # Step 0: copy new content to staging spot next to dst
+    shutil.copytree(src, new_staging)
+    # Step 1: rename old out of the way
+    had_old = False
+    if os.path.exists(dst):
+        os.rename(dst, old_tag)
+        had_old = True
+    # Step 2: rename new into place
+    try:
+        os.rename(new_staging, dst)
+    except Exception as exc:
+        # Restore old if we moved it
+        if had_old and os.path.exists(old_tag) and not os.path.exists(dst):
+            try:
+                os.rename(old_tag, dst)
+            except Exception:
+                logger.error("Failed to restore %s from __update_old__", dst)
+        # Cleanup new staging
+        if os.path.exists(new_staging):
+            shutil.rmtree(new_staging, ignore_errors=True)
+        raise exc
+    # Step 3: cleanup old
+    if os.path.exists(old_tag):
+        shutil.rmtree(old_tag, ignore_errors=True)
 
 
 UPDATE_PROTECT_DIRS = {"API", "data", "assets", "logs", "cache", "cloud-data", "releases", "updates", "userdata", "output"}
@@ -2730,10 +2879,16 @@ async def app_update_download():
         raise HTTPException(status_code=400, detail=f"当前已是最新版本 {APP_VERSION}")
     selected = normalized.get("selected_asset")
     if not selected or not selected.get("url"):
-        raise HTTPException(status_code=400, detail="未找到可下载的更新包")
+        raise HTTPException(status_code=400, detail="未找到可下载的 zip 更新包")
     download_url = selected["url"]
+    # Security: URL must be http/https
+    if not download_url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="下载地址必须是 http/https URL")
+    # Security: URL path must be a .zip file (not just filename check)
+    if not _is_zip_download_url(download_url):
+        raise HTTPException(status_code=400, detail="更新包下载地址不是 zip 文件")
     os.makedirs(UPDATE_DOWNLOADS_DIR, exist_ok=True)
-    filename = selected.get("name") or f"infinite-canvas-{latest}.zip"
+    filename = _sanitize_update_filename(selected.get("name"), latest)
     local_path = os.path.join(UPDATE_DOWNLOADS_DIR, filename)
     try:
         async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
@@ -2746,12 +2901,27 @@ async def app_update_download():
             os.remove(local_path)
         raise HTTPException(status_code=502, detail=f"下载更新包失败：{exc}")
     file_size = os.path.getsize(local_path)
+    actual_sha256 = _sha256_file(local_path)
+    expected_sha256 = (selected.get("sha256") or "").strip().lower()
+    sha256_verified = False
+    warning = ""
+    if expected_sha256:
+        if actual_sha256.lower() != expected_sha256:
+            os.remove(local_path)
+            raise HTTPException(status_code=400, detail=f"更新包校验失败：SHA256 不匹配（期望 {expected_sha256[:16]}...，实际 {actual_sha256[:16]}...）")
+        sha256_verified = True
+    else:
+        warning = "未提供 SHA256 校验值，请确认来源可信。"
     return {
         "ok": True,
         "version": latest,
         "filename": filename,
         "path": local_path,
         "size": file_size,
+        "sha256": actual_sha256,
+        "sha256_expected": expected_sha256 or None,
+        "sha256_verified": sha256_verified,
+        "warning": warning,
         "asset_type": selected.get("type", "unknown"),
     }
 
@@ -2767,40 +2937,26 @@ async def app_update_install():
     if not zip_files:
         raise HTTPException(status_code=400, detail="未找到已下载的更新包，请先执行「下载更新」")
     zip_path = os.path.join(UPDATE_DOWNLOADS_DIR, zip_files[0])
-    # Extract to staging
-    try:
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            top_names = set()
-            for info in zf.infolist():
-                parts = info.filename.split("/")
-                if parts and parts[0]:
-                    top_names.add(parts[0])
-            # Detect if zip has a single top-level folder
-            if len(top_names) == 1:
-                staging_name = list(top_names)[0]
-            else:
-                staging_name = "update"
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"无法读取更新包：{exc}")
-    staging_dir = os.path.join(UPDATE_STAGING_DIR, staging_name)
-    if os.path.exists(staging_dir):
-        shutil.rmtree(staging_dir)
+    # Create unique staging directory
+    install_ts = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    install_dir = os.path.join(UPDATE_STAGING_DIR, f"install-{install_ts}")
     os.makedirs(UPDATE_STAGING_DIR, exist_ok=True)
+    # Extract
     try:
-        _safe_extract_zip(zip_path, UPDATE_STAGING_DIR)
+        _safe_extract_zip(zip_path, install_dir)
     except HTTPException:
         raise
     except Exception as exc:
+        shutil.rmtree(install_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"解压更新包失败：{exc}")
-    # Validate: must contain main.py or static/index.html
-    has_main = os.path.isfile(os.path.join(staging_dir, "main.py"))
-    has_index = os.path.isfile(os.path.join(staging_dir, "static", "index.html"))
-    if not has_main and not has_index:
-        shutil.rmtree(staging_dir, ignore_errors=True)
+    # Detect package root
+    pkg_root = _detect_package_root(install_dir)
+    if not pkg_root:
+        shutil.rmtree(install_dir, ignore_errors=True)
         raise HTTPException(status_code=400, detail="更新包结构不正确，缺少 main.py 或 static/index.html")
     # Backup current files
-    timestamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
-    backup_dir = os.path.join(UPDATE_BACKUPS_DIR, f"backup-{timestamp}")
+    backup_ts = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    backup_dir = os.path.join(UPDATE_BACKUPS_DIR, f"backup-{backup_ts}")
     os.makedirs(backup_dir, exist_ok=True)
     try:
         for name in UPDATE_REPLACE_FILES:
@@ -2810,46 +2966,49 @@ async def app_update_install():
         for name in UPDATE_REPLACE_DIRS:
             src = os.path.join(BASE_DIR, name)
             if os.path.isdir(src):
-                dst = os.path.join(backup_dir, name)
-                shutil.copytree(src, dst, dirs_exist_ok=True)
+                shutil.copytree(src, os.path.join(backup_dir, name), dirs_exist_ok=True)
     except Exception as exc:
+        shutil.rmtree(install_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"备份当前版本失败：{exc}")
-    # Replace files
+    # Replace files (atomic individual files, then atomic directories)
     replaced = []
-    errors = []
     try:
         for name in UPDATE_REPLACE_FILES:
-            src = os.path.join(staging_dir, name)
+            src = os.path.join(pkg_root, name)
             dst = os.path.join(BASE_DIR, name)
             if os.path.isfile(src):
-                shutil.copy2(src, dst)
+                _atomic_replace_file(src, dst)
                 replaced.append(name)
+        # Atomic directory replacement for static/ and workflows/
         for name in UPDATE_REPLACE_DIRS:
-            src = os.path.join(staging_dir, name)
-            dst = os.path.join(BASE_DIR, name)
+            src = os.path.join(pkg_root, name)
             if os.path.isdir(src):
-                if os.path.isdir(dst):
-                    shutil.rmtree(dst)
-                shutil.copytree(src, dst)
+                dst = os.path.join(BASE_DIR, name)
+                _atomic_replace_dir(src, dst, name)
                 replaced.append(name + "/")
     except Exception as exc:
-        # Rollback
-        logger.error("Update install failed, rolling back: %s", exc)
-        for name in replaced:
-            backup_src = os.path.join(backup_dir, name.rstrip("/"))
-            dst = os.path.join(BASE_DIR, name.rstrip("/"))
+        # Rollback: restore ALL backed-up files and directories, not just 'replaced'
+        logger.error("Update install failed, rolling back: %s", exc, exc_info=True)
+        for name in UPDATE_REPLACE_FILES:
             try:
+                backup_src = os.path.join(backup_dir, name)
+                dst = os.path.join(BASE_DIR, name)
                 if os.path.isfile(backup_src):
-                    shutil.copy2(backup_src, dst)
-                elif os.path.isdir(backup_src):
-                    if os.path.isdir(dst):
-                        shutil.rmtree(dst)
-                    shutil.copytree(backup_src, dst)
-            except Exception:
-                pass
-        raise HTTPException(status_code=500, detail=f"安装更新失败，已回滚：{exc}")
+                    _atomic_replace_file(backup_src, dst)
+            except Exception as rb_exc:
+                logger.error("Rollback failed for file %s: %s", name, rb_exc)
+        for name in UPDATE_REPLACE_DIRS:
+            try:
+                backup_src = os.path.join(backup_dir, name)
+                dst = os.path.join(BASE_DIR, name)
+                if os.path.isdir(backup_src):
+                    _atomic_replace_dir(backup_src, dst, name)
+            except Exception as rb_exc:
+                logger.error("Rollback failed for dir %s: %s", name, rb_exc)
+        shutil.rmtree(install_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail=f"安装更新失败，已尝试回滚：{exc}")
     # Cleanup staging
-    shutil.rmtree(staging_dir, ignore_errors=True)
+    shutil.rmtree(install_dir, ignore_errors=True)
     return {
         "ok": True,
         "installed": True,
@@ -3270,8 +3429,26 @@ async def save_providers(payload: List[ApiProviderPayload]):
     return {"providers": [public_provider(p) for p in providers]}
 
 @app.get("/api/cloud/status")
-async def cloud_status():
+async def cloud_status(refresh: int = 0):
     session = load_cloud_session()
+    if refresh and session.get("token"):
+        base_url = str(session.get("base_url") or CLOUD_SYNC_BASE_URL).strip().rstrip("/")
+        if base_url and re.match(r"^https?://", base_url):
+            try:
+                async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                    response = await client.get(f"{base_url}/api/me", headers=cloud_auth_header(session))
+                    if response.status_code == 200:
+                        data = response.json()
+                        session["email"] = data.get("email", session.get("email", ""))
+                        session["email_verified"] = bool(data.get("email_verified"))
+                        session["display_name"] = data.get("display_name", "")
+                        session["avatar_url"] = data.get("avatar_url", "")
+                        save_cloud_session(session)
+                    elif response.status_code in (401, 403):
+                        save_cloud_session({})
+                        session = {}
+            except Exception:
+                pass  # network error: fall through to return local session
     return {
         "logged_in": bool(session.get("token")),
         "email": session.get("email", ""),

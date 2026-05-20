@@ -11,6 +11,7 @@ __pycache__/
 
 # Environment
 .env
+.env.cloud
 API/.env
 
 # Data (runtime, may contain user data)
@@ -20,6 +21,8 @@ data/canvases/
 data/api_providers.json
 data/assets.db
 data/.auth_token
+cloud-data/
+userdata/
 output/*
 !output/.gitkeep
 assets/input/*
@@ -27,6 +30,19 @@ assets/output/*
 assets/thumbs/*
 history.json
 global_config.json
+
+# Build artifacts
+build/
+dist/
+*.spec~
+
+# Releases (uploaded to GitHub Release, not tracked)
+releases/
+
+# Runtime
+logs/
+cache/
+updates/
 
 # OS
 Thumbs.db

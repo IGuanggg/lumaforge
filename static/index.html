@@ -1315,18 +1315,27 @@
         const EMAIL_VERIFY_POLL_MAX = 120; // 5s * 120 = 10 min
 
         function startEmailVerifyPoll() {
-            stopEmailVerifyPoll();
+            if(_emailVerifyPollTimer) return; // already running, don't restart
             _emailVerifyPollCount = 0;
             _emailVerifyPollTimer = setInterval(async () => {
                 _emailVerifyPollCount++;
-                if (_emailVerifyPollCount > EMAIL_VERIFY_POLL_MAX) { stopEmailVerifyPoll(); return; }
+                if (_emailVerifyPollCount > EMAIL_VERIFY_POLL_MAX) {
+                    stopEmailVerifyPoll();
+                    setAccountStatus('暂未检测到邮箱验证，可稍后刷新资料或重新发送验证邮件。');
+                    return;
+                }
                 if (!accountState.logged_in || accountState.email_verified) { stopEmailVerifyPoll(); return; }
                 try {
-                    const data = await fetch('/api/cloud/profile').then(r => r.ok ? r.json() : null);
-                    if (data && data.email_verified) {
-                        renderAccountState({ logged_in:true, ...data });
-                        stopEmailVerifyPoll();
-                        setAccountStatus('邮箱已验证');
+                    const data = await fetch('/api/cloud/status?refresh=1').then(r => r.ok ? r.json() : null);
+                    if (data) {
+                        renderAccountState(data);
+                        if (!data.logged_in) {
+                            stopEmailVerifyPoll();
+                            setAccountStatus('登录已失效，请重新登录。');
+                        } else if (data.email_verified) {
+                            stopEmailVerifyPoll();
+                            setAccountStatus('邮箱已验证');
+                        }
                     }
                 } catch(e) { /* ignore transient errors */ }
             }, EMAIL_VERIFY_POLL_INTERVAL);
@@ -1337,16 +1346,24 @@
         }
 
         // Refresh email_verified when user returns to tab
+        async function refreshAccountOnFocus() {
+            if (!accountState.logged_in || accountState.email_verified) return;
+            try {
+                const data = await fetch('/api/cloud/status?refresh=1').then(r => r.ok ? r.json() : null);
+                if (data) {
+                    renderAccountState(data);
+                    if (!data.logged_in) {
+                        setAccountStatus('登录已失效，请重新登录。');
+                    } else if (data.email_verified) {
+                        setAccountStatus('邮箱已验证');
+                    }
+                }
+            } catch(e) { /* ignore */ }
+        }
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && accountState.logged_in && !accountState.email_verified) {
-                accountRefreshProfile({ quiet:true });
-            }
+            if (document.visibilityState === 'visible') refreshAccountOnFocus();
         });
-        window.addEventListener('focus', () => {
-            if (accountState.logged_in && !accountState.email_verified) {
-                accountRefreshProfile({ quiet:true });
-            }
-        });
+        window.addEventListener('focus', () => { refreshAccountOnFocus(); });
 
         function accountJsonOrError(res, fallback) {
             return res.json().catch(() => ({})).then(data => {
@@ -1530,6 +1547,12 @@
                 selectAccountTab('sync');
                 setAccountStatus('未登录');
             }
+            // Auto-start/stop email verify polling
+            if(accountState.logged_in && !accountState.email_verified) {
+                startEmailVerifyPoll();
+            } else {
+                stopEmailVerifyPoll();
+            }
         }
 
         async function loadAccountState() {
@@ -1554,6 +1577,7 @@
         }
 
         function closeAccountCenter() {
+            stopEmailVerifyPoll();
             const overlay = document.getElementById('account-overlay');
             if(overlay) {
                 overlay.classList.remove('open');
