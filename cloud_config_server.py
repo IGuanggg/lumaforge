@@ -35,7 +35,7 @@ AVATAR_TYPES = {
 TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_TOKEN_TTL_SECONDS", str(30 * 24 * 60 * 60)))
 RESET_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_RESET_TOKEN_TTL_SECONDS", str(30 * 60)))
 EMAIL_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_EMAIL_TOKEN_TTL_SECONDS", str(24 * 60 * 60)))
-CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "1.0.6").strip() or "1.0.6"
+CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "1.0.7").strip() or "1.0.7"
 CLOUD_PUBLIC_URL = os.getenv("CLOUD_PUBLIC_URL", "").strip().rstrip("/")
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
@@ -1161,7 +1161,7 @@ def pill(label: str, tone: str = "") -> str:
 def render_dashboard_html() -> str:
     counts = dashboard_counts()
     status = public_config_status()
-    smtp_tone = "ok" if SMTP_HOST else "warn"
+    smtp_tone = "ok" if status["smtp_configured"] else "warn"
     url_tone = "ok" if CLOUD_PUBLIC_URL else "warn"
     dev_tone = "warn" if EMAIL_DEV_MODE else "ok"
     generated_at = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
@@ -1626,7 +1626,7 @@ def render_admin_console_html(admin: dict) -> str:
     pre{{max-height:360px;overflow:auto;margin:0;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--hover);color:var(--text);font-family:Consolas,monospace;font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}}
     .split{{display:grid;grid-template-columns:minmax(260px,.8fr) 1fr;gap:14px}}
     .muted{{color:var(--muted)}}
-    .actions{{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}}button{{height:38px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--text);padding:0 14px;font-weight:850;cursor:pointer;transition:transform .18s ease,background .18s ease,border-color .18s ease}}button:hover{{background:var(--hover);transform:translateY(-1px)}}button.primary{{background:var(--text);color:var(--bg);border-color:var(--text)}}
+    .actions{{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap}}button{{height:38px;border:1px solid var(--border);border-radius:8px;background:var(--panel);color:var(--text);padding:0 14px;font-weight:850;cursor:pointer;transition:transform .18s ease,background .18s ease,border-color .18s ease}}button:hover{{background:var(--hover);transform:translateY(-1px)}}button.primary{{background:var(--text);color:var(--bg);border-color:var(--text)}}button.danger{{border-color:rgba(185,28,28,.25);color:var(--danger);background:rgba(185,28,28,.06)}}
     .notice{{margin-bottom:14px;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--hover);color:var(--warn);font-size:13px;font-weight:850}}
     .status{{min-height:20px;margin-top:12px;color:var(--muted);font-size:12px;font-weight:800}}
     @media(max-width:900px){{.content{{padding:18px}}.metrics,.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}.row{{grid-template-columns:64px 1fr}}.row span:last-child{{grid-column:2;color:var(--muted)}}}}
@@ -1736,7 +1736,7 @@ def render_admin_console_html(admin: dict) -> str:
               <div class="form" style="margin-top:14px">
                 <label class="full">重置用户密码<input id="userResetPassword" type="password" autocomplete="new-password" placeholder="输入新密码，不能查看原密码"></label>
               </div>
-              <div class="actions"><button class="primary" onclick="resetSelectedUserPassword()">重置密码</button></div>
+              <div class="actions"><button class="primary" onclick="resetSelectedUserPassword()">重置密码</button><button class="danger" onclick="deleteSelectedUser()">删除账号</button></div>
               <div id="userPasswordStatus" class="status">用户密码为哈希存储，后台不能查看明文。</div>
               <h2 class="section-title" style="margin-top:18px">云端配置</h2>
               <pre id="userConfigJson">暂无配置</pre>
@@ -1872,6 +1872,7 @@ def render_admin_console_html(admin: dict) -> str:
       backupStatus.textContent=preset.hint;
     }}
     let selectedUserId=null;
+    let selectedUserEmail='';
     async function loadUsers(){{
       const list=document.getElementById('usersList');
       const status=document.getElementById('usersStatus');
@@ -1899,6 +1900,7 @@ def render_admin_console_html(admin: dict) -> str:
     }}
     async function openUserDetail(id){{
       selectedUserId=id;
+      selectedUserEmail='';
       const panel=document.getElementById('userDetailPanel');
       const meta=document.getElementById('userMeta');
       const config=document.getElementById('userConfigJson');
@@ -1912,6 +1914,7 @@ def render_admin_console_html(admin: dict) -> str:
         const data=await res.json().catch(()=>({{}}));
         if(!res.ok) throw new Error(data.detail||'读取用户详情失败');
         const user=data.user;
+        selectedUserEmail=user.email||'';
         meta.innerHTML=`
           <div class="row"><span>ID</span><code>${{user.id}}</code><span></span></div>
           <div class="row"><span>邮箱</span><code>${{escapeText(user.email)}}</code><span>${{user.email_verified?'已验证':'未验证'}}</span></div>
@@ -1939,6 +1942,23 @@ def render_admin_console_html(admin: dict) -> str:
         if(!res.ok) throw new Error(data.detail||'重置失败');
         input.value='';
         status.textContent='用户密码已重置，旧登录状态已失效。';
+      }}catch(e){{status.textContent=e.message||String(e);}}
+    }}
+    async function deleteSelectedUser(){{
+      const status=document.getElementById('userPasswordStatus');
+      if(!selectedUserId){{status.textContent='请先选择用户';return;}}
+      const label=selectedUserEmail?` #${{selectedUserId}}（${{selectedUserEmail}}）`:` #${{selectedUserId}}`;
+      if(!confirm(`确定删除用户${{label}}？这会清除该用户的登录状态、验证码、云配置和素材记录。`)) return;
+      status.textContent='正在删除用户...';
+      try{{
+        const res=await fetch(`/admin/users/${{selectedUserId}}?confirm=true`,{{method:'DELETE',headers:csrfHeaders()}});
+        const data=await res.json().catch(()=>({{}}));
+        if(!res.ok) throw new Error(data.detail||'删除失败');
+        status.textContent=`用户已删除，清理媒体记录 ${{data.deleted_media||0}} 条。`;
+        selectedUserId=null;
+        selectedUserEmail='';
+        document.getElementById('userDetailPanel').hidden=true;
+        await loadUsers();
       }}catch(e){{status.textContent=e.message||String(e);}}
     }}
     async function saveAdmin(){{
@@ -2473,6 +2493,51 @@ def admin_reset_user_password(user_id: int, payload: AdminUserPasswordPayload, r
         )
         conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
     return {"ok": True}
+
+
+@app.delete("/admin/users/{user_id}")
+def admin_delete_user(user_id: int, request: Request, confirm: bool = Query(default=False)):
+    require_admin(request, csrf=True)
+    if not confirm:
+        raise HTTPException(status_code=400, detail="confirm required")
+    with db() as conn:
+        user = conn.execute("SELECT id, email, avatar_url FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        media_rows = conn.execute("SELECT object_key FROM user_media WHERE user_id = ?", (user_id,)).fetchall()
+
+    deleted_remote = 0
+    if media_rows:
+        try:
+            settings = require_backup_settings()
+            client = backup_s3_client(settings)
+            for row in media_rows:
+                key = row["object_key"]
+                if not key:
+                    continue
+                try:
+                    client.delete_object(Bucket=settings["bucket"], Key=key)
+                    deleted_remote += 1
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    remove_owned_avatar(user_id, user["avatar_url"] or "")
+    with db() as conn:
+        conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM email_verifications WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM password_resets WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM user_configs WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM user_media WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    return {
+        "ok": True,
+        "deleted_user_id": user_id,
+        "deleted_email": user["email"],
+        "deleted_media": len(media_rows),
+        "deleted_remote": deleted_remote,
+    }
 
 
 @app.post("/admin/password")
