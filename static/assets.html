@@ -157,15 +157,20 @@
                     <div class="sync-grid" aria-live="polite">
                         <div class="sync-stat"><span>本地素材</span><b id="syncLocalCount">-</b></div>
                         <div class="sync-stat"><span>本地容量</span><b id="syncLocalSize">-</b></div>
+                        <div class="sync-stat"><span>已同步</span><b id="syncSyncedCount">-</b></div>
+                        <div class="sync-stat"><span>待同步</span><b id="syncPendingCount">-</b></div>
+                        <div class="sync-stat"><span>同步失败</span><b id="syncFailedCount">-</b></div>
+                        <div class="sync-stat"><span>最后同步</span><b id="syncLastTime">-</b></div>
                         <div class="sync-stat"><span>云端素材</span><b id="syncRemoteCount">-</b></div>
                         <div class="sync-stat"><span>云端容量</span><b id="syncRemoteSize">-</b></div>
                     </div>
                     <div class="mini-actions">
-                        <button class="mini" id="syncMissingBtn" type="button"><i data-lucide="cloud-upload" size="13"></i><span>立即同步</span></button>
-                        <button class="mini" id="syncRetryBtn" type="button"><i data-lucide="rotate-ccw" size="13"></i><span>重试失败</span></button>
+                        <button class="mini" id="syncNowBtn" type="button"><i data-lucide="cloud-upload" size="13"></i><span>立刻同步</span></button>
+                        <button class="mini" id="restoreMissingBtn" type="button"><i data-lucide="cloud-download" size="13"></i><span>恢复缺失</span></button>
                         <button class="mini" id="syncPruneBtn" type="button"><i data-lucide="cloud-off" size="13"></i><span>清理云端</span></button>
                     </div>
-                    <div class="sync-note">新生成、上传和扫描到的图片/视频会自动同步；按钮用于手动补偿和清理云端孤儿文件。</div>
+                    <div id="cloudMediaLastResult" class="sync-note">自动同步会在素材生成、上传、扫描后触发，并定时补偿未同步文件。</div>
+                    <div class="sync-note">立刻同步会把本地素材补传到云端；恢复缺失会从云端补回本地文件；清理云端会删除云端孤儿文件。主动删除过的素材不会被自动恢复。</div>
                 </section>
 
                 <section class="panel">
@@ -244,6 +249,14 @@
             const units = ['B', 'KB', 'MB', 'GB', 'TB'];
             const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
             return `${(value / Math.pow(1024, index)).toFixed(index ? 1 : 0)} ${units[index]}`;
+        }
+        function formatTime(value){
+            const n = Number(value || 0);
+            if(!n) return '-';
+            const ms = n > 100000000000 ? n : n * 1000;
+            const d = new Date(ms);
+            if(Number.isNaN(d.getTime())) return '-';
+            return d.toLocaleTimeString();
         }
         function cloudBadge(asset){
             if(asset.cloud_error) return '<span class="badge cloud-fail">同步失败</span>';
@@ -421,12 +434,13 @@
             showToast('正在上传素材...');
             const data = await fetch('/api/assets/upload', { method:'POST', body:form }).then(jsonOrThrow);
             await loadAssets();
+            await loadCloudMediaStatus();
             showToast(`已上传 ${data.items?.length || list.length} 个素材`);
         }
 
         function setSyncBusy(busy){
             state.syncBusy = busy;
-            ['syncMissingBtn', 'syncRetryBtn', 'syncPruneBtn'].forEach(id => {
+            ['syncNowBtn', 'restoreMissingBtn', 'syncPruneBtn'].forEach(id => {
                 const btn = $(id);
                 if(btn) btn.disabled = busy;
             });
@@ -435,14 +449,24 @@
         function renderCloudMediaStatus(data){
             const local = data?.local || {};
             const remote = data?.remote || {};
+            const sync = data?.sync || {};
+            const last = sync.last_result || {};
             const remoteCount = remote.count ?? remote.total ?? 0;
             $('syncLocalCount').textContent = String(local.count || 0);
             $('syncLocalSize').textContent = formatBytes(local.size_bytes || 0);
+            $('syncSyncedCount').textContent = String(local.synced || 0);
+            $('syncPendingCount').textContent = String(local.pending || 0);
+            $('syncFailedCount').textContent = String(local.failed || 0);
+            $('syncLastTime').textContent = formatTime(local.last_synced_at || last.finished_at || 0);
             $('syncRemoteCount').textContent = data?.logged_in ? String(remoteCount) : '-';
             $('syncRemoteSize').textContent = data?.logged_in ? formatBytes(remote.size_bytes || 0) : '-';
             $('cloudMediaStatus').textContent = data?.logged_in
-                ? `云端已连接，已同步 ${remoteCount} 个文件。`
+                ? `云端已连接，已同步 ${local.synced || 0} / ${local.count || 0} 个本地文件。${sync.running ? ' 后台同步中。' : ''}`
                 : '登录云端账户后可以同步素材到 R2。';
+            const finished = last.finished_at ? new Date(last.finished_at * 1000).toLocaleString() : '';
+            $('cloudMediaLastResult').textContent = finished
+                ? `最近同步：${finished}，上传 ${last.uploaded || 0}，跳过 ${last.skipped || 0}，失败 ${last.failed_count || 0}。`
+                : '自动同步会在素材生成、上传、扫描后触发，并每 10 分钟补偿未同步或失败文件。';
         }
 
         async function loadCloudMediaStatus(){
@@ -474,6 +498,26 @@
                 await loadCloudMediaStatus();
                 const failed = data.failed?.length || 0;
                 showToast(`同步完成：上传 ${data.uploaded || 0}，跳过 ${data.skipped || 0}，失败 ${failed}`);
+            } finally {
+                setSyncBusy(false);
+            }
+        }
+
+        async function restoreCloudMedia(){
+            if(state.syncBusy) return;
+            setSyncBusy(true);
+            showToast('正在从云端恢复缺失素材...');
+            try {
+                const data = await fetch('/api/cloud/media/restore', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({ missing_only:true, limit:5000 })
+                }).then(jsonOrThrow);
+                await loadAssets();
+                await loadCloudMediaStatus();
+                const failed = data.failed_count || 0;
+                const ignored = data.skipped_deleted || 0;
+                showToast(`恢复完成：新增 ${data.restored || 0}，跳过 ${data.skipped || 0}，已删除忽略 ${ignored}，失败 ${failed}`);
             } finally {
                 setSyncBusy(false);
             }
@@ -578,14 +622,18 @@
         $('rescanBtn').addEventListener('click', async () => {
             const data = await fetch('/api/assets/rescan', { method:'POST' }).then(jsonOrThrow);
             await loadAssets();
+            await loadCloudMediaStatus();
             showToast(`已扫描 ${data.indexed || 0} 个素材`);
         });
         $('newPromptFocusBtn').addEventListener('click', () => $('promptTitle').focus());
         $('savePromptBtn').addEventListener('click', () => savePrompt().catch(err => showToast(err.message)));
         $('clearPromptBtn').addEventListener('click', clearPromptForm);
-        $('syncMissingBtn').addEventListener('click', () => runCloudMediaSync({ missing_only:true, retry_failed:false }).catch(err => showToast(err.message)));
-        $('syncRetryBtn').addEventListener('click', () => runCloudMediaSync({ missing_only:true, retry_failed:true }).catch(err => showToast(err.message)));
-        $('syncPruneBtn').addEventListener('click', () => runCloudMediaSync({ missing_only:true, retry_failed:false, delete_remote_missing:true }).catch(err => showToast(err.message)));
+        $('syncNowBtn').addEventListener('click', () => runCloudMediaSync({ missing_only:true, retry_failed:true }).catch(err => showToast(err.message)));
+        $('restoreMissingBtn').addEventListener('click', () => restoreCloudMedia().catch(err => showToast(err.message)));
+        $('syncPruneBtn').addEventListener('click', () => {
+            if(!confirm('清理云端会删除云端存在、但本地素材库没有记录的孤儿文件。确定继续吗？')) return;
+            runCloudMediaSync({ missing_only:true, retry_failed:false, delete_remote_missing:true }).catch(err => showToast(err.message));
+        });
         $('contextMenu').addEventListener('click', event => {
             const action = event.target.closest('button')?.dataset.action;
             handleAssetAction(action, state.activeAsset);
@@ -602,6 +650,7 @@
         });
 
         Promise.all([loadAssets(), loadPrompts(), loadCloudMediaStatus()]).catch(err => showToast(err.message));
+        setInterval(() => loadCloudMediaStatus().catch(() => {}), 30000);
         lucide.createIcons();
     </script>
 </body>

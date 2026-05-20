@@ -290,6 +290,8 @@
                             <div class="kv"><span>当前版本</span><span id="version-text">-</span></div>
                             <div class="kv"><span>运行模式</span><span id="mode-text">-</span></div>
                             <div class="kv"><span>云端地址</span><span id="cloud-text">-</span></div>
+                            <div class="kv"><span>最近升级</span><span id="update-last-text">-</span></div>
+                            <div class="kv"><span>升级备份</span><span id="update-backup-text">-</span></div>
                         </div>
                         <label class="setting-field">
                             <span class="setting-label">更新检查地址</span>
@@ -301,6 +303,9 @@
                             </button>
                             <button class="action-btn primary" id="check-update-btn" type="button">
                                 <i data-lucide="refresh-cw" class="w-4 h-4"></i><span>检查更新</span>
+                            </button>
+                            <button class="action-btn primary" id="auto-update-btn" type="button">
+                                <i data-lucide="sparkles" class="w-4 h-4"></i><span>自动升级</span>
                             </button>
                         </div>
                         <div class="update-result" id="update-result"></div>
@@ -371,6 +376,15 @@
             return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
         }
 
+        function formatTime(value) {
+            const n = Number(value || 0);
+            if(!n) return '暂无记录';
+            const ms = n > 100000000000 ? n : n * 1000;
+            const d = new Date(ms);
+            if(Number.isNaN(d.getTime())) return '暂无记录';
+            return d.toLocaleString();
+        }
+
         function renderInfo(info) {
             appInfo = info || {};
             const paths = appInfo.paths || {};
@@ -378,6 +392,11 @@
             document.getElementById('version-text').textContent = appInfo.version || '-';
             document.getElementById('mode-text').textContent = appInfo.desktop ? '桌面端' : '浏览器端';
             document.getElementById('cloud-text').textContent = appInfo.cloud_url || '-';
+            const updateState = appInfo.update_state || {};
+            const lastUpdate = document.getElementById('update-last-text');
+            const backupText = document.getElementById('update-backup-text');
+            if(lastUpdate) lastUpdate.textContent = updateState.installed_at ? `${formatTime(updateState.installed_at)} → ${updateState.target_version || '-'}` : '暂无记录';
+            if(backupText) backupText.textContent = updateState.backup_dir || '-';
             const updateInput = document.getElementById('update-url-input');
             if(updateInput) updateInput.value = appInfo.update_check_url || '';
             document.getElementById('path-list').innerHTML = PATH_ROWS.map(row => {
@@ -523,6 +542,7 @@
             try {
                 const data = await fetch('/api/app/update-install', { method:'POST' }).then(jsonOrThrow);
                 setStatus('update-status', `安装完成，已替换 ${data.replaced?.length || 0} 项。备份：${data.backup_dir || '-'}`, 'ok');
+                await loadInfo();
                 const restartBtn = document.getElementById('restart-app-btn');
                 if(restartBtn) restartBtn.style.display = '';
                 if(instBtn) instBtn.style.display = 'none';
@@ -549,6 +569,31 @@
                 setStatus('update-status', e.message || String(e), 'error');
             } finally {
                 if(restartBtn) restartBtn.disabled = false;
+            }
+        }
+
+        async function autoUpdate() {
+            if(!confirm('自动升级会下载最新 zip、备份当前版本并替换程序文件；data、assets、API、logs、cache 等数据目录不会被覆盖。确定继续吗？')) return;
+            const btn = document.getElementById('auto-update-btn');
+            if(btn) btn.disabled = true;
+            setStatus('update-status', '正在自动升级：检查版本、下载更新包、安装替换...');
+            try {
+                const data = await fetch('/api/app/update-auto', { method:'POST' }).then(jsonOrThrow);
+                if(data.updated) {
+                    const replaced = data.install?.replaced?.length || 0;
+                    setStatus('update-status', `自动升级完成，已替换 ${replaced} 项。请重启应用后生效。`, 'ok');
+                    await loadInfo();
+                    const restartBtn = document.getElementById('restart-app-btn');
+                    if(restartBtn) restartBtn.style.display = '';
+                    const actions = document.getElementById('update-actions');
+                    if(actions) actions.style.display = '';
+                } else {
+                    setStatus('update-status', data.message || '当前已是最新版本。', 'ok');
+                }
+            } catch(e) {
+                setStatus('update-status', e.message || String(e), 'error');
+            } finally {
+                if(btn) btn.disabled = false;
             }
         }
 
@@ -595,6 +640,7 @@
         });
         document.getElementById('save-update-url-btn').addEventListener('click', saveUpdateSettings);
         document.getElementById('check-update-btn').addEventListener('click', checkUpdate);
+        document.getElementById('auto-update-btn').addEventListener('click', autoUpdate);
         document.getElementById('download-update-btn').addEventListener('click', downloadUpdate);
         document.getElementById('install-update-btn').addEventListener('click', installUpdate);
         document.getElementById('restart-app-btn').addEventListener('click', restartApp);

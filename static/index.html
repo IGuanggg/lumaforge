@@ -789,10 +789,58 @@
 
         .account-input:focus { border-color:var(--text); }
 
-        .account-input[type="file"] {
-            height:auto;
-            min-height:38px;
-            padding:8px 12px;
+        .account-file-row {
+            min-height:42px;
+            border:1px solid var(--border);
+            border-radius:14px;
+            background:var(--bg);
+            padding:5px;
+            display:flex;
+            align-items:center;
+            gap:10px;
+        }
+
+        .account-file-input {
+            position:absolute;
+            width:1px;
+            height:1px;
+            opacity:0;
+            pointer-events:none;
+        }
+
+        .account-file-btn {
+            height:32px;
+            min-width:126px;
+            border-radius:10px;
+            border:1px solid var(--text);
+            background:var(--text);
+            color:#fff;
+            padding:0 12px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:7px;
+            font-size:12px;
+            font-weight:900;
+            cursor:pointer;
+            white-space:nowrap;
+        }
+
+        .account-file-btn svg,
+        .account-file-btn span {
+            color:#fff;
+            flex:0 0 auto;
+        }
+
+        .account-file-name {
+            min-width:0;
+            flex:1;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+            color:var(--muted);
+            font-size:12px;
+            font-weight:800;
         }
 
         .account-avatar-help {
@@ -891,6 +939,60 @@
             background:rgba(16,185,129,.12);
         }
 
+        .account-sync-card {
+            display:none;
+            flex-direction:column;
+            gap:9px;
+            padding:13px 14px;
+            border:1px solid rgba(16,185,129,.24);
+            border-radius:14px;
+            background:rgba(16,185,129,.08);
+        }
+
+        .account-sync-card.show { display:flex; }
+
+        .account-sync-head {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+        }
+
+        .account-sync-title {
+            color:var(--text);
+            font-size:13px;
+            font-weight:950;
+        }
+
+        .account-sync-pill {
+            flex:0 0 auto;
+            border:1px solid rgba(4,120,87,.22);
+            border-radius:999px;
+            padding:3px 8px;
+            color:#047857;
+            background:rgba(16,185,129,.12);
+            font-size:10px;
+            font-weight:950;
+        }
+
+        .account-sync-meta {
+            display:grid;
+            grid-template-columns:repeat(2, minmax(0, 1fr));
+            gap:8px;
+        }
+
+        .account-sync-meta span {
+            min-width:0;
+            border:1px solid var(--border);
+            border-radius:12px;
+            background:var(--sidebar-bg);
+            color:var(--muted);
+            padding:9px 10px;
+            font-size:11px;
+            font-weight:850;
+            line-height:1.45;
+        }
+
         .account-note,
         .account-status {
             color:var(--muted);
@@ -924,6 +1026,7 @@
             .account-tabs { flex-direction:row; overflow:auto; }
             .account-tab { flex:0 0 auto; }
             .account-row { grid-template-columns:1fr; }
+            .account-sync-meta { grid-template-columns:1fr; }
         }
     </style>
 </head>
@@ -1226,6 +1329,16 @@
                                     <input id="account-include-secrets" type="checkbox" autocomplete="off" checked disabled>
                                     <span>自动同步包含 API Key（请确认云端部署在 HTTPS 后面）</span>
                                 </label>
+                                <div id="account-config-sync-card" class="account-sync-card">
+                                    <div class="account-sync-head">
+                                        <div class="account-sync-title">配置自动同步</div>
+                                        <span class="account-sync-pill">已开启</span>
+                                    </div>
+                                    <div class="account-sync-meta">
+                                        <span id="account-config-sync-mode">保存 API、模型或 ComfyUI 设置后会自动同步。</span>
+                                        <span id="account-config-sync-time">最近配置同步：暂无记录</span>
+                                    </div>
+                                </div>
                             </div>
                             <div id="account-sync-status" class="account-status">未连接云端</div>
                             <div class="account-note account-authed">配置会自动同步 API 平台、模型列表、ComfyUI 地址和 API Key；素材库图片/视频会按缺失文件增量同步到云端对象存储。</div>
@@ -1243,8 +1356,19 @@
                                 </label>
                                 <label class="account-field full">
                                     <span class="account-label">头像文件</span>
-                                    <input id="account-avatar-file" class="account-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
-                                    <input id="account-avatar-url" type="hidden">
+                                    <div class="account-file-row">
+                                        <button class="account-file-btn" type="button" onclick="document.getElementById('account-avatar-file')?.click()">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                                <path d="M17 8l-5-5-5 5"></path>
+                                                <path d="M12 3v12"></path>
+                                            </svg>
+                                            <span>选择头像</span>
+                                        </button>
+                                        <span id="account-avatar-file-name" class="account-file-name">未选择文件</span>
+                                        <input id="account-avatar-file" class="account-file-input" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+                                        <input id="account-avatar-url" type="hidden">
+                                    </div>
                                     <span id="account-avatar-help" class="account-avatar-help">支持 JPG、PNG、WebP、GIF，最大 5MB。保存资料时会上传到云端账户。</span>
                                 </label>
                             </div>
@@ -1399,6 +1523,29 @@
             el.innerHTML = strong ? `<strong>${escapeAccountHtml(text)}</strong>` : escapeAccountHtml(text);
         }
 
+        function setAccountAvatarFileName(text) {
+            const el = document.getElementById('account-avatar-file-name');
+            if(el) el.textContent = text || '未选择文件';
+        }
+
+        function accountFormatSyncTime(ts) {
+            const value = Number(ts || 0);
+            if(!value) return '暂无记录';
+            const ms = value > 100000000000 ? value : value * 1000;
+            const date = new Date(ms);
+            if(Number.isNaN(date.getTime())) return '暂无记录';
+            return date.toLocaleString();
+        }
+
+        function updateAccountConfigSyncCard(ts, modeText) {
+            const card = document.getElementById('account-config-sync-card');
+            if(card) card.classList.toggle('show', !!accountState.logged_in);
+            const mode = document.getElementById('account-config-sync-mode');
+            const time = document.getElementById('account-config-sync-time');
+            if(mode) mode.textContent = modeText || '自动同步已开启：保存 API、模型、ComfyUI 设置后会自动上传。';
+            if(time) time.textContent = `最近配置同步：${accountFormatSyncTime(ts || accountState.updated_at)}`;
+        }
+
         function setAccountEmailStatus(text) {
             const el = document.getElementById('account-email-status');
             if(el) el.textContent = text;
@@ -1542,6 +1689,7 @@
             if(customCloudUrl && accountState.custom_cloud) customCloudUrl.value = accountState.base_url || '';
             toggleAccountCustomCloud(!!accountState.custom_cloud);
             syncAccountEmailVerifyCard();
+            updateAccountConfigSyncCard(accountState.updated_at);
             if(accountState.logged_in) setAccountStatus(`已登录 ${accountState.email || ''}`);
             else {
                 selectAccountTab('sync');
@@ -1610,6 +1758,7 @@
                 if(pwd && !document.getElementById('account-remember-password')?.checked) pwd.value = '';
                 renderAccountState(data);
                 await accountRefreshProfile({ quiet:true });
+                notifyConfigChanged();
                 // After registration, if email not verified, start polling
                 if (isRegister && accountState.logged_in && !accountState.email_verified) {
                     startEmailVerifyPoll();
@@ -1686,8 +1835,24 @@
             stopEmailVerifyPoll();
             try {
                 await fetch('/api/cloud/logout', { method:'POST' }).then(r => accountJsonOrError(r, '退出失败'));
-                renderAccountState({ logged_in:false, token:'', display_name:'', avatar_url:'', custom_cloud:false });
-                applyRememberedAccount();
+                localStorage.removeItem(ACCOUNT_REMEMBER_KEY);
+                accountState = {};
+                const fields = accountRememberFields();
+                if(fields.email) fields.email.value = '';
+                if(fields.password) fields.password.value = '';
+                if(fields.remember) fields.remember.checked = false;
+                renderAccountState({
+                    logged_in:false,
+                    token:'',
+                    email:'',
+                    email_verified:false,
+                    display_name:'',
+                    avatar_url:'',
+                    custom_cloud:false,
+                    updated_at:0
+                });
+                notifyConfigChanged();
+                closeAccountCenter();
             } catch(e) {
                 setAccountStatus(e.message || String(e));
             }
@@ -1766,8 +1931,12 @@
                     headers:{'Content-Type':'application/json'},
                     body:JSON.stringify({ include_secrets:include })
                 }).then(r => accountJsonOrError(r, '上传失败'));
-                setAccountStatus(`上传成功 · ${new Date(data.cloud?.updated_at || Date.now()).toLocaleString()}`);
-                loadAccountState();
+                const syncedAt = data.cloud?.updated_at || Date.now();
+                accountState.updated_at = syncedAt;
+                updateAccountConfigSyncCard(syncedAt, '刚刚手动同步完成；之后保存设置仍会自动同步。');
+                await loadAccountState();
+                updateAccountConfigSyncCard(syncedAt, '刚刚手动同步完成；之后保存设置仍会自动同步。');
+                setAccountStatus(`同步成功 · ${accountFormatSyncTime(syncedAt)}`);
             } catch(e) {
                 setAccountStatus(e.message || String(e));
             }
@@ -1777,8 +1946,10 @@
             if(!confirm('下载云端配置会覆盖本机 API 平台、模型列表和 ComfyUI 地址。确定继续吗？')) return;
             setAccountStatus('正在下载云端配置...');
             try {
-                await fetch('/api/cloud/download', { method:'POST' }).then(r => accountJsonOrError(r, '下载失败'));
-                setAccountStatus('下载成功 · 已应用到本机');
+                const data = await fetch('/api/cloud/download', { method:'POST' }).then(r => accountJsonOrError(r, '下载失败'));
+                const syncedAt = data.cloud_updated_at || accountState.updated_at || Date.now();
+                updateAccountConfigSyncCard(syncedAt, '已下载云端配置到本机；之后保存设置会继续自动同步。');
+                setAccountStatus(`下载成功 · 云端配置时间 ${accountFormatSyncTime(syncedAt)}`);
                 notifyConfigChanged();
             } catch(e) {
                 setAccountStatus(e.message || String(e));
@@ -1799,6 +1970,8 @@
             const avatarFileInput = document.getElementById('account-avatar-file');
             const avatarFile = avatarFileInput?.files?.[0] || null;
             if(avatarFile && avatarFile.size > ACCOUNT_AVATAR_MAX_BYTES) {
+                if(avatarFileInput) avatarFileInput.value = '';
+                setAccountAvatarFileName();
                 setAccountStatus('头像文件不能超过 5MB');
                 return;
             }
@@ -1826,6 +1999,7 @@
                 }).then(r => accountJsonOrError(r, '保存资料失败'));
                 renderAccountState({ logged_in:true, ...data });
                 if(avatarFileInput) avatarFileInput.value = '';
+                setAccountAvatarFileName();
                 setAccountStatus('资料已保存');
             } catch(e) {
                 setAccountStatus(e.message || String(e));
@@ -2080,10 +2254,17 @@
             if(avatarFile) {
                 avatarFile.addEventListener('change', () => {
                     const file = avatarFile.files?.[0];
+                    if(!file) {
+                        setAccountAvatarFileName();
+                        return;
+                    }
                     if(file && file.size > ACCOUNT_AVATAR_MAX_BYTES) {
                         avatarFile.value = '';
+                        setAccountAvatarFileName();
                         setAccountStatus('头像文件不能超过 5MB');
+                        return;
                     }
+                    setAccountAvatarFileName(file.name);
                 });
             }
         });

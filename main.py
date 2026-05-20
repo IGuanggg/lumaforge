@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger("infinite_canvas")
-APP_VERSION = os.getenv("APP_VERSION", "1.0.5")
+APP_VERSION = os.getenv("APP_VERSION", "1.0.6")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/Infinite-Canvas/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
@@ -170,19 +170,28 @@ async def _cleanup_canvas_tasks():
 
 @asynccontextmanager
 async def lifespan(app):
-    global GLOBAL_HTTP_CLIENT
+    global GLOBAL_HTTP_CLIENT, CLOUD_MEDIA_PERIODIC_TASK
     GLOBAL_HTTP_CLIENT = httpx.AsyncClient(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True)
     cleanup_task = asyncio.create_task(_cleanup_canvas_tasks())
+    CLOUD_MEDIA_PERIODIC_TASK = asyncio.create_task(_cloud_media_periodic_sync())
+    schedule_cloud_media_sync()
     logger.info("=" * 50)
     logger.info("  Remote access token: %s", AUTH_TOKEN)
     logger.info("  (localhost access is unrestricted)")
     logger.info("=" * 50)
     yield
     cleanup_task.cancel()
+    if CLOUD_MEDIA_PERIODIC_TASK:
+        CLOUD_MEDIA_PERIODIC_TASK.cancel()
     try:
         await cleanup_task
     except asyncio.CancelledError:
         pass
+    if CLOUD_MEDIA_PERIODIC_TASK:
+        try:
+            await CLOUD_MEDIA_PERIODIC_TASK
+        except asyncio.CancelledError:
+            pass
     for ws in list(manager.active_connections):
         try:
             await ws.close()
@@ -329,6 +338,7 @@ UPDATE_DIR = os.path.join(RUNTIME_DIR, "updates")
 UPDATE_DOWNLOADS_DIR = os.path.join(UPDATE_DIR, "downloads")
 UPDATE_STAGING_DIR = os.path.join(UPDATE_DIR, "staging")
 UPDATE_BACKUPS_DIR = os.path.join(UPDATE_DIR, "backups")
+UPDATE_STATE_FILE = os.path.join(DATA_DIR, "update_state.json")
 HISTORY_FILE = os.path.join(RUNTIME_DIR, "history.json")
 DATA_DIR = os.path.join(RUNTIME_DIR, "data")
 ASSET_DB_FILE = os.path.join(DATA_DIR, "assets.db")
@@ -350,6 +360,8 @@ CONVERSATION_LOCK = Lock()
 CANVAS_LOCK = Lock()
 LOAD_LOCK = Lock()
 CLOUD_MEDIA_SYNC_TASK = None
+CLOUD_MEDIA_PERIODIC_TASK = None
+CLOUD_MEDIA_LAST_RESULT = {}
 CLOUD_CONFIG_SYNC_TASK = None
 NEXT_TASK_ID = 1
 
@@ -753,6 +765,67 @@ def schedule_cloud_config_sync():
         return
     CLOUD_CONFIG_SYNC_TASK = loop.create_task(run_cloud_config_auto_sync())
 
+def cloud_synced_env_defaults():
+    return {
+        "COMFYUI_INSTANCES": "127.0.0.1:8188",
+        "COMFLY_BASE_URL": "https://ai.comfly.chat",
+        "IMAGE_MODELS": ",".join(["gpt-image-2", "nano-banana-pro"]),
+        "CHAT_MODELS": ",".join(["gpt-4o-mini", "gemini-3.1-flash-image-preview-2k"]),
+        "VIDEO_MODELS": ",".join([
+            "veo2", "veo2-fast", "veo2-pro",
+            "veo3", "veo3-fast", "veo3-pro",
+            "veo3.1", "veo3.1-fast", "veo3.1-pro",
+            "sora-2", "sora-2-pro",
+            "wan2.6-t2v", "wan2.6-i2v",
+            "wan2.5-t2v-preview", "wan2.5-i2v-preview",
+            "wan2.2-t2v-plus", "wan2.2-i2v-plus", "wan2.2-i2v-flash",
+            "doubao-seedance-2-0-260128",
+            "doubao-seedance-2-0-fast-260128",
+            "doubao-seedance-1-5-pro-251215",
+            "doubao-seedance-1-0-pro-250528",
+            "doubao-seedance-1-0-lite-t2v-250428",
+            "doubao-seedance-1-0-lite-i2v-250428",
+        ]),
+        "MODELSCOPE_CHAT_MODELS": ",".join(MODELSCOPE_DEFAULT_CHAT_MODELS),
+    }
+
+def cloud_synced_api_key_env_keys(providers=None):
+    keys = {"MODELSCOPE_API_KEY", "COMFLY_API_KEY"}
+    for provider in providers or []:
+        pid = str((provider or {}).get("id") or "").strip()
+        if pid:
+            keys.add(provider_key_env(pid))
+    if os.path.exists(API_ENV_FILE):
+        try:
+            with open(API_ENV_FILE, "r", encoding="utf-8-sig") as f:
+                for raw_line in f.read().splitlines():
+                    if "=" not in raw_line:
+                        continue
+                    key = raw_line.split("=", 1)[0].strip()
+                    if key.startswith("API_PROVIDER_") and key.endswith("_KEY"):
+                        keys.add(key)
+        except Exception as exc:
+            logger.warning("Scan API key env keys failed: %s", exc)
+    return keys
+
+def reset_local_cloud_synced_config():
+    existing_providers = load_api_providers()
+    save_api_providers(default_api_providers())
+    env_updates = cloud_synced_env_defaults()
+    for key in cloud_synced_api_key_env_keys(existing_providers):
+        env_updates[key] = ""
+    update_env_values(env_updates)
+    reload_env_globals()
+    global COMFYUI_INSTANCES, COMFYUI_ADDRESS, BACKEND_LOCAL_LOAD
+    with LOAD_LOCK:
+        COMFYUI_INSTANCES = ["127.0.0.1:8188"]
+        COMFYUI_ADDRESS = COMFYUI_INSTANCES[0]
+        BACKEND_LOCAL_LOAD = {addr: 0 for addr in COMFYUI_INSTANCES}
+    return {
+        "providers": [public_provider(p) for p in load_api_providers()],
+        "comfyui_instances": COMFYUI_INSTANCES,
+    }
+
 def build_cloud_config(include_secrets=False):
     providers = load_api_providers()
     env_values = {
@@ -815,6 +888,32 @@ def apply_cloud_config(config):
                     COMFYUI_ADDRESS = cleaned[0]
                     BACKEND_LOCAL_LOAD = {addr: BACKEND_LOCAL_LOAD.get(addr, 0) for addr in cleaned}
     return {"providers": [public_provider(p) for p in load_api_providers()], "comfyui_instances": COMFYUI_INSTANCES}
+
+async def try_apply_cloud_config_from_account(session):
+    base_url = cloud_base_url(session)
+    try:
+        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+            response = await client.get(
+                f"{base_url}/api/configs/current",
+                headers=cloud_auth_header(session),
+            )
+        if response.status_code == 404:
+            return {"downloaded": False, "missing": True}
+        response.raise_for_status()
+        data = response.json()
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        return {"downloaded": False, "error": detail or "Cloud config download failed"}
+    except httpx.HTTPError as exc:
+        return {"downloaded": False, "error": f"Cannot connect to cloud service: {exc}"}
+    config = data.get("config")
+    if not config:
+        return {"downloaded": False, "missing": True}
+    applied = apply_cloud_config(config)
+    return {"downloaded": True, "cloud_updated_at": data.get("updated_at", 0), "applied": applied}
 
 def public_provider(provider):
     key = os.getenv(provider_key_env(provider["id"]), "")
@@ -969,6 +1068,14 @@ def init_asset_library():
                     updated_at REAL NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_prompt_snippets_favorite ON prompt_snippets(favorite, updated_at DESC);
+
+                CREATE TABLE IF NOT EXISTS asset_deletions (
+                    sha256 TEXT PRIMARY KEY,
+                    title TEXT DEFAULT '',
+                    local_path TEXT DEFAULT '',
+                    cloud_key TEXT DEFAULT '',
+                    deleted_at REAL NOT NULL
+                );
             """)
             existing = {row["name"] for row in conn.execute("PRAGMA table_info(assets)").fetchall()}
             for column, ddl in {
@@ -1090,6 +1197,8 @@ def index_local_asset(local_url, *, source_type="", prompt="", model="", source_
                 )
                 row = conn.execute("SELECT * FROM assets WHERE local_url = ?", (local_url,)).fetchone()
                 item = asset_row_to_dict(row) if row else None
+                if digest:
+                    conn.execute("DELETE FROM asset_deletions WHERE sha256 = ?", (digest,))
         if item:
             schedule_cloud_media_sync()
         return item
@@ -1232,6 +1341,11 @@ class CloudMediaSyncRequest(BaseModel):
     missing_only: bool = True
     retry_failed: bool = True
     delete_remote_missing: bool = False
+    limit: int = Field(default=500, ge=1, le=5000)
+
+class CloudMediaRestoreRequest(BaseModel):
+    missing_only: bool = True
+    include_deleted: bool = False
     limit: int = Field(default=500, ge=1, le=5000)
 
 class CloudProfileRequest(BaseModel):
@@ -2536,6 +2650,25 @@ def version_tuple(value: str):
             parts.append(int(piece))
     return tuple(parts or [0])
 
+def load_update_state():
+    if not os.path.exists(UPDATE_STATE_FILE):
+        return {}
+    try:
+        with open(UPDATE_STATE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception as exc:
+        logger.warning("Load update state failed: %s", exc)
+        return {}
+
+def save_update_state(state: dict):
+    os.makedirs(os.path.dirname(UPDATE_STATE_FILE), exist_ok=True)
+    payload = dict(state or {})
+    payload["saved_at"] = now_ms()
+    with GLOBAL_CONFIG_LOCK:
+        with open(UPDATE_STATE_FILE, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+
 def _is_zip_download_url(url: str) -> bool:
     """Check if a URL points to a .zip download (by inspecting the URL path, ignoring query params)."""
     try:
@@ -2639,6 +2772,7 @@ async def app_info():
         "cloud_url": CLOUD_SYNC_BASE_URL,
         "update_check_configured": bool(APP_UPDATE_CHECK_URL),
         "update_check_url": APP_UPDATE_CHECK_URL,
+        "update_state": load_update_state(),
         "paths": app_paths_payload(),
     }
 
@@ -2926,8 +3060,7 @@ async def app_update_download():
     }
 
 
-@app.post("/api/app/update-install")
-async def app_update_install():
+async def install_latest_update_package(target_version: str = "", download_meta: Optional[dict] = None):
     is_frozen = getattr(sys, "frozen", False)
     if is_frozen:
         raise HTTPException(status_code=400, detail="当前环境是打包 EXE，不支持原地更新，需要独立 updater。")
@@ -3009,12 +3142,62 @@ async def app_update_install():
         raise HTTPException(status_code=500, detail=f"安装更新失败，已尝试回滚：{exc}")
     # Cleanup staging
     shutil.rmtree(install_dir, ignore_errors=True)
+    state = {
+        "current_version": APP_VERSION,
+        "target_version": target_version or "",
+        "installed_at": now_ms(),
+        "backup_dir": backup_dir,
+        "package": zip_path,
+        "download": download_meta or {},
+        "replaced": replaced,
+        "restart_required": True,
+    }
+    save_update_state(state)
     return {
         "ok": True,
         "installed": True,
         "restart_required": True,
         "replaced": replaced,
         "backup_dir": backup_dir,
+        "update_state": state,
+    }
+
+
+@app.post("/api/app/update-install")
+async def app_update_install():
+    return await install_latest_update_package()
+
+
+@app.post("/api/app/update-auto")
+async def app_update_auto():
+    is_frozen = getattr(sys, "frozen", False)
+    if is_frozen:
+        raise HTTPException(status_code=400, detail="当前环境是打包 EXE，需要独立 updater；浏览器/源码版支持一键自动升级。")
+    check = await app_update_check()
+    if not check.get("configured"):
+        raise HTTPException(status_code=400, detail=check.get("message") or "未配置更新检查地址")
+    if not check.get("is_newer"):
+        return {
+            "ok": True,
+            "updated": False,
+            "restart_required": False,
+            "current_version": check.get("current_version"),
+            "latest_version": check.get("latest_version"),
+            "message": f"当前已是最新版本 {check.get('current_version')}",
+        }
+    if not check.get("auto_update_supported"):
+        raise HTTPException(status_code=400, detail=check.get("auto_update_reason") or "当前环境不支持自动升级")
+    download = await app_update_download()
+    install = await install_latest_update_package(check.get("latest_version") or "", download)
+    return {
+        "ok": True,
+        "updated": True,
+        "restart_required": True,
+        "current_version": check.get("current_version"),
+        "latest_version": check.get("latest_version"),
+        "download": download,
+        "install": install,
+        "message": "自动升级已安装完成，请重启应用后生效。",
     }
 
 
@@ -3155,6 +3338,25 @@ def delete_asset(asset_id: str, delete_file: bool = False):
             row = conn.execute("SELECT * FROM assets WHERE id = ?", (asset_id,)).fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="Asset not found")
+            if row["sha256"]:
+                conn.execute(
+                    """
+                    INSERT INTO asset_deletions (sha256, title, local_path, cloud_key, deleted_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(sha256) DO UPDATE SET
+                        title=excluded.title,
+                        local_path=excluded.local_path,
+                        cloud_key=excluded.cloud_key,
+                        deleted_at=excluded.deleted_at
+                    """,
+                    (
+                        row["sha256"],
+                        row["title"] or "",
+                        row["local_path"] or "",
+                        row["cloud_key"] or "",
+                        time.time(),
+                    ),
+                )
             conn.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
     if delete_file and os.path.isfile(row["local_path"]):
         try:
@@ -3500,7 +3702,12 @@ async def cloud_auth(action: str, payload: CloudAuthRequest):
         "updated_at": now_ms(),
     }
     save_cloud_session(session)
-    schedule_cloud_config_sync()
+    config_sync = await try_apply_cloud_config_from_account(session)
+    if config_sync.get("downloaded") and config_sync.get("cloud_updated_at"):
+        session["updated_at"] = config_sync.get("cloud_updated_at")
+        save_cloud_session(session)
+    elif config_sync.get("missing"):
+        reset_local_cloud_synced_config()
     return {
         "logged_in": True,
         "email": session["email"],
@@ -3509,6 +3716,8 @@ async def cloud_auth(action: str, payload: CloudAuthRequest):
         "avatar_url": session.get("avatar_url", ""),
         "base_url": base_url,
         "custom_cloud": custom_cloud,
+        "updated_at": session.get("updated_at", 0),
+        "config_sync": config_sync,
     }
 
 @app.post("/api/cloud/register")
@@ -3626,7 +3835,8 @@ async def cloud_confirm_email_verify(payload: CloudEmailVerifyConfirmRequest):
 @app.post("/api/cloud/logout")
 async def cloud_logout():
     save_cloud_session({})
-    return {"ok": True}
+    reset_result = reset_local_cloud_synced_config()
+    return {"ok": True, "local_config_cleared": True, "reset": reset_result}
 
 @app.get("/api/cloud/profile")
 async def cloud_profile():
@@ -3808,30 +4018,248 @@ def local_media_assets(limit: int = 5000):
     return items
 
 
+def cloud_restore_extension(item: dict, content_type: str = "") -> str:
+    title_ext = os.path.splitext(str(item.get("title") or ""))[1].lower()
+    if re.match(r"^\.[a-z0-9]{1,12}$", title_ext):
+        return title_ext
+    object_ext = os.path.splitext(str(item.get("object_key") or ""))[1].lower()
+    if re.match(r"^\.[a-z0-9]{1,12}$", object_ext):
+        return object_ext
+    ct = (content_type or item.get("content_type") or "").split(";", 1)[0].strip().lower()
+    return {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+        "video/mp4": ".mp4",
+        "video/webm": ".webm",
+        "video/quicktime": ".mov",
+    }.get(ct, ".bin")
+
+
+def local_media_hash_index():
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            rows = conn.execute("SELECT id, sha256, local_path FROM assets WHERE COALESCE(sha256, '') != ''").fetchall()
+    index = {}
+    for row in rows:
+        sha = row["sha256"]
+        if not sha:
+            continue
+        path = row["local_path"] or ""
+        index[sha] = {"id": row["id"], "local_path": path, "exists": bool(path and os.path.isfile(path))}
+    return index
+
+
+def deleted_media_hashes():
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            rows = conn.execute("SELECT sha256 FROM asset_deletions").fetchall()
+    return {row["sha256"] for row in rows if row["sha256"]}
+
+
+def index_restored_cloud_asset(item: dict, path: str, local_url: str):
+    digest = file_sha256(path)
+    expected = str(item.get("sha256") or "").lower()
+    if expected and digest != expected:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        raise HTTPException(status_code=502, detail=f"云素材校验失败：{item.get('title') or expected[:12]}")
+    asset_id = digest[:20]
+    kind = asset_type_for_path(path)
+    width, height = image_dimensions(path) if kind == "image" else (0, 0)
+    thumb_url = make_asset_thumbnail(asset_id, path)
+    now = time.time()
+    remote_created = float(item.get("created_at") or item.get("updated_at") or 0)
+    created = remote_created / 1000 if remote_created > 100000000000 else (remote_created or now)
+    title = str(item.get("title") or os.path.basename(path))[:300]
+    tags = json.dumps(["cloud"], ensure_ascii=False)
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            conn.execute(
+                """
+                INSERT INTO assets (
+                    id, title, type, local_url, local_path, thumb_url, source_url, source_type,
+                    prompt, model, width, height, tags, favorite, sha256, size_bytes, created_at, updated_at,
+                    cloud_key, cloud_url, cloud_synced_at, cloud_error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, '')
+                ON CONFLICT(id) DO UPDATE SET
+                    title=excluded.title,
+                    type=excluded.type,
+                    local_url=excluded.local_url,
+                    local_path=excluded.local_path,
+                    thumb_url=COALESCE(NULLIF(excluded.thumb_url, ''), assets.thumb_url),
+                    source_url=excluded.source_url,
+                    source_type=excluded.source_type,
+                    prompt=excluded.prompt,
+                    model=excluded.model,
+                    width=excluded.width,
+                    height=excluded.height,
+                    tags=CASE WHEN assets.tags IS NULL OR assets.tags = '[]' THEN excluded.tags ELSE assets.tags END,
+                    sha256=excluded.sha256,
+                    size_bytes=excluded.size_bytes,
+                    updated_at=excluded.updated_at,
+                    cloud_key=excluded.cloud_key,
+                    cloud_url=excluded.cloud_url,
+                    cloud_synced_at=excluded.cloud_synced_at,
+                    cloud_error=''
+                """,
+                (
+                    asset_id, title, kind, local_url, path, thumb_url, str(item.get("cloud_url") or ""),
+                    str(item.get("source_type") or "cloud-restore"), str(item.get("prompt") or ""),
+                    str(item.get("model") or ""), width, height, tags, digest, os.path.getsize(path),
+                    created, now, str(item.get("object_key") or ""), str(item.get("cloud_url") or ""), now,
+                ),
+            )
+            row = conn.execute("SELECT * FROM assets WHERE id = ?", (asset_id,)).fetchone()
+    return asset_row_to_dict(row) if row else None
+
+
+def local_media_summary():
+    items = local_media_assets()
+    summary = {
+        "count": len(items),
+        "size_bytes": 0,
+        "synced": 0,
+        "pending": 0,
+        "failed": 0,
+        "last_synced_at": 0,
+        "by_type": {},
+    }
+    for item in items:
+        size = int(item.get("size_bytes") or 0)
+        kind = item.get("type") or "file"
+        summary["size_bytes"] += size
+        bucket = summary["by_type"].setdefault(kind, {"count": 0, "size_bytes": 0})
+        bucket["count"] += 1
+        bucket["size_bytes"] += size
+        synced_at = float(item.get("cloud_synced_at") or 0)
+        error = (item.get("cloud_error") or "").strip()
+        if error:
+            summary["failed"] += 1
+        elif synced_at > 0:
+            summary["synced"] += 1
+            summary["last_synced_at"] = max(summary["last_synced_at"], synced_at)
+        else:
+            summary["pending"] += 1
+    return summary
+
+
 async def cloud_media_remote_status(client, base_url: str, session: dict):
     response = await client.get(f"{base_url}/api/media/status", headers=cloud_auth_header(session))
     response.raise_for_status()
     return response.json()
 
 
+async def cloud_media_remote_list(client, base_url: str, session: dict, limit: int = 5000):
+    response = await client.get(
+        f"{base_url}/api/media/list",
+        headers=cloud_auth_header(session),
+        params={"limit": max(1, min(int(limit or 5000), 5000)), "offset": 0},
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 @app.get("/api/cloud/media/status")
 async def cloud_media_status():
-    local_items = local_media_assets()
-    local_size = sum(int(item.get("size_bytes") or 0) for item in local_items)
+    local = local_media_summary()
     session = load_cloud_session()
     if not session.get("token"):
-        return {"ok": True, "logged_in": False, "local": {"count": len(local_items), "size_bytes": local_size}, "remote": None}
+        return {
+            "ok": True,
+            "logged_in": False,
+            "local": local,
+            "remote": None,
+            "sync": {
+                "running": bool(CLOUD_MEDIA_SYNC_TASK and not CLOUD_MEDIA_SYNC_TASK.done()),
+                "last_result": CLOUD_MEDIA_LAST_RESULT,
+            },
+        }
     base_url = cloud_base_url(session)
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             remote = await cloud_media_remote_status(client, base_url, session)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"读取云素材状态失败：{exc}") from exc
-    return {"ok": True, "logged_in": True, "local": {"count": len(local_items), "size_bytes": local_size}, "remote": remote}
+    return {
+        "ok": True,
+        "logged_in": True,
+        "local": local,
+        "remote": remote,
+        "sync": {
+            "running": bool(CLOUD_MEDIA_SYNC_TASK and not CLOUD_MEDIA_SYNC_TASK.done()),
+            "last_result": CLOUD_MEDIA_LAST_RESULT,
+        },
+    }
+
+
+@app.post("/api/cloud/media/restore")
+async def cloud_media_restore(payload: CloudMediaRestoreRequest):
+    session = load_cloud_session()
+    base_url = cloud_base_url(session)
+    restored, skipped, failed = [], [], []
+    skipped_deleted = []
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=20, read=180, write=180, pool=20), follow_redirects=True) as client:
+            remote_data = await cloud_media_remote_list(client, base_url, session, payload.limit)
+            remote_items = remote_data.get("items") or []
+            local_index = local_media_hash_index()
+            deleted_hashes = set() if payload.include_deleted else deleted_media_hashes()
+            os.makedirs(OUTPUT_OUTPUT_DIR, exist_ok=True)
+            for item in remote_items:
+                sha = str(item.get("sha256") or "").lower()
+                if not re.match(r"^[a-f0-9]{64}$", sha):
+                    continue
+                if sha in deleted_hashes:
+                    skipped_deleted.append(sha)
+                    continue
+                local = local_index.get(sha) or {}
+                if payload.missing_only and local.get("exists"):
+                    skipped.append(sha)
+                    continue
+                try:
+                    response = await client.get(f"{base_url}/api/media/download/{sha}", headers=cloud_auth_header(session))
+                    response.raise_for_status()
+                    ext = cloud_restore_extension(item, response.headers.get("content-type", ""))
+                    filename = f"cloud_{sha[:20]}{ext}"
+                    path = output_path_for(filename, "output")
+                    local_url = output_url_for(filename, "output")
+                    with open(path, "wb") as fh:
+                        fh.write(response.content)
+                    restored_item = index_restored_cloud_asset(item, path, local_url)
+                    if restored_item:
+                        restored.append(restored_item)
+                    else:
+                        failed.append({"sha256": sha, "title": item.get("title"), "error": "index failed"})
+                except Exception as exc:
+                    failed.append({"sha256": sha, "title": item.get("title"), "error": str(exc)})
+            remote_status = await cloud_media_remote_status(client, base_url, session)
+    except httpx.HTTPStatusError as exc:
+        try:
+            detail = exc.response.json().get("detail")
+        except Exception:
+            detail = exc.response.text
+        raise HTTPException(status_code=exc.response.status_code, detail=detail or "云素材恢复失败") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"云素材恢复请求失败：{exc}") from exc
+    return {
+        "ok": True,
+        "remote_count": len(remote_items),
+        "restored": len(restored),
+        "skipped": len(skipped),
+        "skipped_deleted": len(skipped_deleted),
+        "failed": failed,
+        "failed_count": len(failed),
+        "remote": remote_status,
+    }
 
 
 @app.post("/api/cloud/media/sync")
 async def cloud_media_sync(payload: CloudMediaSyncRequest):
+    global CLOUD_MEDIA_LAST_RESULT
     session = load_cloud_session()
     base_url = cloud_base_url(session)
     items = local_media_assets(payload.limit)
@@ -3862,6 +4290,9 @@ async def cloud_media_sync(payload: CloudMediaSyncRequest):
                 path = item.get("local_path")
                 if not path or not os.path.isfile(path):
                     failed.append({"id": item.get("id"), "title": item.get("title"), "error": "local file missing"})
+                    with ASSET_LOCK:
+                        with asset_db() as conn:
+                            conn.execute("UPDATE assets SET cloud_error = ? WHERE id = ?", ("local file missing", item["id"]))
                     continue
                 metadata = {
                     "id": item.get("id"),
@@ -3912,7 +4343,25 @@ async def cloud_media_sync(payload: CloudMediaSyncRequest):
         raise HTTPException(status_code=exc.response.status_code, detail=detail or "云素材同步失败") from exc
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"云素材同步请求失败：{exc}") from exc
-    return {"ok": True, "local_count": len(items), "uploaded": len(uploaded), "skipped": len(skipped), "failed": failed, "deleted_remote": deleted_remote, "remote": remote_status}
+    result = {
+        "ok": True,
+        "local_count": len(items),
+        "uploaded": len(uploaded),
+        "skipped": len(skipped),
+        "failed": failed,
+        "failed_count": len(failed),
+        "deleted_remote": deleted_remote,
+        "remote": remote_status,
+        "finished_at": time.time(),
+    }
+    CLOUD_MEDIA_LAST_RESULT = {
+        "uploaded": result["uploaded"],
+        "skipped": result["skipped"],
+        "failed_count": result["failed_count"],
+        "deleted_remote": deleted_remote,
+        "finished_at": result["finished_at"],
+    }
+    return result
 
 
 async def run_cloud_media_auto_sync(delay: float = 4.0):
@@ -3929,6 +4378,24 @@ async def run_cloud_media_auto_sync(delay: float = 4.0):
         logger.warning("Auto cloud media sync failed: %s", exc)
     finally:
         CLOUD_MEDIA_SYNC_TASK = None
+
+
+async def _cloud_media_periodic_sync():
+    while True:
+        await asyncio.sleep(600)
+        try:
+            session = load_cloud_session()
+            if not session.get("token"):
+                continue
+            if CLOUD_MEDIA_SYNC_TASK and not CLOUD_MEDIA_SYNC_TASK.done():
+                continue
+            await cloud_media_sync(CloudMediaSyncRequest(missing_only=True, retry_failed=True, delete_remote_missing=False, limit=5000))
+        except asyncio.CancelledError:
+            raise
+        except HTTPException as exc:
+            logger.info("Periodic cloud media sync skipped: %s", exc.detail)
+        except Exception as exc:
+            logger.warning("Periodic cloud media sync failed: %s", exc)
 
 
 def schedule_cloud_media_sync():
