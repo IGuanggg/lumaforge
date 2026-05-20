@@ -336,6 +336,7 @@ def init_db():
                 email_verified INTEGER NOT NULL DEFAULT 0,
                 display_name TEXT NOT NULL DEFAULT '',
                 avatar_url TEXT NOT NULL DEFAULT '',
+                last_login_at INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL
             )
             """
@@ -347,6 +348,8 @@ def init_db():
             conn.execute("ALTER TABLE users ADD COLUMN avatar_url TEXT NOT NULL DEFAULT ''")
         if "email_verified" not in existing:
             conn.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
+        if "last_login_at" not in existing:
+            conn.execute("ALTER TABLE users ADD COLUMN last_login_at INTEGER NOT NULL DEFAULT 0")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS sessions (
@@ -557,6 +560,7 @@ def issue_token(user_id: int) -> str:
             "INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
             (hash_token(token), user_id, ts + setting_int("cloud_token_ttl_seconds", TOKEN_TTL_SECONDS) * 1000, ts),
         )
+        conn.execute("UPDATE users SET last_login_at = ? WHERE id = ?", (ts, user_id))
     return token
 
 
@@ -1889,7 +1893,7 @@ def render_admin_console_html(admin: dict) -> str:
             <div class="row" style="cursor:pointer" onclick="openUserDetail(${{user.id}})">
               <span>#${{user.id}}</span>
               <code>${{escapeText(user.email)}}</code>
-              <span>${{user.email_verified?'已验证':'未验证'}} · ${{user.has_config?'有配置':'无配置'}}</span>
+              <span>${{user.email_verified?'已验证':'未验证'}} · ${{user.has_config?'有配置':'无配置'}} · 最后登录 ${{formatTime(user.last_login_at)}}</span>
             </div>
           `).join('');
         }}
@@ -1920,7 +1924,8 @@ def render_admin_console_html(admin: dict) -> str:
           <div class="row"><span>邮箱</span><code>${{escapeText(user.email)}}</code><span>${{user.email_verified?'已验证':'未验证'}}</span></div>
           <div class="row"><span>昵称</span><code>${{escapeText(user.display_name||'-')}}</code><span></span></div>
           <div class="row"><span>头像</span><code>${{escapeText(user.avatar_url||'-')}}</code><span></span></div>
-          <div class="row"><span>创建</span><code>${{formatTime(user.created_at)}}</code><span></span></div>
+          <div class="row"><span>注册时间</span><code>${{formatTime(user.created_at)}}</code><span></span></div>
+          <div class="row"><span>最后登录</span><code>${{formatTime(user.last_login_at)}}</code><span></span></div>
           <div class="row"><span>密码</span><code>已加密存储</code><span>不能查看明文，可重置</span></div>
           <div class="row"><span>配置</span><code>${{data.config_updated_at?formatTime(data.config_updated_at):'暂无'}}</code><span>${{data.has_config?'已保存':'未保存'}}</span></div>
         `;
@@ -2408,9 +2413,15 @@ def admin_list_users(
         rows = conn.execute(
             f"""
             SELECT users.id, users.email, users.display_name, users.avatar_url, users.email_verified, users.created_at,
+                   max(COALESCE(users.last_login_at, 0), COALESCE(recent_sessions.last_session_at, 0)) AS last_login_at,
                    user_configs.updated_at AS config_updated_at
             FROM users
             LEFT JOIN user_configs ON user_configs.user_id = users.id
+            LEFT JOIN (
+                SELECT user_id, MAX(created_at) AS last_session_at
+                FROM sessions
+                GROUP BY user_id
+            ) recent_sessions ON recent_sessions.user_id = users.id
             {where_sql}
             ORDER BY users.created_at DESC
             LIMIT ? OFFSET ?
@@ -2426,6 +2437,7 @@ def admin_list_users(
             "avatar_url": row["avatar_url"],
             "email_verified": bool(row["email_verified"]),
             "created_at": int(row["created_at"]),
+            "last_login_at": int(row["last_login_at"] or 0),
             "has_config": row["config_updated_at"] is not None,
             "config_updated_at": int(row["config_updated_at"] or 0),
             "password_status": "hashed",
@@ -2441,9 +2453,15 @@ def admin_user_detail(user_id: int, request: Request):
     with db() as conn:
         user = conn.execute(
             """
-            SELECT id, email, display_name, avatar_url, email_verified, created_at
+            SELECT users.id, users.email, users.display_name, users.avatar_url, users.email_verified, users.created_at,
+                   max(COALESCE(users.last_login_at, 0), COALESCE(recent_sessions.last_session_at, 0)) AS last_login_at
             FROM users
-            WHERE id = ?
+            LEFT JOIN (
+                SELECT user_id, MAX(created_at) AS last_session_at
+                FROM sessions
+                GROUP BY user_id
+            ) recent_sessions ON recent_sessions.user_id = users.id
+            WHERE users.id = ?
             """,
             (user_id,),
         ).fetchone()
@@ -2469,6 +2487,7 @@ def admin_user_detail(user_id: int, request: Request):
             "avatar_url": user["avatar_url"],
             "email_verified": bool(user["email_verified"]),
             "created_at": int(user["created_at"]),
+            "last_login_at": int(user["last_login_at"] or 0),
             "password_status": "hashed",
             "password_visible": False,
         },

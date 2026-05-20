@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger("infinite_canvas")
-APP_VERSION = os.getenv("APP_VERSION", "1.0.6")
+APP_VERSION = os.getenv("APP_VERSION", "1.0.7")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/Infinite-Canvas/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
@@ -338,9 +338,9 @@ UPDATE_DIR = os.path.join(RUNTIME_DIR, "updates")
 UPDATE_DOWNLOADS_DIR = os.path.join(UPDATE_DIR, "downloads")
 UPDATE_STAGING_DIR = os.path.join(UPDATE_DIR, "staging")
 UPDATE_BACKUPS_DIR = os.path.join(UPDATE_DIR, "backups")
-UPDATE_STATE_FILE = os.path.join(DATA_DIR, "update_state.json")
 HISTORY_FILE = os.path.join(RUNTIME_DIR, "history.json")
 DATA_DIR = os.path.join(RUNTIME_DIR, "data")
+UPDATE_STATE_FILE = os.path.join(DATA_DIR, "update_state.json")
 ASSET_DB_FILE = os.path.join(DATA_DIR, "assets.db")
 CONVERSATION_DIR = os.path.join(DATA_DIR, "conversations")
 CANVAS_DIR = os.path.join(DATA_DIR, "canvases")
