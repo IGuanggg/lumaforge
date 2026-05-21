@@ -2,7 +2,7 @@
 setlocal
 
 echo ============================================
-echo   Infinite Canvas - Windows EXE Builder
+echo   LumaForge - Windows EXE Builder
 echo ============================================
 echo.
 
@@ -34,9 +34,9 @@ if errorlevel 1 (
 
 echo [3/3] Build complete!
 echo.
-echo Output: dist\Infinite Canvas\Infinite Canvas.exe
+echo Output: dist\LumaForge Browser\LumaForge.exe
 echo.
-echo To run: double-click "Infinite Canvas.exe" in the dist folder.
+echo To run: double-click "LumaForge.exe" in the dist folder.
 echo Runtime data will be saved to "userdata\" beside the EXE.
 echo.
 pause

@@ -47,7 +47,7 @@ def main():
     thread.start()
     if wait_until_ready(f"http://127.0.0.1:{port}/health"):
         webbrowser.open(url)
-    print(f"Infinite Canvas is running at {url}")
+    print(f"LumaForge is running at {url}")
     print("Close this window or press Ctrl+C to stop.")
     try:
         while thread.is_alive():

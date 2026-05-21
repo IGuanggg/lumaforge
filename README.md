@@ -1,310 +1,122 @@
-# Infinite Canvas
+# 光绘工坊 / LumaForge
 
-本地部署的 AI 创作工作台。无限画布 + 节点连线，统一调度 ComfyUI、在线 API、LLM 完成图文视频生成。
+LumaForge 是一个本地优先的 AI 创作工作台，核心是无限画布、素材库、Agent 创作、GPT 对话、图像增强、视频生成和云同步。
 
-> 当前版本：v1.0.9
-
----
-
-## 下载
-
-| 版本 | 说明 | 大小 |
-|------|------|------|
-| [桌面窗口版](https://github.com/IGuanggg/Infinite-Canvas/releases/download/v1.0.9/Infinite-Canvas-desktop-v1.0.9-windows.zip) | 独立窗口，无终端，推荐正式使用 | ~27 MB |
-| [浏览器版](https://github.com/IGuanggg/Infinite-Canvas/releases/download/v1.0.9/Infinite-Canvas-browser-v1.0.9.zip) | 打开浏览器，有终端窗口，推荐调试 | ~22 MB |
-
-桌面版需要 [Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)（Windows 11 自带，Win10 可能需安装）。
-
-下载后解压，双击 `Infinite Canvas.exe` 即可运行。
-
----
+当前版本：`2.0.0`
 
 ## 核心功能
 
-### 无限画布节点系统
-- 自由拖拽、缩放、连线的无限画布
-- 节点类型：生图、视频、LLM 对话、提示词、循环计数、ComfyUI 工作流
-- 节点连线自动级联运行，支持一键从输出端触发整条链路
-- 多画布管理，回收站保留 30 天
+- 无限画布：节点式创作、拖拽连线、LLM/API/ComfyUI/Output 节点、Agent 自动规划。
+- Agent 创作：把自然语言目标拆成可编辑节点，支持尺寸、比例、张数和模型参数落地。
+- GPT 对话：支持聊天和生图模式，聊天可上传临时参考图，参考图不会进入素材库。
+- 文生图/在线生图：统一调用 API 平台，生成结果优先保存到本地，再进入素材库。
+- 素材库：图片/视频归档、预览、下载、加入无限画布、云端素材同步。
+- 图像增强：本地 API 增强，提供 2K / 4K 两档质量。
+- 云端账户：邮箱验证、配置自动同步、头像、密码、云端媒体同步。
+- 云后端：`LumaForge Cloud`，提供账户、配置同步、媒体同步和加密数据库备份。
 
-### 文生图统一入口
-- 一个节点统一调用本地 ComfyUI 或在线 API
-- 支持选择参考图、模型、平台、比例、分辨率
-- 支持 2K/4K 高分辨率
-- 图生图、LoRA 调用
+## 项目命名
 
-### 图片编辑与增强
-- 角度控制（angle）：基于参考图调整视角
-- 细节增强（enhance）：ComfyUI 工作流放大细节
-- Klein 增强：ModelScope FLUX.2-klein 专用链路
-- 图片局部重绘（edit）：带 mask 的图生图
+| 项目 | 名称 |
+| --- | --- |
+| 应用标题 | 光绘工坊 |
+| 英文品牌 | LumaForge |
+| GitHub 仓库 | lumaforge |
+| 前端包名 | lumaforge |
+| 后端服务名 | lumaforge-cloud |
+| Docker 镜像 | iguang9881/lumaforge-cloud |
+| Docker 容器名 | lumaforge-cloud |
+| 云端数据目录 | /opt/lumaforge-cloud |
+| 后端标题 | LumaForge Cloud |
+| EXE 名称 | LumaForge.exe |
 
-### 视频生成
-- 模型支持：Veo 2/3/3.1、Sora 2、通义万相 wan2.x、豆包 Seedance
-- 首尾帧控制、参考图输入、视频续写
-- APIMart 异步协议（失败不扣费）
+## 本地运行
 
-### LLM 对话
-- 多平台 Chat 模型（OpenAI 兼容协议）
-- 图片输入（Vision 多模态），可反推提示词
-- 流式输出（SSE）
-- 对话历史持久化
-
-### 素材库与提示词库
-- 本地素材库：上传图片/视频，自动缩略图，标签筛选
-- 提示词库：保存常用提示词，画布节点直接引用
-
-### 账户中心与云端同步
-- 注册/登录，邮箱验证（6 位数字验证码）
-- 头像上传
-- 云端配置同步：画布、对话、API 设置自动上传到云后端
-- 云备份/恢复/导出
-
-### ComfyUI 工作流管理
-- 自定义工作流上传
-- 可视化字段配置（文本、数字、下拉、布尔）
-- 工作流在画布中作为节点调用
-- 支持多 ComfyUI 后端负载均衡
-
-### API 平台管理
-- 多平台配置，一键拉取模型列表
-- 自动分类（图片/对话/视频）
-- 协议验证（OpenAI / APIMart 异步）
-- 独立 API Key 管理，密钥脱敏显示
-
----
-
-## 源码运行
-
-### 环境要求
-- Python 3.10+
-- ComfyUI（可选，用于本地生图）
-
-### 安装
-
-```bash
+```powershell
 pip install -r requirements.txt
-```
-
-离线安装（使用 packages/ 目录下的 wheel 包）：
-
-```bash
-pip install --no-index --find-links=packages -r requirements.txt
-```
-
-### 启动
-
-```bash
-python main.py
-```
-
-或使用 launcher（自动选端口、自动开浏览器、仅监听 127.0.0.1）：
-
-```bash
 python launcher.py
 ```
 
-### API Key 配置
+默认只监听本机，启动后自动打开浏览器。开发时也可以直接运行：
 
-启动后在网页「API 设置」中配置，或手动编辑 `API/.env`：
-
-```
-MODELSCOPE_API_KEY=your_key_here
+```powershell
+python main.py
 ```
 
----
+## 桌面版构建
 
-## EXE 打包（Windows）
+```powershell
+.\build_desktop.bat
+```
 
-### 桌面窗口版（推荐发布）
+输出：
+
+```text
+dist\LumaForge\LumaForge.exe
+```
+
+桌面版默认数据目录：
+
+- 运行数据：`%APPDATA%\LumaForge`
+- 图片/视频/素材：`%USERPROFILE%\Pictures\LumaForge`
+- 日志：`%LOCALAPPDATA%\LumaForge\logs`
+
+## 浏览器版构建
+
+```powershell
+.\build_windows.bat
+```
+
+输出：
+
+```text
+dist\LumaForge Browser\LumaForge.exe
+```
+
+浏览器版会启动本地服务并打开系统浏览器，运行数据保存在 EXE 旁边的 `userdata/`。
+
+## 云后端 Docker
+
+多架构镜像：
 
 ```bash
-build_desktop.bat
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -f Dockerfile.cloud \
+  -t iguang9881/lumaforge-cloud:2.0.0 \
+  -t iguang9881/lumaforge-cloud:latest \
+  --push .
 ```
 
-产物：`dist/Infinite Canvas Desktop/`（整个文件夹打包分发）
-
-数据目录：
-- 运行时：`%APPDATA%\Infinite Canvas\`
-- 图片/视频：`%USERPROFILE%\Pictures\Infinite Canvas\`
-- 日志：`%LOCALAPPDATA%\Infinite Canvas\logs\`
-
-验证构建：
-```bash
-dist\Infinite Canvas Desktop\Infinite Canvas.exe --smoke-test
-```
-
-### 浏览器版（调试备用）
+服务器升级部署：
 
 ```bash
-build_windows.bat
+mkdir -p /opt/lumaforge-cloud/cloud-data
+cd /opt/lumaforge-cloud
+
+docker pull iguang9881/lumaforge-cloud:2.0.0
+docker stop lumaforge-cloud || true
+docker rm lumaforge-cloud || true
+
+docker run -d \
+  --name lumaforge-cloud \
+  --restart unless-stopped \
+  -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
+  -e CLOUD_APP_VERSION=2.0.0 \
+  -p 127.0.0.1:8787:8787 \
+  -v /opt/lumaforge-cloud/cloud-data:/app/data \
+  iguang9881/lumaforge-cloud:2.0.0
 ```
 
-产物：`dist/Infinite Canvas/`，数据在 EXE 旁边的 `userdata/`。
+不要删除 `/opt/lumaforge-cloud/cloud-data`，否则云端账户、SMTP、配置同步和备份记录会丢失。
 
----
+## 发布检查
 
-## Docker 部署（主应用）
+发布前运行：
 
-```bash
-cp .env.example .env   # 编辑配置
-docker compose up -d --build
+```powershell
+.\scripts\check_release.ps1 -Version 2.0.0
 ```
 
-升级：
+发布流程和人工回归项见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。
 
-```bash
-docker compose pull
-docker compose up -d
-```
-
-数据通过 `./userdata:/app/userdata` 卷挂载持久化，升级不丢失数据。
-
----
-
-## Docker 部署（云后端）
-
-云后端提供账户管理、邮箱验证、配置同步、云备份功能。
-
-```bash
-cp .env.cloud.example .env.cloud   # 编辑 SMTP、管理员密码等
-docker compose -f docker-compose.cloud.yml up -d --build
-```
-
-验证：
-
-```bash
-curl https://your-cloud-domain/version
-# → {"name":"infinite-canvas-cloud","version":"1.0.9"}
-```
-
----
-
-## 环境变量
-
-### 主应用
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `APP_RUNTIME_DIR` | 运行时数据目录 | `%APPDATA%\Infinite Canvas`（桌面版）或 `./userdata` |
-| `APP_ASSETS_DIR` | 图片/素材目录 | `%USERPROFILE%\Pictures\Infinite Canvas`（桌面版） |
-| `APP_PORT` | 服务端口 | `3000` |
-| `APP_ACCESS_TOKEN` | 远程访问令牌 | `change-me` |
-| `MODELSCOPE_API_KEY` | ModelScope API Key | 空 |
-| `COMFLY_API_KEY` | 默认 API 平台 Key | 空 |
-| `COMFLY_BASE_URL` | 默认 API 平台地址 | `https://ai.comfly.chat` |
-| `COMFYUI_INSTANCES` | ComfyUI 后端（逗号分隔） | `127.0.0.1:8188` |
-| `CLOUD_SYNC_BASE_URL` | 云后端地址 | `https://image-cloud.0909106.xyz` |
-| `MAX_UPLOAD_SIZE_MB` | 上传大小限制 (MB) | `50` |
-| `CORS_ORIGINS` | CORS 来源（逗号分隔） | `*` |
-
-### 云后端
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `CLOUD_APP_VERSION` | 版本号 | `1.0.9` |
-| `CLOUD_PUBLIC_URL` | 公网 HTTPS 地址 | 空 |
-| `SMTP_HOST` / `SMTP_PORT` | 邮件服务器 | 空 / `587` |
-| `SMTP_USERNAME` / `SMTP_PASSWORD` | 邮件账号 | 空 |
-| `CLOUD_ADMIN_USERNAME` | 初始管理员账号 | `admin` |
-| `CLOUD_ADMIN_PASSWORD` | 初始管理员密码 | `admin` |
-| `CLOUD_EMAIL_DEV_MODE` | 开发模式（返回验证码） | `0` |
-
-完整变量见 `.env.example` 和 `.env.cloud.example`。
-
----
-
-## 数据目录与安全
-
-运行时数据位置取决于启动方式：
-
-| 方式 | 数据目录 |
-|------|---------|
-| 桌面版 EXE | `%APPDATA%\Infinite Canvas\` |
-| 浏览器版 EXE | EXE 旁边的 `userdata/` |
-| 源码 / Docker | 项目根目录的 `userdata/` 或容器卷 |
-
-目录结构：
-
-```
-(API 或 userdata)/
-  API/.env              # API 密钥（不提交 git）
-  data/
-    conversations/      # 对话历史
-    canvases/           # 画布数据
-    api_providers.json  # 平台配置
-    assets.db           # 素材库数据库
-  output/               # 生成的图片/视频
-  assets/
-    input/              # 上传的图片
-    output/             # AI 参考图
-    thumbs/             # 缩略图
-  workflows/            # 工作流（内置 + 自定义）
-  history.json          # 生成历史
-  global_config.json    # 全局配置
-```
-
-### 安全说明
-
-- EXE / launcher 模式仅监听 `127.0.0.1`，局域网不可访问
-- Docker 默认绑定 `127.0.0.1`，需显式配置才能对外暴露
-- `main.py` 直接启动监听 `0.0.0.0`，远程访问需 `APP_ACCESS_TOKEN`
-- API Key 脱敏返回，路径遍历防护，上传大小限制
-- `.gitignore` 已排除所有敏感文件和运行时数据
-
----
-
-## 技术栈
-
-| 组件 | 技术 |
-|------|------|
-| 后端 | FastAPI + Uvicorn，单文件架构 |
-| 前端 | 纯 HTML/JS/CSS + Tailwind CDN |
-| 存储 | JSON 文件 + SQLite（素材库/云后端） |
-| 通信 | WebSocket（实时状态）+ SSE（流式对话） |
-| 打包 | PyInstaller + pywebview（桌面窗口） |
-| 容器 | Docker + docker compose |
-
----
-
-## 常见问题
-
-**Q: 桌面版打不开 / 白屏？**
-A: 确认已安装 Edge WebView2 Runtime（Win11 自带，Win10 需安装）。运行 `Infinite Canvas.exe --smoke-test` 查看诊断。日志在 `%LOCALAPPDATA%\Infinite Canvas\logs\desktop.log`。
-
-**Q: 报错 `Failed to load Python DLL`？**
-A: EXE 和 `_internal` 文件夹必须在一起。不能单独复制 EXE，需要整个文件夹一起分发。
-
-**Q: ComfyUI 连不上？**
-A: 确认 ComfyUI 已启动且监听正确端口。多后端用逗号分隔：`COMFYUI_INSTANCES=127.0.0.1:8188,192.168.1.100:8188`
-
-**Q: API 调用失败？**
-A: 在「API 设置」中检查 Key 是否配置，点击「测试连接」验证。
-
-**Q: Docker 升级后数据丢失？**
-A: 确认 `docker-compose.yml` 中 volumes 配置正确，`userdata/` 目录已挂载。
-
-**Q: 云后端邮箱验证收不到邮件？**
-A: 检查 `.env.cloud` 中 SMTP 配置。开发环境可开启 `CLOUD_EMAIL_DEV_MODE=1`。
-
-**Q: 如何备份数据？**
-A: 桌面版备份 `%APPDATA%\Infinite Canvas\`。浏览器版备份 `userdata/`。云后端备份 `cloud-data/`。
-
----
-
-## 发布状态
-
-当前版本 **v1.0.9**。
-
-- 核心功能完整
-- 安全加固已完成（认证、脱敏、路径防护、异步架构）
-- 桌面窗口版 EXE 已验证
-- 浏览器版 EXE 已验证
-- Docker 部署已验证
-- 云后端已部署运行
-
----
-
-## License
-
-MIT
+API 和数据边界见 [docs/API_CONTRACT.md](docs/API_CONTRACT.md)。

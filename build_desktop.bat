@@ -2,7 +2,7 @@
 setlocal
 
 echo ============================================
-echo   Infinite Canvas - Desktop Window Builder
+echo   LumaForge - Desktop Window Builder
 echo ============================================
 echo.
 
@@ -31,11 +31,11 @@ if errorlevel 1 (
 
 echo [3/3] Build complete!
 echo.
-echo Output: dist\Infinite Canvas Desktop\Infinite Canvas.exe
+echo Output: dist\LumaForge\LumaForge.exe
 echo.
 echo Desktop data:
-echo   Runtime: %%APPDATA%%\Infinite Canvas
-echo   Images:  %%USERPROFILE%%\Pictures\Infinite Canvas
-echo   Logs:    %%LOCALAPPDATA%%\Infinite Canvas\logs
+echo   Runtime: %%APPDATA%%\LumaForge
+echo   Images:  %%USERPROFILE%%\Pictures\LumaForge
+echo   Logs:    %%LOCALAPPDATA%%\LumaForge\logs
 echo.
 pause

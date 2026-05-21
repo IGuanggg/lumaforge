@@ -1,10 +1,10 @@
 services:
-  infinite-canvas:
+  lumaforge:
     build:
       context: .
       dockerfile: Dockerfile
-    image: iguang9881/infinite-canvas:latest
-    container_name: infinite-canvas
+    image: iguang9881/lumaforge:latest
+    container_name: lumaforge
     restart: unless-stopped
     environment:
       APP_RUNTIME_DIR: /app/userdata

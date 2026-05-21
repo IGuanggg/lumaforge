@@ -12,7 +12,7 @@ from pathlib import Path
 import uvicorn
 
 
-APP_NAME = "Infinite Canvas"
+APP_NAME = "LumaForge"
 
 
 def is_frozen():
@@ -53,6 +53,7 @@ def configure_desktop_environment():
     os.environ.setdefault("APP_OUTPUT_DIR", str(save_dir / "legacy-output"))
     os.environ.setdefault("APP_LOG_DIR", str(logs_dir))
     os.environ.setdefault("APP_CACHE_DIR", str(localappdata_dir() / "cache"))
+    os.environ.setdefault("LUMAFORGE_DESKTOP", "1")
     os.environ.setdefault("INFINITE_CANVAS_DESKTOP", "1")
 
     for child in ("input", "output", "thumbs", "temp"):
@@ -132,7 +133,7 @@ def start_server(port):
 
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="info", log_config=None, use_colors=False)
     server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True, name="InfiniteCanvasServer")
+    thread = threading.Thread(target=server.run, daemon=True, name="LumaForgeServer")
     thread.start()
     return server, thread
 

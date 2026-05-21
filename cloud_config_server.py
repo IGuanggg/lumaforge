@@ -35,13 +35,13 @@ AVATAR_TYPES = {
 TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_TOKEN_TTL_SECONDS", str(30 * 24 * 60 * 60)))
 RESET_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_RESET_TOKEN_TTL_SECONDS", str(30 * 60)))
 EMAIL_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_EMAIL_TOKEN_TTL_SECONDS", str(24 * 60 * 60)))
-CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "1.0.9").strip() or "1.0.9"
+CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "2.0.0").strip() or "2.0.0"
 CLOUD_PUBLIC_URL = os.getenv("CLOUD_PUBLIC_URL", "").strip().rstrip("/")
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "").strip()
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USERNAME or "no-reply@infinite-canvas.local").strip()
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USERNAME or "no-reply@lumaforge.local").strip()
 SMTP_TLS = os.getenv("SMTP_TLS", "1").strip().lower() not in {"0", "false", "no"}
 EMAIL_DEV_MODE = os.getenv("CLOUD_EMAIL_DEV_MODE", "").strip().lower() in {"1", "true", "yes"}
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -72,12 +72,12 @@ async def lifespan(app: FastAPI):
             pass
 
 
-app = FastAPI(title="Infinite Canvas Cloud Config", lifespan=lifespan)
+app = FastAPI(title="LumaForge Cloud", lifespan=lifespan)
 
 
 FAVICON_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <rect width="64" height="64" rx="14" fill="#111111"/>
-  <text x="32" y="41" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="900" fill="#ffffff">IC</text>
+  <text x="32" y="41" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="900" fill="#ffffff">LF</text>
   <rect x="24" y="19" width="4" height="26" rx="2" fill="#3b82f6"/>
   <rect x="40" y="19" width="4" height="26" rx="2" fill="#f59e0b"/>
 </svg>"""
@@ -158,7 +158,7 @@ class BackupSettingsPayload(BaseModel):
     region: str = Field(default="auto", max_length=120)
     addressing_style: str = Field(default="auto", max_length=20)
     bucket: str = Field(default="", max_length=200)
-    prefix: str = Field(default="infinite-canvas/backups", max_length=300)
+    prefix: str = Field(default="lumaforge/backups", max_length=300)
     access_key_id: str = Field(default="", max_length=500)
     secret_access_key: str = Field(default="", max_length=1000)
     encryption_passphrase: str = Field(default="", max_length=1000)
@@ -251,7 +251,7 @@ DEFAULT_APP_SETTINGS = {
     "backup_region": os.getenv("CLOUD_BACKUP_REGION", "auto").strip() or "auto",
     "backup_addressing_style": os.getenv("CLOUD_BACKUP_ADDRESSING_STYLE", "auto").strip() or "auto",
     "backup_bucket": os.getenv("CLOUD_BACKUP_BUCKET", "").strip(),
-    "backup_prefix": os.getenv("CLOUD_BACKUP_PREFIX", "infinite-canvas/backups").strip(),
+    "backup_prefix": os.getenv("CLOUD_BACKUP_PREFIX", "lumaforge/backups").strip(),
     "backup_access_key_id": os.getenv("CLOUD_BACKUP_ACCESS_KEY_ID", "").strip(),
     "backup_secret_access_key": os.getenv("CLOUD_BACKUP_SECRET_ACCESS_KEY", ""),
     "backup_encryption_passphrase": os.getenv("CLOUD_BACKUP_ENCRYPTION_PASSPHRASE", ""),
@@ -672,7 +672,7 @@ def send_email(to_email: str, subject: str, text: str) -> bool:
     smtp_port = setting_int("smtp_port", SMTP_PORT)
     smtp_username = setting_value("smtp_username").strip()
     smtp_password = setting_value("smtp_password")
-    smtp_from = setting_value("smtp_from").strip() or smtp_username or "no-reply@infinite-canvas.local"
+    smtp_from = setting_value("smtp_from").strip() or smtp_username or "no-reply@lumaforge.local"
     smtp_tls = setting_bool("smtp_tls", SMTP_TLS)
     email_dev_mode = setting_bool("cloud_email_dev_mode", EMAIL_DEV_MODE)
     if not smtp_host:
@@ -703,11 +703,11 @@ def send_verification_email(user_id: int, email: str) -> dict:
     token = issue_one_time_token("email_verifications", user_id, setting_int("cloud_email_token_ttl_seconds", EMAIL_TOKEN_TTL_SECONDS))
     public_url = setting_value("cloud_public_url").strip().rstrip("/")
     verify_url = f"{public_url}/verify-email?email={email}&token={token}" if public_url else ""
-    body = "请验证你的 Infinite Canvas 云端账号邮箱。\n\n"
+    body = "请验证你的 LumaForge 云端账号邮箱。\n\n"
     body += f"验证码：{token}\n"
     if verify_url:
         body += f"\n也可以点击下面链接完成验证：\n{verify_url}\n"
-    sent = send_email(email, "验证 Infinite Canvas 云端邮箱", body)
+    sent = send_email(email, "验证 LumaForge 云端邮箱", body)
     result = {"email_sent": sent}
     if setting_bool("cloud_email_dev_mode", EMAIL_DEV_MODE):
         result["dev_token"] = token
@@ -717,11 +717,11 @@ def send_verification_email(user_id: int, email: str) -> dict:
 def send_password_reset_email(user_id: int, email: str) -> dict:
     reset_ttl = setting_int("cloud_reset_token_ttl_seconds", RESET_TOKEN_TTL_SECONDS)
     token = issue_one_time_token("password_resets", user_id, reset_ttl)
-    body = "你正在重置 Infinite Canvas 云端账号密码。\n\n"
+    body = "你正在重置 LumaForge 云端账号密码。\n\n"
     body += f"重置验证码：{token}\n"
     body += f"有效期：{reset_ttl // 60} 分钟。\n"
     body += "\n请在前端页面输入此验证码完成密码重置。\n"
-    sent = send_email(email, "重置 Infinite Canvas 云端密码", body)
+    sent = send_email(email, "重置 LumaForge 云端密码", body)
     result = {"email_sent": sent}
     if setting_bool("cloud_email_dev_mode", EMAIL_DEV_MODE):
         result["dev_token"] = token
@@ -792,7 +792,7 @@ def public_admin_settings() -> dict:
 
 def normalize_backup_prefix(prefix: str) -> str:
     value = re.sub(r"/+", "/", (prefix or "").strip().replace("\\", "/")).strip("/")
-    return value or "infinite-canvas/backups"
+    return value or "lumaforge/backups"
 
 
 def normalize_backup_provider(provider: str) -> str:
@@ -848,7 +848,7 @@ def public_backup_settings() -> dict:
         "region": region,
         "addressing_style": normalize_backup_addressing_style(provider, settings.get("backup_addressing_style", "auto")),
         "bucket": settings.get("backup_bucket", ""),
-        "prefix": normalize_backup_prefix(settings.get("backup_prefix", "infinite-canvas/backups")),
+        "prefix": normalize_backup_prefix(settings.get("backup_prefix", "lumaforge/backups")),
         "access_key_id": settings.get("backup_access_key_id", ""),
         "secret_access_key_set": bool(settings.get("backup_secret_access_key", "")),
         "encryption_passphrase_set": bool(settings.get("backup_encryption_passphrase", "")),
@@ -914,7 +914,7 @@ def backup_key(filename: str, settings: dict) -> str:
 
 
 def media_backup_prefix(settings: dict) -> str:
-    prefix = normalize_backup_prefix(settings.get("prefix", "infinite-canvas/backups"))
+    prefix = normalize_backup_prefix(settings.get("prefix", "lumaforge/backups"))
     if prefix.endswith("/backups"):
         prefix = prefix[:-len("/backups")]
     return f"{prefix}/media".strip("/")
@@ -1035,10 +1035,10 @@ def create_backup_package(encrypt: bool = True) -> tuple[bytes, str, bool]:
             raise HTTPException(status_code=400, detail="请先设置备份加密密码，再导出加密备份")
         return (
             encrypt_backup_blob(compressed, passphrase),
-            f"infinite-canvas-backup-{timestamp}.sqlite.gz.enc",
+            f"lumaforge-backup-{timestamp}.sqlite.gz.enc",
             True,
         )
-    return compressed, f"infinite-canvas-backup-{timestamp}.sqlite.gz", False
+    return compressed, f"lumaforge-backup-{timestamp}.sqlite.gz", False
 
 
 def decode_backup_package(blob: bytes) -> bytes:
@@ -1117,7 +1117,7 @@ def run_backup_to_object_storage() -> dict:
             Key=key,
             Body=encrypted,
             ContentType="application/octet-stream",
-            Metadata={"app": "infinite-canvas", "format": "sqlite-gzip-aesgcm"},
+            Metadata={"app": "lumaforge", "format": "sqlite-gzip-aesgcm"},
         )
         deleted = prune_backup_objects(settings)
     except Exception as exc:
@@ -1217,7 +1217,7 @@ def render_dashboard_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Infinite Canvas Cloud</title>
+  <title>LumaForge Cloud</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>
     :root {{
@@ -1455,9 +1455,9 @@ def render_dashboard_html() -> str:
     <div class="wrap">
       <header class="topbar">
         <div class="brand">
-          <div class="logo">IC</div>
+          <div class="logo">LF</div>
           <div>
-            <h1>Infinite Canvas Cloud</h1>
+            <h1>LumaForge Cloud</h1>
             <div class="sub">账号、邮箱验证、密码找回与配置同步后端</div>
           </div>
         </div>
@@ -1514,7 +1514,7 @@ def render_admin_login_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Infinite Canvas Cloud Admin</title>
+  <title>LumaForge Cloud Admin</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>
     :root{--bg:#fff;--stage:#fcfcfc;--panel:#fff;--border:#f2f2f2;--text:#121212;--muted:#8f8f8f;--hover:#fafafa;--danger:#b91c1c;--shadow:rgba(0,0,0,.04)}
@@ -1542,7 +1542,7 @@ def render_admin_login_html() -> str:
   <main class="shell">
     <section class="panel">
       <div class="brand">
-        <div class="logo">IC</div>
+        <div class="logo">LF</div>
         <div>
           <h1>Cloud Admin</h1>
           <div class="sub">登录后管理云端部署状态</div>
@@ -1586,7 +1586,7 @@ def render_admin_console_html(admin: dict) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Infinite Canvas Cloud Admin</title>
+  <title>LumaForge Cloud Admin</title>
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <style>
     :root{{--bg:#fff;--stage:#fcfcfc;--panel:#fff;--border:#f2f2f2;--text:#121212;--muted:#8f8f8f;--hover:#fafafa;--ok:#0f766e;--warn:#b45309;--danger:#b91c1c;--shadow:rgba(0,0,0,.04)}}
@@ -1677,7 +1677,7 @@ def render_admin_console_html(admin: dict) -> str:
     <section class="content">
       <div class="wrap">
         <header class="topbar">
-          <div class="brand"><div class="logo">IC</div><div><h1>Infinite Canvas Cloud</h1><div class="sub">当前管理员：{html.escape(admin["username"])}</div></div></div>
+          <div class="brand"><div class="logo">LF</div><div><h1>LumaForge Cloud</h1><div class="sub">当前管理员：{html.escape(admin["username"])}</div></div></div>
           <div>{pill("服务在线","ok")} {pill("SMTP " + status["smtp"], "ok" if status["smtp_configured"] else "warn")} {pill("Dev Mode " + status["dev_mode"], "warn" if status["dev_mode_enabled"] else "ok")} {pill("v" + status["version"], "ok")}</div>
         </header>
 
@@ -1757,7 +1757,7 @@ def render_admin_console_html(admin: dict) -> str:
               <label>SMTP Port<input id="settingSmtpPort" type="number" value="{settings["smtp_port"]}"></label>
               <label>SMTP Username<input id="settingSmtpUsername" value="{html.escape(settings["smtp_username"])}" autocomplete="username"></label>
               <label>SMTP Password<input id="settingSmtpPassword" type="password" autocomplete="new-password" placeholder="{'已设置，留空则不修改' if settings['smtp_password_set'] else '请输入邮箱应用专用密码'}"></label>
-              <label class="full">SMTP From<input id="settingSmtpFrom" value="{html.escape(settings["smtp_from"])}" placeholder="Infinite Canvas <your@email.com>"></label>
+              <label class="full">SMTP From<input id="settingSmtpFrom" value="{html.escape(settings["smtp_from"])}" placeholder="LumaForge <your@email.com>"></label>
               <label>登录 Token 有效期（秒）<input id="settingTokenTtl" type="number" value="{settings["cloud_token_ttl_seconds"]}"></label>
               <label>重置密码有效期（秒）<input id="settingResetTtl" type="number" value="{settings["cloud_reset_token_ttl_seconds"]}"></label>
               <label>邮箱验证有效期（秒）<input id="settingEmailTtl" type="number" value="{settings["cloud_email_token_ttl_seconds"]}"></label>
@@ -1803,7 +1803,7 @@ def render_admin_console_html(admin: dict) -> str:
                   </select>
                 </label>
                 <label>Bucket<input id="backupBucket" value="{html.escape(backup["bucket"])}" placeholder="your-bucket"></label>
-                <label>备份路径前缀<input id="backupPrefix" value="{html.escape(backup["prefix"])}" placeholder="infinite-canvas/backups"></label>
+                <label>备份路径前缀<input id="backupPrefix" value="{html.escape(backup["prefix"])}" placeholder="lumaforge/backups"></label>
                 <label>Access Key<input id="backupAccessKey" value="{html.escape(backup["access_key_id"])}" autocomplete="username"></label>
                 <label>Secret Key<input id="backupSecretKey" type="password" autocomplete="new-password" placeholder="{'已设置，留空则不修改' if backup['secret_access_key_set'] else '请输入 Secret Key'}"></label>
                 <label>加密密码<input id="backupPassphrase" type="password" autocomplete="new-password" placeholder="{'已设置，留空则不修改' if backup['encryption_passphrase_set'] else '用于加密备份文件'}"></label>
@@ -2010,7 +2010,7 @@ def render_admin_console_html(admin: dict) -> str:
         region:backupRegion.value.trim()||'auto',
         addressing_style:backupAddressingStyle.value||'auto',
         bucket:backupBucket.value.trim(),
-        prefix:backupPrefix.value.trim()||'infinite-canvas/backups',
+        prefix:backupPrefix.value.trim()||'lumaforge/backups',
         access_key_id:backupAccessKey.value.trim(),
         secret_access_key:backupSecretKey.value,
         encryption_passphrase:backupPassphrase.value,
@@ -2327,7 +2327,7 @@ def admin_backup_download(request: Request, object_key: str = Query(min_length=1
         blob = response["Body"].read()
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"下载云备份失败：{exc}") from exc
-    filename = os.path.basename(object_key) or "infinite-canvas-backup.sqlite.gz.enc"
+    filename = os.path.basename(object_key) or "lumaforge-backup.sqlite.gz.enc"
     return Response(
         content=blob,
         media_type="application/octet-stream",
@@ -2348,7 +2348,7 @@ def admin_backup_run(request: Request):
             Key=key,
             Body=encrypted,
             ContentType="application/octet-stream",
-            Metadata={"app": "infinite-canvas", "format": "sqlite-gzip-aesgcm"},
+            Metadata={"app": "lumaforge", "format": "sqlite-gzip-aesgcm"},
         )
         deleted = prune_backup_objects(settings)
     except Exception as exc:
@@ -2650,7 +2650,7 @@ def verify_email_page(email: str = "", token: str = "", request: Request = None)
     try:
         rate_limit(request, "email_verify_confirm", email, limit=10, window_seconds=300)
         confirm_email_token(email, token)
-        return HTMLResponse(render_simple_result_page("邮箱验证成功", "你的邮箱已经验证，可以回到 Infinite Canvas 登录。"))
+        return HTMLResponse(render_simple_result_page("邮箱验证成功", "你的邮箱已经验证，可以回到 LumaForge 登录。"))
     except HTTPException as exc:
         return HTMLResponse(render_simple_result_page("邮箱验证失败", str(exc.detail)), status_code=400)
 
@@ -2732,7 +2732,7 @@ def health():
 
 @app.get("/version")
 def version():
-    return {"name": "infinite-canvas-cloud", "version": CLOUD_APP_VERSION}
+    return {"name": "lumaforge-cloud", "version": CLOUD_APP_VERSION}
 
 
 @app.get("/avatars/{filename}")
@@ -3057,4 +3057,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("CLOUD_CONFIG_PORT", "8787")))
-

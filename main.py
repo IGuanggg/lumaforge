@@ -28,9 +28,12 @@ from fastapi.responses import FileResponse, Response, StreamingResponse, JSONRes
 from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 
-logger = logging.getLogger("infinite_canvas")
-APP_VERSION = os.getenv("APP_VERSION", "1.0.9")
-APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/Infinite-Canvas/releases/latest").strip()
+logger = logging.getLogger("lumaforge")
+APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
+APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
+APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
+APP_VERSION = os.getenv("APP_VERSION", "2.0.0")
+APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
     "/api/queue_status",
@@ -2837,7 +2840,7 @@ def normalize_update_payload(data: Dict[str, Any]):
                 sha256_val = str(asset.get("sha256") or "")
             parsed_assets.append({"name": name, "url": raw_url, "type": atype, "size": asset.get("size", 0), "sha256": sha256_val})
     # Select best asset for auto-update
-    is_desktop = os.getenv("INFINITE_CANVAS_DESKTOP") == "1"
+    is_desktop = os.getenv("LUMAFORGE_DESKTOP") == "1" or os.getenv("INFINITE_CANVAS_DESKTOP") == "1"
     selected = None
     for a in parsed_assets:
         if is_desktop and a["type"] == "desktop":
@@ -2888,9 +2891,11 @@ async def index():
 @app.get("/api/app/info")
 async def app_info():
     return {
-        "name": "Infinite Canvas",
+        "name": APP_DISPLAY_NAME,
+        "brand": APP_BRAND_NAME,
+        "repository": APP_REPOSITORY_NAME,
         "version": APP_VERSION,
-        "desktop": os.getenv("INFINITE_CANVAS_DESKTOP") == "1",
+        "desktop": os.getenv("LUMAFORGE_DESKTOP") == "1" or os.getenv("INFINITE_CANVAS_DESKTOP") == "1",
         "cloud_url": CLOUD_SYNC_BASE_URL,
         "update_check_configured": bool(APP_UPDATE_CHECK_URL),
         "update_check_url": APP_UPDATE_CHECK_URL,
@@ -2960,7 +2965,7 @@ async def app_update_check():
     latest = normalized["latest_version"]
     is_newer = bool(latest and version_tuple(latest) > version_tuple(APP_VERSION))
     is_frozen = getattr(sys, "frozen", False)
-    is_desktop = os.getenv("INFINITE_CANVAS_DESKTOP") == "1"
+    is_desktop = os.getenv("LUMAFORGE_DESKTOP") == "1" or os.getenv("INFINITE_CANVAS_DESKTOP") == "1"
     auto_update_supported = not is_frozen  # Python source can self-update; EXE cannot
     reason = ""
     if is_frozen:
@@ -3021,7 +3026,7 @@ def _sanitize_update_filename(name: str, version: str) -> str:
     """Keep only safe characters in filename; fall back to a known-good name."""
     safe = re.sub(r"[^a-zA-Z0-9._\- ]", "", name or "")
     if not safe or not safe.lower().endswith(".zip"):
-        safe = f"infinite-canvas-{version}.zip"
+        safe = f"lumaforge-{version}.zip"
     return safe
 
 
@@ -3114,8 +3119,9 @@ UPDATE_REPLACE_FILES = {"main.py", "cloud_config_server.py", "launcher.py", "des
                         "requirements.txt", "requirements-cloud.txt", "build_windows.bat", "build_desktop.bat",
                         "infinite_canvas.spec", "desktop_canvas.spec", "Dockerfile", "Dockerfile.cloud",
                         "docker-compose.yml", "docker-compose.cloud.yml", ".env.example", ".env.cloud.example",
-                        "docker-entrypoint.sh", "docker-entrypoint-cloud.sh", "README.md", "APP_PACKAGING.md", ".gitignore"}
-UPDATE_REPLACE_DIRS = {"static", "workflows"}
+                        "docker-entrypoint.sh", "docker-entrypoint-cloud.sh", "README.md", "APP_PACKAGING.md",
+                        "RELEASE_CHECKLIST.md", ".gitignore"}
+UPDATE_REPLACE_DIRS = {"static", "workflows", "docs", "scripts"}
 
 
 @app.post("/api/app/update-download")

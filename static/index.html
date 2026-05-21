@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="/static/logo.png" type="image/png">
-    <title>AI Studio</title>
+    <title>光绘工坊 · LumaForge</title>
     <style>
         html.studio-route-booting body {
             visibility: hidden !important;
@@ -362,14 +362,14 @@
             border-radius: 999px;
             border: 1px solid var(--monitor-border);
             box-shadow: 0 4px 20px var(--monitor-shadow);
-            font-family: monospace;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             overflow:hidden;
             transition: width 0.3s var(--fluid-ease) 0.5s, justify-content 0.3s var(--fluid-ease) 0.5s, background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
         }
 
         .sidebar:hover .nano-monitor {
             width:170px;
-            justify-content:flex-start;
+            justify-content:center;
             transition-delay:0s;
         }
 
@@ -383,9 +383,11 @@
         .stat-group {
             display: flex;
             align-items: center;
+            justify-content:center;
             gap: 5px;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 900;
+            letter-spacing:.02em;
             color: var(--text);
             min-width:0;
             white-space:nowrap;
@@ -458,9 +460,9 @@
 
         .label-nano {
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            opacity: 0.5;
-            font-size: 10px;
+            letter-spacing: .02em;
+            opacity: 0.62;
+            font-size: 12px;
             font-weight: 900;
         }
 
@@ -1175,6 +1177,19 @@
                     </svg>
                     <span class="side-pill-text" data-i18n="common.appSettings">应用设置</span>
                 </button>
+                <div class="nano-monitor" id="nano-monitor" title="服务状态">
+                    <div class="stat-group">
+                        <div class="pulse-dot"></div>
+                        <div class="spinner-nano"></div>
+                        <span class="label-nano">ONLINE</span>
+                        <span id="online-val">1</span>
+                    </div>
+                    <div class="divider"></div>
+                    <div class="stat-group">
+                        <span class="label-nano">QUEUE</span>
+                        <span id="queue-val">0</span>
+                    </div>
+                </div>
             </div>
 
         </aside>
@@ -1196,19 +1211,6 @@
         </script>
 
         <main class="stage">
-            <div class="nano-monitor" id="nano-monitor" title="服务状态">
-                <div class="stat-group">
-                    <div class="pulse-dot"></div>
-                    <div class="spinner-nano"></div>
-                    <span class="label-nano">ONLINE</span>
-                    <span id="online-val">1</span>
-                </div>
-                <div class="divider"></div>
-                <div class="stat-group">
-                    <span class="label-nano">QUEUE</span>
-                    <span id="queue-val">0</span>
-                </div>
-            </div>
             <iframe id="frame-zimage" data-src="/static/online.html?v=20260519-lightbox-close1" class="active" scrolling="yes"></iframe>
             <iframe id="frame-enhance" data-src="/static/enhance.html?v=20260512-i18n2" scrolling="yes"></iframe>
             <iframe id="frame-klein" data-src="/static/klein.html?v=20260512-i18n2" scrolling="yes"></iframe>

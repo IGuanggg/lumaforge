@@ -22,7 +22,7 @@
     <script src="/static/i18n.js?v=20260512-pages"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap');
-        :root { --ease:cubic-bezier(.4,0,.2,1); --content-width:1160px; }
+        :root { --ease:cubic-bezier(.4,0,.2,1); --content-width:1160px; --composer-safe-bottom:268px; }
         * { box-sizing:border-box; }
         body { margin:0; height:100vh; overflow:hidden; background:#f8fafc; color:#111827; font-family:'Inter',-apple-system,sans-serif; -webkit-font-smoothing:antialiased; }
         .chat-shell { height:100vh; display:flex; flex-direction:column; min-width:0; }
@@ -43,7 +43,7 @@
         .thread-item.active { background:#111827; color:#fff; box-shadow:0 12px 24px rgba(0,0,0,.12); }
         .thread-delete { width:34px; border-radius:14px; display:flex; align-items:center; justify-content:center; color:#cbd5e1; transition:all .2s var(--ease); }
         .thread-delete:hover { background:#fee2e2; color:#dc2626; }
-        .messages { flex:1; overflow:auto; padding:34px 42px 268px; display:flex; flex-direction:column; align-items:center; gap:18px; }
+        .messages { flex:1; overflow:auto; padding:34px 42px var(--composer-safe-bottom); display:flex; flex-direction:column; align-items:center; gap:18px; }
         .bubble-row { width:min(var(--content-width),100%); display:flex; gap:12px; align-items:flex-end; }
         .bubble-row.user { justify-content:flex-end; }
         .bubble { max-width:min(780px,78%); border-radius:24px; padding:15px 18px; font-size:14px; line-height:1.7; white-space:pre-wrap; word-break:break-word; box-shadow:0 1px 0 rgba(0,0,0,.03); }
@@ -64,6 +64,8 @@
         .provider-switch button { height:30px; padding:0 10px; white-space:nowrap; border-radius:999px; display:flex; align-items:center; justify-content:center; gap:5px; color:#64748b; font-size:10px; font-weight:600; letter-spacing:.02em; transition:all .2s var(--ease); }
         .provider-switch button.active { background:#fff; color:#111827; box-shadow:0 1px 3px rgba(15,23,42,.08); }
         .provider-select { min-width:112px; height:30px; border:0; border-radius:999px; background:#fff; color:#111827; padding:0 10px; outline:none; font-size:10px; font-weight:700; }
+        .attach-btn { height:30px; padding:0 12px; border-radius:999px; display:flex; align-items:center; justify-content:center; gap:6px; background:#fff; border:1px solid #e8edf3; color:#475569; font-size:10px; font-weight:800; transition:all .2s var(--ease); }
+        .attach-btn:hover { color:#111827; border-color:#dbe3ec; background:#f8fafc; }
         .image-controls { display:flex; align-items:center; justify-content:flex-end; gap:8px; min-width:0; }
         .image-controls.hidden { display:none; }
         .mini-ratio { display:flex; gap:2px; background:#f8fafc; border:1px solid #edf2f7; border-radius:999px; padding:2px; overflow:auto; }
@@ -74,6 +76,64 @@
         .resolution-option.active { background:#fff; color:#111827; box-shadow:0 1px 3px rgba(15,23,42,.08); }
         .composer-body { min-height:148px; border:1px solid #f1f5f9; background:#fbfdff; border-radius:22px; padding:14px; display:flex; flex-direction:column; gap:10px; }
         .composer-body.drag-over { border-color:#cbd5e1; background:#f8fafc; box-shadow:inset 0 0 0 1px #e2e8f0; }
+        .image-mode-head { display:none; flex-direction:column; align-items:stretch; gap:14px; }
+        .composer-body.image-mode { min-height:256px; padding:18px; border-radius:26px; }
+        .composer-body.image-mode .image-mode-head { display:flex; }
+        .image-ref-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+        .image-ref-row-items { display:flex; align-items:center; gap:10px; flex-wrap:wrap; min-width:0; }
+        .image-ref-row .ref-chip { width:74px; height:74px; border-radius:20px; margin:0; }
+        .image-ref-row .ref-chip img { width:100%; height:100%; object-fit:cover; border-radius:20px; }
+        .image-ref-row .ref-chip button { top:4px; right:4px; width:20px; height:20px; border-radius:999px; background:rgba(15,23,42,.78); color:#fff; font-size:12px; }
+        .composer-body.image-mode > .ref-strip { display:none; }
+        .ref-upload-tile { width:74px; min-height:74px; border-radius:22px; background:#f8fafc; border:1px solid #edf2f7; color:#94a3b8; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; font-size:11px; font-weight:900; flex:0 0 auto; }
+        .ref-upload-tile:hover { color:#111827; border-color:#dbe3ec; background:#f8fafc; }
+        .image-mode-copy { display:none; }
+        .composer-body.image-mode textarea { min-height:112px; font-size:18px; line-height:1.6; }
+        .composer-body.image-mode .composer-inside-foot { align-items:center; }
+        .composer-body.image-mode .inline-controls { width:100%; align-items:center; gap:10px; }
+        .composer-body.image-mode .provider-switch { min-height:42px; padding:4px; border-radius:22px; background:#f1f5f9; grid-template-columns:minmax(108px,.8fr) minmax(150px,1.2fr); }
+        .composer-body.image-mode .provider-select { height:34px; min-width:0; border-radius:18px; font-size:12px; background:#fff; }
+        .composer-body.image-mode .image-controls { display:flex; flex:1; justify-content:flex-start; gap:10px; }
+        .composer-body.image-mode #providerSwitchWrap,
+        .composer-body.image-mode #imageControls { display:none; }
+        .composer-body.image-mode .mini-ratio,
+        .composer-body.image-mode .resolution-toggle { min-height:42px; border-radius:22px; background:#f1f5f9; padding:4px; }
+        .composer-body.image-mode .mini-ratio button,
+        .composer-body.image-mode .resolution-option { height:32px; font-size:12px; font-weight:900; }
+        .image-quick-controls { position:relative; display:flex; align-items:center; gap:8px; }
+        .image-quick-controls.hidden { display:none; }
+        .param-chip { min-height:42px; padding:0 16px; border-radius:999px; background:#fff; border:1px solid #e8edf3; display:flex; align-items:center; justify-content:center; gap:8px; font-size:13px; font-weight:900; color:#111827; white-space:nowrap; }
+        .model-chip { width:46px; height:46px; border-radius:999px; background:#f1f5f9; color:#111827; display:flex; align-items:center; justify-content:center; transition:all .2s var(--ease); }
+        .model-chip:hover,.model-chip.active { background:#e2e8f0; transform:translateY(-1px); }
+        .model-chip-icon { width:24px; height:24px; border-radius:999px; display:flex; align-items:center; justify-content:center; color:#475569; }
+        .image-model-menu,
+        .image-param-panel { display:none; position:absolute; right:0; bottom:56px; z-index:40; background:#fff; border:1px solid #dbe3ec; box-shadow:0 24px 60px rgba(15,23,42,.18); }
+        .image-model-menu.open,
+        .image-param-panel.open { display:block; animation:popIn .18s var(--ease); }
+        .image-model-menu { width:270px; max-height:420px; overflow:auto; border-radius:22px; padding:10px; }
+        .model-menu-item { width:100%; min-height:46px; border-radius:14px; display:flex; align-items:center; gap:10px; padding:0 10px; color:#334155; font-size:14px; font-weight:700; text-align:left; }
+        .model-menu-item:hover { background:#f8fafc; color:#111827; }
+        .model-menu-item.active { color:#111827; }
+        .model-menu-item .check { margin-left:auto; color:#111827; opacity:0; }
+        .model-menu-item.active .check { opacity:1; }
+        .image-param-panel { width:min(430px,calc(100vw - 42px)); border-radius:24px; padding:18px; }
+        .param-section + .param-section { margin-top:18px; }
+        .param-title { font-size:13px; font-weight:800; color:#64748b; margin-bottom:10px; }
+        .quality-options { display:grid; grid-template-columns:repeat(4,1fr); gap:4px; background:#f1f5f9; padding:4px; border-radius:999px; }
+        .quality-options button { height:40px; border-radius:999px; color:#475569; font-size:13px; font-weight:800; }
+        .quality-options button.active { background:#fff; color:#111827; box-shadow:0 1px 3px rgba(15,23,42,.08); }
+        .dimension-row { display:grid; grid-template-columns:1fr 36px 1fr; gap:10px; align-items:center; margin-bottom:14px; }
+        .dimension-row label { height:44px; border-radius:14px; background:#f8fafc; display:flex; align-items:center; gap:8px; padding:0 12px; color:#64748b; font-size:13px; font-weight:800; }
+        .dimension-row input { min-width:0; width:100%; border:0; outline:0; background:transparent; color:#111827; font-size:16px; font-weight:800; }
+        .swap-size-btn { height:36px; border-radius:999px; display:flex; align-items:center; justify-content:center; color:#94a3b8; }
+        .swap-size-btn:hover { background:#f8fafc; color:#111827; }
+        .size-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+        .size-grid button { min-height:76px; border:1px solid #dbe3ec; border-radius:14px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#334155; font-size:14px; font-weight:800; background:#fff; }
+        .size-grid button:hover { border-color:#94a3b8; }
+        .size-grid button.active { background:#f1f5f9; color:#111827; border-color:#cbd5e1; }
+        .count-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+        .count-grid button { height:42px; border:1px solid #dbe3ec; border-radius:14px; color:#334155; font-size:14px; font-weight:800; background:#fff; }
+        .count-grid button.active { background:#f1f5f9; color:#111827; border-color:#cbd5e1; }
         textarea { width:100%; flex:1; min-height:82px; max-height:168px; resize:none; outline:none; border:0; padding:2px; font-size:14px; line-height:1.65; background:transparent; }
         .attachment-stack { display:flex; flex-direction:column; align-items:flex-start; gap:8px; min-width:0; }
         .composer-inside-foot { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; }
@@ -86,17 +146,28 @@
         .ref-chip { position:relative; width:54px; height:54px; border-radius:14px; overflow:hidden; border:1px solid #e5e7eb; background:#fff; flex:0 0 auto; }
         .ref-chip img { width:100%; height:100%; object-fit:cover; }
         .ref-chip button { position:absolute; top:3px; right:3px; width:18px; height:18px; border-radius:50%; background:rgba(255,255,255,.92); font-size:12px; line-height:18px; }
+        .chat-lightbox { position:fixed; inset:0; z-index:80; display:none; align-items:center; justify-content:center; padding:28px; background:rgba(248,250,252,.92); backdrop-filter:blur(18px); }
+        .chat-lightbox.open { display:flex; animation:popIn .18s var(--ease); }
+        .chat-lightbox-card { position:relative; width:min(1380px,100%); height:min(86vh,920px); border-radius:30px; background:#f8fafc; box-shadow:0 28px 80px rgba(15,23,42,.18); overflow:hidden; display:flex; align-items:center; justify-content:center; }
+        .chat-lightbox-card img { max-width:100%; max-height:100%; object-fit:contain; display:block; }
+        .chat-lightbox-actions { position:absolute; top:22px; right:22px; display:flex; gap:10px; z-index:2; }
+        .chat-lightbox-actions button { width:54px; height:54px; border-radius:999px; display:flex; align-items:center; justify-content:center; background:#111827; color:#fff; box-shadow:0 14px 34px rgba(15,23,42,.18); }
+        .chat-lightbox-actions .close { background:#fff; color:#111827; border:1px solid #e8edf3; }
+        .chat-lightbox-meta { position:absolute; left:22px; bottom:22px; right:22px; border-radius:22px; background:rgba(255,255,255,.92); border:1px solid #e8edf3; padding:14px 18px; color:#334155; font-size:13px; font-weight:700; line-height:1.55; max-height:120px; overflow:auto; }
         /* MS provider indicator badge */
         .ms-badge { display:inline-flex; align-items:center; gap:4px; font-size:9px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; background:#0d1117; color:#7ee787; border-radius:999px; padding:3px 8px; }
         @keyframes popIn { from { opacity:0; transform:translateY(-6px) scale(.98); } to { opacity:1; transform:translateY(0) scale(1); } }
         @keyframes cursorBlink { 0%,45% { opacity:1; } 46%,100% { opacity:0; } }
         @media (max-width:900px){
             .topbar { padding-left:18px; padding-right:18px; }
-            .messages { padding:24px 18px 360px; }
+            .messages { padding:24px 18px var(--composer-safe-bottom); }
             .composer-wrap { padding:20px 18px 24px; }
             .composer { min-height:296px; }
             .inline-controls { align-items:stretch; flex-direction:column; flex:1; }
             .image-controls { align-items:stretch; flex-direction:column; }
+            .composer-body.image-mode .image-mode-copy { font-size:16px; }
+            .composer-body.image-mode .provider-switch { grid-template-columns:1fr; }
+            .composer-body.image-mode .image-controls { width:100%; }
             .resolution-toggle { align-self:flex-start; }
             .composer-inside-foot { align-items:flex-end; }
             .ref-strip { max-width:100%; }
@@ -133,11 +204,26 @@
         <div class="composer-wrap">
             <div class="composer">
                 <div id="composerBody" class="composer-body">
+                    <input id="imageUploadInput" type="file" accept="image/*" multiple hidden onchange="handleAttachInput(this)">
+                    <div id="imageModeHead" class="image-mode-head">
+                        <div class="image-ref-row">
+                            <div id="imageRefRow" class="image-ref-row-items"></div>
+                            <button class="ref-upload-tile" type="button" onclick="openAttachPicker()" title="上传参考图">
+                                <i data-lucide="image" class="w-5 h-5"></i>
+                                <span>参考图</span>
+                            </button>
+                        </div>
+                        <div class="image-mode-copy">今天我们要创作什么</div>
+                    </div>
                     <textarea id="messageInput" rows="4" placeholder="输入消息，Enter 发送..." data-i18n-placeholder="chat.inputPlaceholder" oninput="autoGrow(this)" onkeydown="handleKey(event)"></textarea>
                     <div id="refStrip" class="ref-strip"></div>
                     <div class="composer-inside-foot">
                         <div class="left-tools">
                             <div class="inline-controls">
+                                <button id="attachBtn" class="attach-btn" type="button" onclick="openAttachPicker()" title="上传图片">
+                                    <i data-lucide="image-plus" class="w-3.5 h-3.5"></i>
+                                    <span id="attachBtnText">图片</span>
+                                </button>
                                 <div class="mode-switch">
                                     <button id="chatModeBtn" class="active" onclick="setMode('chat')"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i><span data-i18n="chat.chatMode">Chat</span></button>
                                     <button id="imageModeBtn" onclick="setMode('image')"><i data-lucide="image-plus" class="w-3.5 h-3.5"></i><span data-i18n="chat.imageMode">Image</span></button>
@@ -161,12 +247,52 @@
                                         <button id="chat-res-2k" class="resolution-option" onclick="setChatResolution('2k')">2K</button>
                                     </div>
                                 </div>
+                                <div id="imageQuickControls" class="image-quick-controls hidden">
+                                    <button id="imageParamChip" class="param-chip" type="button" onclick="toggleParamPanel()">
+                                        <span id="imageParamLabel">中 · 1:1 · 1 img</span>
+                                        <i data-lucide="chevron-up" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                    <button id="imageModelChip" class="model-chip" type="button" onclick="toggleModelMenu()" title="选择生图模型">
+                                        <span id="imageModelIcon" class="model-chip-icon"><i data-lucide="circle-dot" class="w-5 h-5"></i></span>
+                                    </button>
+                                    <div id="imageModelMenu" class="image-model-menu"></div>
+                                    <div id="imageParamPanel" class="image-param-panel">
+                                        <div class="param-section">
+                                            <div class="param-title">质量</div>
+                                            <div id="qualityOptions" class="quality-options"></div>
+                                        </div>
+                                        <div class="param-section">
+                                            <div class="param-title">尺寸</div>
+                                            <div class="dimension-row">
+                                                <label>W <input id="imageWidthInput" type="number" min="256" max="4096" step="16" value="1024" oninput="setCustomImageSize()"></label>
+                                                <button class="swap-size-btn" type="button" onclick="swapImageSize()" title="交换宽高"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i></button>
+                                                <label>H <input id="imageHeightInput" type="number" min="256" max="4096" step="16" value="1024" oninput="setCustomImageSize()"></label>
+                                            </div>
+                                            <div id="sizePresetGrid" class="size-grid"></div>
+                                        </div>
+                                        <div class="param-section">
+                                            <div class="param-title">Image</div>
+                                            <div id="imageCountGrid" class="count-grid"></div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <button id="sendBtn" onclick="sendMessage()" class="send-btn" title="发送" data-i18n-title="chat.send"><i data-lucide="send" class="w-5 h-5"></i></button>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div id="chatLightbox" class="chat-lightbox" onclick="closeChatImagePreview(event)">
+        <div class="chat-lightbox-card">
+            <div class="chat-lightbox-actions">
+                <button type="button" onclick="downloadChatPreview(event)" title="下载"><i data-lucide="download" class="w-6 h-6"></i></button>
+                <button type="button" class="close" onclick="closeChatImagePreview(event)" title="关闭"><i data-lucide="x" class="w-7 h-7"></i></button>
+            </div>
+            <img id="chatLightboxImg" alt="">
+            <div id="chatLightboxMeta" class="chat-lightbox-meta"></div>
         </div>
     </div>
 
@@ -197,21 +323,52 @@
         }
 
         const USER_KEY = 'gpt_chat_browser_user';
+        const MODE_KEY = 'gpt_chat_mode';
+        const CHAT_PROVIDER_KEY = 'gpt_chat_provider';
+        const CHAT_MODEL_KEY = 'gpt_chat_model';
+        const IMAGE_PROVIDER_KEY = 'gpt_chat_image_provider';
+        const IMAGE_MODEL_KEY = 'gpt_chat_image_model';
+        const RATIO_KEY = 'gpt_chat_ratio';
+        const RESOLUTION_KEY = 'gpt_chat_resolution';
+        const QUALITY_KEY = 'gpt_chat_quality';
+        const COUNT_KEY = 'gpt_chat_image_count';
+        const SIZE_PRESET_KEY = 'gpt_chat_size_preset';
+        const IMAGE_WIDTH_KEY = 'gpt_chat_image_width';
+        const IMAGE_HEIGHT_KEY = 'gpt_chat_image_height';
+        function savedValue(key, fallback){
+            try {
+                const value = localStorage.getItem(key);
+                return value === null || value === '' ? fallback : value;
+            } catch(e) {
+                return fallback;
+            }
+        }
+        function savedNumber(key, fallback){
+            const value = Number(savedValue(key, fallback));
+            return Number.isFinite(value) ? value : fallback;
+        }
         const userId = localStorage.getItem(USER_KEY) || uuid();
         localStorage.setItem(USER_KEY, userId);
+        const CLIENT_ID = localStorage.getItem('client_id') || userId;
+        localStorage.setItem('client_id', CLIENT_ID);
 
         let conversations = [];
         let currentConversation = null;
-        let mode = 'chat';
-        let provider = 'comfly';
+        let mode = savedValue(MODE_KEY, 'image');
+        let provider = savedValue(CHAT_PROVIDER_KEY, 'comfly');
         let msModel = '';
-        let activeChatModel = '';
-        let activeImageProvider = 'comfly';
-        let activeImageModel = '';
+        let activeChatModel = savedValue(CHAT_MODEL_KEY, '');
+        let activeImageProvider = savedValue(IMAGE_PROVIDER_KEY, 'comfly');
+        let activeImageModel = savedValue(IMAGE_MODEL_KEY, '');
         let apiProviders = [];
         let chatProviderModels = {};
-        let chatRatio = 'square';
-        let chatResolution = '1k';
+        let chatRatio = savedValue(RATIO_KEY, 'square');
+        let chatResolution = savedValue(RESOLUTION_KEY, '1k');
+        let chatQuality = savedValue(QUALITY_KEY, 'medium');
+        let chatImageCount = savedNumber(COUNT_KEY, 1);
+        let selectedSizePreset = savedValue(SIZE_PRESET_KEY, '1:1');
+        let imageWidth = savedNumber(IMAGE_WIDTH_KEY, 1024);
+        let imageHeight = savedNumber(IMAGE_HEIGHT_KEY, 1024);
         let refs = [];
         let config = { chat_model: 'gpt-5.5', image_model: 'gpt-image-2', ms_chat_models: [] };
 
@@ -224,8 +381,45 @@
             story: [['720x1280','1k'], ['1080x1920','2k']],
             wide: [['1280x720','1k'], ['1920x1080','2k']]
         };
+        const QUALITY_OPTIONS = [
+            ['auto','自动'],
+            ['high','高'],
+            ['medium','中'],
+            ['low','低']
+        ];
+        const SIZE_PRESETS = [
+            {key:'1:1', label:'1:1', ratio:'square', res:'1k', w:1024, h:1024},
+            {key:'3:2', label:'3:2', ratio:'landscape', res:'1k', w:1080, h:720},
+            {key:'2:3', label:'2:3', ratio:'portrait', res:'1k', w:720, h:1080},
+            {key:'4:3', label:'4:3', ratio:'landscape43', res:'1k', w:1344, h:1008},
+            {key:'3:4', label:'3:4', ratio:'portrait43', res:'1k', w:1008, h:1344},
+            {key:'9:16', label:'9:16', ratio:'story', res:'1k', w:720, h:1280},
+            {key:'1:1-2k', label:'1:1(2k)', ratio:'square', res:'2k', w:1536, h:1536},
+            {key:'16:9-2k', label:'16:9(2k)', ratio:'wide', res:'2k', w:1920, h:1080},
+            {key:'9:16-2k', label:'9:16(2k)', ratio:'story', res:'2k', w:1080, h:1920},
+            {key:'16:9-4k', label:'16:9(4k)', ratio:'wide', res:'4k', w:3840, h:2160},
+            {key:'9:16-4k', label:'9:16(4k)', ratio:'story', res:'4k', w:2160, h:3840},
+            {key:'auto', label:'auto', ratio:'square', res:'1k', w:1024, h:1024}
+        ];
 
         const headers = () => ({'Content-Type':'application/json', 'X-User-ID':userId});
+
+        function persistComposerState(){
+            try {
+                localStorage.setItem(MODE_KEY, mode === 'chat' ? 'chat' : 'image');
+                localStorage.setItem(CHAT_PROVIDER_KEY, provider || '');
+                localStorage.setItem(CHAT_MODEL_KEY, activeChatModel || '');
+                localStorage.setItem(IMAGE_PROVIDER_KEY, activeImageProvider || '');
+                localStorage.setItem(IMAGE_MODEL_KEY, activeImageModel || '');
+                localStorage.setItem(RATIO_KEY, chatRatio || 'square');
+                localStorage.setItem(RESOLUTION_KEY, chatResolution || '1k');
+                localStorage.setItem(QUALITY_KEY, chatQuality || 'medium');
+                localStorage.setItem(COUNT_KEY, String(chatImageCount || 1));
+                localStorage.setItem(SIZE_PRESET_KEY, selectedSizePreset || '1:1');
+                localStorage.setItem(IMAGE_WIDTH_KEY, String(imageWidth || 1024));
+                localStorage.setItem(IMAGE_HEIGHT_KEY, String(imageHeight || 1024));
+            } catch(e) {}
+        }
 
         function uniqueModels(list){
             const seen = new Set();
@@ -269,7 +463,136 @@
             if(mode === 'chat' && provider === 'modelscope') msModel = activeChatModel;
             providerSelect.innerHTML = providers.map(p => `<option value="${escapeHtml(p.id)}" ${p.id === currentProviderId() ? 'selected' : ''}>${escapeHtml(p.name || p.id)}</option>`).join('');
             modelSelect.innerHTML = models.map(m => `<option value="${escapeHtml(m)}" ${m === currentModel() ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
+            renderImageModelMenu();
+            renderImageParamPanel();
         }
+
+        function imageModelEntries(){
+            const entries = [];
+            imageProviders().forEach(p => {
+                uniqueModels(p.image_models || []).forEach(model => {
+                    entries.push({ provider:p, model, key:`${p.id}::${model}` });
+                });
+            });
+            return entries;
+        }
+        function modelIconName(model){
+            const text = String(model || '').toLowerCase();
+            if(text.includes('nano') || text.includes('banana')) return 'sparkles';
+            if(text.includes('flux')) return 'triangle';
+            if(text.includes('luma')) return 'aperture';
+            if(text.includes('gpt') || text.includes('image')) return 'circle-dot';
+            return 'image';
+        }
+        function modelDisplayName(model){
+            return String(model || '').replace(/^openai\//i, '').replace(/-/g, ' ').replace(/\bgpt\b/i, 'GPT').replace(/\bimage\b/i, 'Image').replace(/\bnano\b/i, 'Nano').replace(/\bbanana\b/i, 'Banana').trim();
+        }
+        function renderImageModelMenu(){
+            const menu = document.getElementById('imageModelMenu');
+            const chip = document.getElementById('imageModelIcon');
+            if(!menu || !chip) return;
+            const entries = imageModelEntries();
+            const selectedKey = `${activeImageProvider}::${activeImageModel}`;
+            chip.innerHTML = `<i data-lucide="${modelIconName(activeImageModel)}" class="w-5 h-5"></i>`;
+            menu.innerHTML = entries.length ? entries.map(item => {
+                const active = item.key === selectedKey;
+                return `<button class="model-menu-item ${active ? 'active' : ''}" type="button" onclick="selectImageModel('${escapeJs(item.provider.id)}','${escapeJs(item.model)}')">
+                    <span class="model-chip-icon"><i data-lucide="${modelIconName(item.model)}" class="w-4 h-4"></i></span>
+                    <span>${escapeHtml(modelDisplayName(item.model))}</span>
+                    <span class="check">✓</span>
+                </button>`;
+            }).join('') : `<div class="px-3 py-5 text-center text-xs font-bold text-gray-400">暂无生图模型</div>`;
+            lucide.createIcons();
+        }
+        function selectImageModel(nextProvider, nextModel){
+            activeImageProvider = nextProvider;
+            activeImageModel = nextModel;
+            closeImagePopovers();
+            renderProviderControls();
+            updateModelLabel();
+            updateImageParamLabel();
+            persistComposerState();
+        }
+        function toggleModelMenu(){
+            const menu = document.getElementById('imageModelMenu');
+            const panel = document.getElementById('imageParamPanel');
+            const chip = document.getElementById('imageModelChip');
+            if(!menu) return;
+            panel?.classList.remove('open');
+            const open = !menu.classList.contains('open');
+            menu.classList.toggle('open', open);
+            chip?.classList.toggle('active', open);
+        }
+        function toggleParamPanel(){
+            const panel = document.getElementById('imageParamPanel');
+            const menu = document.getElementById('imageModelMenu');
+            if(!panel) return;
+            menu?.classList.remove('open');
+            document.getElementById('imageModelChip')?.classList.remove('active');
+            panel.classList.toggle('open');
+        }
+        function closeImagePopovers(){
+            document.getElementById('imageModelMenu')?.classList.remove('open');
+            document.getElementById('imageParamPanel')?.classList.remove('open');
+            document.getElementById('imageModelChip')?.classList.remove('active');
+        }
+        function renderImageParamPanel(){
+            const qualityBox = document.getElementById('qualityOptions');
+            const sizeBox = document.getElementById('sizePresetGrid');
+            const countBox = document.getElementById('imageCountGrid');
+            if(!qualityBox || !sizeBox || !countBox) return;
+            qualityBox.innerHTML = QUALITY_OPTIONS.map(([key,label]) => `<button class="${chatQuality === key ? 'active' : ''}" type="button" onclick="setChatQuality('${key}')">${label}</button>`).join('');
+            sizeBox.innerHTML = SIZE_PRESETS.map(item => `<button class="${selectedSizePreset === item.key ? 'active' : ''}" type="button" onclick="setImageSizePreset('${item.key}')"><i data-lucide="${item.label.includes('16:9') || item.label.includes('3:2') || item.label.includes('4:3') ? 'rectangle-horizontal' : item.label.includes('auto') ? 'sparkles' : 'rectangle-vertical'}" class="w-4 h-4"></i><span>${item.label}</span></button>`).join('');
+            countBox.innerHTML = Array.from({length:10}, (_,i) => i + 1).map(num => `<button class="${chatImageCount === num ? 'active' : ''}" type="button" onclick="setChatImageCount(${num})">${num} img</button>`).join('');
+            document.getElementById('imageWidthInput').value = imageWidth;
+            document.getElementById('imageHeightInput').value = imageHeight;
+            updateImageParamLabel();
+            lucide.createIcons();
+        }
+        function setChatQuality(next){ chatQuality = next; renderImageParamPanel(); persistComposerState(); }
+        function setChatImageCount(next){ chatImageCount = Math.max(1, Math.min(10, Number(next) || 1)); renderImageParamPanel(); persistComposerState(); }
+        function setImageSizePreset(key){
+            const item = SIZE_PRESETS.find(x => x.key === key) || SIZE_PRESETS[0];
+            selectedSizePreset = item.key;
+            imageWidth = item.w;
+            imageHeight = item.h;
+            chatRatio = item.ratio;
+            chatResolution = item.res;
+            updateChatResolutionUI();
+            renderImageParamPanel();
+            persistComposerState();
+        }
+        function setCustomImageSize(){
+            const w = Number(document.getElementById('imageWidthInput')?.value || 0);
+            const h = Number(document.getElementById('imageHeightInput')?.value || 0);
+            if(w >= 256 && h >= 256){
+                imageWidth = Math.min(4096, Math.max(256, Math.round(w / 16) * 16));
+                imageHeight = Math.min(4096, Math.max(256, Math.round(h / 16) * 16));
+                selectedSizePreset = 'custom';
+                updateImageParamLabel();
+                persistComposerState();
+            }
+        }
+        function swapImageSize(){
+            [imageWidth, imageHeight] = [imageHeight, imageWidth];
+            selectedSizePreset = 'custom';
+            renderImageParamPanel();
+            persistComposerState();
+        }
+        function qualityLabel(){
+            return (QUALITY_OPTIONS.find(([key]) => key === chatQuality) || QUALITY_OPTIONS[2])[1];
+        }
+        function sizeLabel(){
+            const item = SIZE_PRESETS.find(x => x.key === selectedSizePreset);
+            if(item) return item.label.replace(/\(.+\)/, '');
+            const ratio = imageWidth === imageHeight ? '1:1' : imageWidth > imageHeight ? `${Math.round(imageWidth / Math.max(1, imageHeight) * 10) / 10}:1` : `1:${Math.round(imageHeight / Math.max(1, imageWidth) * 10) / 10}`;
+            return ratio;
+        }
+        function updateImageParamLabel(){
+            const label = document.getElementById('imageParamLabel');
+            if(label) label.textContent = `${qualityLabel()} · ${sizeLabel()} · ${chatImageCount} img`;
+        }
+        function escapeJs(str){ return String(str || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 
         async function loadConfig(){
             try {
@@ -280,13 +603,17 @@
                 config.image_model = config.image_model || ((config.image_models || [])[0]) || 'gpt-image-2';
                 const chatProviderList = chatProviders();
                 provider = chatProviderList.some(p => p.id === provider) ? provider : (chatProviderList[0]?.id || 'comfly');
-                activeChatModel = chatProviderModels[provider] || providerById(provider, 'chat')?.chat_models?.[0] || config.chat_model;
-                activeImageProvider = imageProviders()[0]?.id || 'comfly';
-                activeImageModel = imageProviders()[0]?.image_models?.[0] || config.image_model;
+                const chatModels = uniqueModels(providerById(provider, 'chat')?.chat_models || []);
+                activeChatModel = chatModels.includes(activeChatModel) ? activeChatModel : (chatProviderModels[provider] && chatModels.includes(chatProviderModels[provider]) ? chatProviderModels[provider] : (chatModels[0] || config.chat_model));
+                const imageProviderList = imageProviders();
+                activeImageProvider = imageProviderList.some(p => p.id === activeImageProvider) ? activeImageProvider : (imageProviderList[0]?.id || 'comfly');
+                const imageModels = uniqueModels(providerById(activeImageProvider, 'image')?.image_models || []);
+                activeImageModel = imageModels.includes(activeImageModel) ? activeImageModel : (imageModels[0] || config.image_model);
                 // Default MS model to first in list
-                if (config.ms_chat_models?.length) msModel = config.ms_chat_models[0];
+                if (config.ms_chat_models?.length) msModel = config.ms_chat_models.includes(activeChatModel) ? activeChatModel : config.ms_chat_models[0];
                 renderProviderControls();
                 updateModelLabel();
+                persistComposerState();
             } catch(e) {}
         }
         try {
@@ -311,6 +638,7 @@
             }
             renderProviderControls();
             updateModelLabel();
+            persistComposerState();
         }
         function setActiveModel(model){
             if(mode === 'image') activeImageModel = model;
@@ -320,6 +648,7 @@
                 if(provider === 'modelscope') msModel = model;
             }
             updateModelLabel();
+            persistComposerState();
         }
 
         async function loadConversations(){
@@ -394,15 +723,32 @@
         document.addEventListener('click', (event) => {
             const actions = document.querySelector('.top-actions');
             if(actions && !actions.contains(event.target)) toggleHistory(false);
+            const quick = document.getElementById('imageQuickControls');
+            if(quick && !quick.contains(event.target)) closeImagePopovers();
         });
 
         function setMode(next){
-            mode = next;
+            mode = next === 'chat' ? 'chat' : 'image';
             document.getElementById('chatModeBtn').classList.toggle('active', next === 'chat');
             document.getElementById('imageModeBtn').classList.toggle('active', next === 'image');
             document.getElementById('imageControls').classList.toggle('hidden', next !== 'image');
+            document.getElementById('composerBody').classList.toggle('image-mode', next === 'image');
+            document.getElementById('imageQuickControls')?.classList.toggle('hidden', next !== 'image');
+            document.getElementById('providerSwitchWrap')?.classList.toggle('hidden', next === 'image');
+            document.getElementById('attachBtnText').textContent = next === 'image' ? '参考图' : '图片';
+            const input = document.getElementById('messageInput');
+            if(input){
+                input.placeholder = next === 'image' ? '今天我们要创作什么' : '输入消息，Enter 发送...';
+                autoGrow(input);
+            }
+            if(next !== 'image') closeImagePopovers();
             renderProviderControls();
+            renderRefs();
             updateModelLabel();
+            updateImageParamLabel();
+            lucide.createIcons();
+            persistComposerState();
+            updateComposerSafeArea(true);
         }
 
         function updateModelLabel(){
@@ -425,16 +771,40 @@
                 document.getElementById(`chat-ratio-${item}`).classList.toggle('active', item === next);
             });
             if(preferredSize){ const match = SIZE_OPTIONS[next].find(([value]) => value === preferredSize); if(match) chatResolution = match[1]; }
+            const match = SIZE_OPTIONS[next]?.find(([, label]) => label === chatResolution) || SIZE_OPTIONS[next]?.[0];
+            if(match){
+                const [w,h] = match[0].split('x').map(Number);
+                imageWidth = w || imageWidth;
+                imageHeight = h || imageHeight;
+                const preset = SIZE_PRESETS.find(item => item.ratio === next && item.res === chatResolution);
+                selectedSizePreset = preset?.key || 'custom';
+            }
             updateChatResolutionUI();
+            updateImageParamLabel();
+            persistComposerState();
         }
 
-        function setChatResolution(next){ chatResolution = next; updateChatResolutionUI(); }
+        function setChatResolution(next){
+            chatResolution = next;
+            const match = SIZE_OPTIONS[chatRatio]?.find(([, label]) => label === next) || SIZE_OPTIONS[chatRatio]?.[0];
+            if(match){
+                const [w,h] = match[0].split('x').map(Number);
+                imageWidth = w || imageWidth;
+                imageHeight = h || imageHeight;
+                const preset = SIZE_PRESETS.find(item => item.ratio === chatRatio && item.res === next);
+                selectedSizePreset = preset?.key || 'custom';
+            }
+            updateChatResolutionUI();
+            renderImageParamPanel();
+            persistComposerState();
+        }
         function updateChatResolutionUI(){
             document.getElementById('chat-res-1k').classList.toggle('active', chatResolution === '1k');
             document.getElementById('chat-res-2k').classList.toggle('active', chatResolution === '2k');
         }
 
         function currentChatSize(){
+            if(mode === 'image') return `${imageWidth}x${imageHeight}`;
             const options = SIZE_OPTIONS[chatRatio] || SIZE_OPTIONS.square;
             const match = options.find(([, label]) => label === chatResolution) || options[0];
             return match[0];
@@ -472,7 +842,7 @@
                 const img = document.createElement('img');
                 img.className = 'generated';
                 img.src = msg.image_url;
-                img.onclick = () => window.open(msg.image_url, '_blank');
+                img.onclick = () => openChatImagePreview(msg.image_url, msg.content || tr('chat.generated'));
                 bubble.appendChild(img);
             }
             // Show model badge for assistant messages
@@ -489,18 +859,106 @@
             return {row, bubble, text};
         }
 
+        let currentPreviewImage = '';
+        function openChatImagePreview(url, meta=''){
+            currentPreviewImage = url || '';
+            const box = document.getElementById('chatLightbox');
+            const img = document.getElementById('chatLightboxImg');
+            const metaEl = document.getElementById('chatLightboxMeta');
+            if(!box || !img) return;
+            img.src = currentPreviewImage;
+            if(metaEl) metaEl.textContent = meta || '';
+            box.classList.add('open');
+            lucide.createIcons();
+        }
+
+        function closeChatImagePreview(event){
+            if(event && event.target !== event.currentTarget && !event.currentTarget?.classList?.contains('close')) return;
+            event?.stopPropagation?.();
+            const box = document.getElementById('chatLightbox');
+            if(box) box.classList.remove('open');
+        }
+
+        function outputDownloadName(url){
+            const clean = String(url || '').split('?')[0].split('#')[0];
+            const name = decodeURIComponent(clean.split('/').pop() || '');
+            return name || `chat-image-${Date.now()}.png`;
+        }
+
+        async function downloadDirectImage(event, url, filename){
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            if(!url) return;
+            try {
+                const href = `/api/download-url?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || outputDownloadName(url))}`;
+                const a = document.createElement('a');
+                a.href = href;
+                a.download = filename || outputDownloadName(url);
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            } catch(err) {
+                const res = await fetch('/api/download-url', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({url, filename: filename || outputDownloadName(url)})
+                });
+                const blob = await res.blob();
+                const href = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = href;
+                a.download = filename || outputDownloadName(url);
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(href), 1200);
+            }
+        }
+
+        function downloadChatPreview(event){
+            downloadDirectImage(event, currentPreviewImage, outputDownloadName(currentPreviewImage));
+        }
+
+        function openAttachPicker(){
+            document.getElementById('imageUploadInput')?.click();
+        }
+        function handleAttachInput(input){
+            uploadFiles(input.files);
+            input.value = '';
+        }
         async function uploadFiles(files){
             if(!files?.length) return;
             const form = new FormData();
             [...files].slice(0, 4 - refs.length).forEach(file => form.append('files', file));
-            const data = await fetch('/api/ai/upload', {method:'POST', body:form}).then(r=>r.json());
-            refs.push(...(data.files || []));
-            renderRefs();
+            if(![...form.keys()].length) return;
+            const btnText = document.getElementById('attachBtnText');
+            const oldText = btnText?.textContent || '图片';
+            if(btnText) btnText.textContent = '上传中';
+            try {
+                const data = await fetch('/api/ai/upload?temporary=true', {method:'POST', body:form}).then(async r => {
+                    if(!r.ok) throw new Error((await r.json()).detail || '图片上传失败');
+                    return r.json();
+                });
+                refs.push(...(data.files || []));
+                renderRefs();
+            } catch(err) {
+                alert(err.message || '图片上传失败');
+            } finally {
+                if(btnText) btnText.textContent = oldText;
+            }
+        }
+
+        function refChipMarkup(ref, i){
+            return `<div class="ref-chip"><img src="${escapeHtml(ref.url)}" alt=""><button type="button" onclick="removeRef(${i})">×</button></div>`;
         }
 
         function renderRefs(){
+            const markup = refs.map((ref,i) => refChipMarkup(ref, i)).join('');
             const strip = document.getElementById('refStrip');
-            strip.innerHTML = refs.map((ref,i) => `<div class="ref-chip"><img src="${ref.url}"><button onclick="removeRef(${i})">×</button></div>`).join('');
+            const imageRow = document.getElementById('imageRefRow');
+            if(strip) strip.innerHTML = markup;
+            if(imageRow) imageRow.innerHTML = markup;
+            updateComposerSafeArea(true);
         }
 
         function removeRef(i){ refs.splice(i,1); renderRefs(); }
@@ -528,12 +986,17 @@
         });
 
         function hasImageFiles(items){ return [...(items || [])].some(item => item.kind === 'file' && item.type.startsWith('image/')); }
-        function autoGrow(el){ el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 150) + 'px'; }
+        function autoGrow(el){
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 150) + 'px';
+            updateComposerSafeArea(true);
+        }
         function handleKey(e){ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); } }
 
         async function sendMessage(){
             const input = document.getElementById('messageInput');
-            const message = input.value.trim();
+            let message = input.value.trim();
+            if(!message && refs.length && mode === 'chat') message = '请识别并描述这张图片。';
             if(!message) return;
             const btn = document.getElementById('sendBtn');
             btn.disabled = true;
@@ -562,10 +1025,13 @@
                             message,
                             mode,
                             size: currentChatSize(),
+                            quality: chatQuality,
+                            image_count: chatImageCount,
                             model: activeChatModel || config.chat_model,
                             image_model: activeImageModel || config.image_model,
                             reference_images: pendingRefs,
                             provider: activeImageProvider,
+                            client_id: CLIENT_ID,
                         })
                     }).then(async r => { if(!r.ok) throw new Error((await r.json()).detail || tr('chat.requestFailed')); return r.json(); });
                     currentConversation = data.conversation;
@@ -596,7 +1062,8 @@
                     model: currentProvider === 'modelscope' ? currentMsModel : currentChatModel,
                     ms_model: currentProvider === 'modelscope' ? currentMsModel : '',
                     provider: currentProvider,
-                    reference_images: pendingRefs
+                    reference_images: pendingRefs,
+                    client_id: CLIENT_ID
                 })
             });
             if(!res.ok) throw new Error((await res.json()).detail || tr('chat.requestFailed'));
@@ -636,15 +1103,54 @@
             assistantBubble.bubble.classList.remove('streaming');
         }
 
-        function scrollBottom(){ requestAnimationFrame(() => { const box = document.getElementById('messages'); box.scrollTop = box.scrollHeight; }); }
+        function updateComposerSafeArea(keepBottom = false){
+            requestAnimationFrame(() => {
+                const wrap = document.querySelector('.composer-wrap');
+                const box = document.getElementById('messages');
+                if(!wrap || !box) return;
+                const wasNearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 96;
+                const safe = Math.ceil(wrap.getBoundingClientRect().height + 28);
+                const minSafe = mode === 'image' ? 360 : 250;
+                const next = Math.max(safe, minSafe);
+                document.documentElement.style.setProperty('--composer-safe-bottom', `${next}px`);
+                if(keepBottom || wasNearBottom) {
+                    requestAnimationFrame(() => {
+                        box.scrollTop = box.scrollHeight;
+                    });
+                }
+            });
+        }
+
+        function scrollBottom(){
+            updateComposerSafeArea(true);
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const box = document.getElementById('messages');
+                    box.scrollTop = box.scrollHeight;
+                });
+            });
+        }
         function escapeHtml(str){ return String(str).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
+
+        const composerWrapEl = document.querySelector('.composer-wrap');
+        if(window.ResizeObserver && composerWrapEl) {
+            new ResizeObserver(updateComposerSafeArea).observe(composerWrapEl);
+        }
+        window.addEventListener('resize', updateComposerSafeArea);
 
         window.onload = async () => {
             applyLanguage();
-            setChatRatio('square');
-            setChatResolution('1k');
+            chatQuality = ['auto','high','medium','low'].includes(chatQuality) ? chatQuality : 'medium';
+            chatImageCount = Math.max(1, Math.min(10, Number(chatImageCount) || 1));
+            if(SIZE_PRESETS.some(item => item.key === selectedSizePreset)) setImageSizePreset(selectedSizePreset);
+            else {
+                setChatRatio(SIZE_OPTIONS[chatRatio] ? chatRatio : 'square');
+                setChatResolution(chatResolution || '1k');
+            }
             await loadConfig();
+            setMode(mode === 'chat' ? 'chat' : 'image');
             await loadConversations();
+            updateComposerSafeArea();
         };
     </script>
 </body>

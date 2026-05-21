@@ -1,4 +1,4 @@
-# Infinite-Canvas 架构分析文档
+# LumaForge 架构分析文档
 
 > 分析日期：2026-05-17
 > 仅分析，未修改任何代码。
@@ -7,7 +7,7 @@
 
 ## 1. 项目概览
 
-Infinite-Canvas（无限画布）是一个基于 **Python FastAPI + 原生 HTML/JS** 的 AI 图像/视频生成工作站。前端通过 iframe 路由切换多个功能页面，后端是单文件 `main.py`（约 3468 行）。
+LumaForge（光绘工坊）是一个基于 **Python FastAPI + 原生 HTML/JS** 的 AI 图像/视频生成工作站。前端通过 iframe 路由切换多个功能页面，后端主入口是 `main.py`。
 
 **技术栈：**
 - 后端：Python 3.10 + FastAPI + uvicorn + httpx + Pillow
@@ -21,7 +21,7 @@ Infinite-Canvas（无限画布）是一个基于 **Python FastAPI + 原生 HTML/
 ## 2. 目录结构
 
 ```
-Infinite-Canvas-main/
+lumaforge/
 ├── main.py                  # 后端入口（单文件 3468 行，所有路由 + 业务逻辑）
 ├── static/                  # 前端静态文件
 │   ├── index.html           # 前端入口（主壳，iframe 路由器）
