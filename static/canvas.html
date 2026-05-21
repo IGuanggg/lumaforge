@@ -96,6 +96,93 @@
         .asset-dock-mini { width:28px; height:28px; border:1px solid rgba(255,255,255,.6); border-radius:999px; background:rgba(255,255,255,.94); color:#111827; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 22px rgba(15,23,42,.18); }
         .theme-dark .asset-dock-mini { background:rgba(15,23,42,.92); color:#f8fafc; border-color:rgba(255,255,255,.12); }
         .asset-dock-empty { min-height:180px; border:1px dashed var(--line-2); border-radius:16px; color:var(--faint); display:flex; align-items:center; justify-content:center; text-align:center; font-size:12px; font-weight:900; line-height:1.5; padding:18px; }
+        .agent-fab { position:fixed; right:0; top:50%; transform:translateY(-50%); z-index:39; width:44px; height:62px; min-width:0; padding:0; border:1px solid var(--line); border-right:0; border-radius:18px 0 0 18px; background:rgba(255,255,255,.9); color:var(--muted); box-shadow:0 12px 30px rgba(15,23,42,.12); display:flex; align-items:center; justify-content:center; gap:0; font-size:0; backdrop-filter:blur(12px); transition:background .16s var(--ease), color .16s var(--ease), border-color .16s var(--ease), transform .16s var(--ease), box-shadow .16s var(--ease), width .16s var(--ease); }
+        .agent-fab span { display:none; }
+        .agent-fab:hover { width:50px; color:var(--text); transform:translateY(-50%) translateX(-2px); box-shadow:0 16px 34px rgba(15,23,42,.16); }
+        .agent-fab.active { opacity:0; pointer-events:none; transform:translateY(-50%) translateX(100%); }
+        .theme-dark .agent-fab { background:rgba(15,23,42,.88); color:#cbd5e1; border-color:rgba(255,255,255,.12); }
+        .agent-dock { position:fixed; right:14px; top:92px; z-index:38; width:min(420px, calc(100vw - 112px)); max-height:calc(100vh - 128px); padding:16px; display:flex; flex-direction:column; gap:13px; transform:translateX(calc(100% + 28px)); opacity:0; pointer-events:none; overflow:auto; transition:transform .22s var(--ease), opacity .16s var(--ease), box-shadow .16s var(--ease); }
+        .agent-dock.open { transform:translateX(0); opacity:1; pointer-events:auto; box-shadow:0 28px 72px rgba(15,23,42,.18); }
+        .agent-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; cursor:default; }
+        .agent-head:active { cursor:default; }
+        .agent-title { color:var(--text); font-size:16px; font-weight:900; letter-spacing:-.02em; }
+        .agent-sub { margin-top:3px; color:var(--faint); font-size:11px; font-weight:800; line-height:1.45; }
+        .agent-close { width:34px; height:34px; border-radius:13px; display:flex; align-items:center; justify-content:center; color:var(--muted); border:1px solid var(--line); background:var(--card-solid); }
+        .agent-field { display:flex; flex-direction:column; gap:7px; }
+        .agent-label { color:var(--faint); font-size:10px; font-weight:900; letter-spacing:.14em; text-transform:uppercase; }
+        .agent-input, .agent-select { width:100%; border:1px solid var(--line); border-radius:16px; background:var(--card-solid); color:var(--text); font-size:12px; font-weight:800; outline:none; }
+        .agent-input { min-height:128px; padding:12px 13px; resize:vertical; line-height:1.55; }
+        .agent-select { height:40px; padding:0 11px; }
+        .agent-grid { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+        .agent-model-card { border:1px solid var(--line); border-radius:18px; background:rgba(248,250,252,.72); overflow:hidden; }
+        .agent-model-toggle { width:100%; min-height:54px; padding:11px 13px; display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--text); text-align:left; }
+        .agent-model-title { font-size:12px; font-weight:900; }
+        .agent-model-summary { margin-top:3px; color:var(--faint); font-size:11px; font-weight:800; line-height:1.35; }
+        .agent-model-chevron { color:var(--muted); transition:transform .16s var(--ease); }
+        .agent-model-card.open .agent-model-chevron { transform:rotate(180deg); }
+        .agent-model-panel { display:none; padding:0 13px 13px; gap:10px; }
+        .agent-model-card.open .agent-model-panel { display:flex; flex-direction:column; }
+        .theme-dark .agent-model-card { background:rgba(15,23,42,.45); }
+        .agent-actions { display:flex; flex-direction:column; gap:9px; }
+        .agent-run, .agent-stop { height:44px; border-radius:16px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:13px; font-weight:900; }
+        .agent-run { background:var(--strong); color:var(--strong-text); box-shadow:0 14px 32px var(--shadow); }
+        .agent-run:disabled { background:#e5e7eb; color:#94a3b8; cursor:not-allowed; box-shadow:none; }
+        .agent-stop { background:var(--card-solid); color:#dc2626; border:1px solid #fecaca; }
+        .agent-stop:disabled { display:none; }
+        .agent-run-hint { color:var(--faint); font-size:10px; font-weight:800; line-height:1.45; padding:0 2px; }
+        .agent-log { flex:1; min-height:150px; overflow:auto; border:1px solid var(--line); border-radius:18px; background:rgba(248,250,252,.72); padding:10px; display:flex; flex-direction:column; gap:7px; }
+        .agent-log-line { display:flex; gap:8px; color:var(--muted); font-size:11px; font-weight:800; line-height:1.45; }
+        .agent-log-dot { width:7px; height:7px; margin-top:4px; border-radius:999px; background:#cbd5e1; flex:0 0 auto; }
+        .agent-log-line.running .agent-log-dot { background:#3b82f6; animation:nodeStatusPulse 1s ease-in-out infinite; }
+        .agent-log-line.done .agent-log-dot { background:#10b981; }
+        .agent-log-line.failed .agent-log-dot { background:#ef4444; }
+        .agent-result { color:var(--faint); font-size:11px; font-weight:800; line-height:1.55; }
+        .agent-plan-card { display:flex; flex-direction:column; gap:8px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.76); padding:10px; color:var(--text); }
+        .agent-plan-title { font-size:12px; font-weight:900; line-height:1.35; }
+        .agent-plan-meta { color:var(--faint); font-size:10px; font-weight:900; line-height:1.45; }
+        .agent-param-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:8px; border:1px solid var(--line); border-radius:14px; background:rgba(248,250,252,.78); }
+        .agent-param-field { display:flex; flex-direction:column; gap:5px; min-width:0; }
+        .agent-param-label { color:var(--faint); font-size:9px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
+        .agent-param-select { width:100%; height:32px; border:1px solid var(--line-2); border-radius:999px; background:var(--card-solid); color:var(--text); padding:0 10px; font-size:11px; font-weight:900; outline:none; }
+        .agent-plan-prompt { max-height:116px; overflow:auto; border:1px solid var(--line); border-radius:13px; background:rgba(248,250,252,.78); padding:9px; color:var(--muted); font-size:11px; font-weight:800; line-height:1.55; white-space:pre-wrap; }
+        .agent-plan-title-input { width:100%; height:34px; border:1px solid var(--line); border-radius:12px; background:var(--card-solid); color:var(--text); padding:0 10px; font-size:12px; font-weight:900; outline:none; }
+        .agent-plan-edit-list { display:flex; flex-direction:column; gap:9px; }
+        .agent-plan-edit-item { border:1px solid var(--line); border-radius:14px; background:rgba(248,250,252,.78); padding:9px; display:flex; flex-direction:column; gap:7px; }
+        .agent-plan-edit-head { display:flex; align-items:center; gap:7px; }
+        .agent-plan-edit-index { width:22px; height:22px; border-radius:999px; background:var(--strong); color:var(--strong-text); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:900; flex:0 0 auto; }
+        .agent-plan-item-title { flex:1; min-width:0; height:28px; border:1px solid var(--line); border-radius:10px; background:var(--card-solid); color:var(--text); padding:0 8px; font-size:11px; font-weight:900; outline:none; }
+        .agent-plan-textarea { width:100%; min-height:96px; max-height:190px; resize:vertical; border:1px solid var(--line); border-radius:12px; background:var(--card-solid); color:var(--muted); padding:9px; font-size:11px; font-weight:800; line-height:1.55; outline:none; }
+        .agent-plan-actions { display:flex; gap:8px; flex-wrap:wrap; }
+        .agent-plan-copy { height:30px; padding:0 11px; border-radius:999px; border:1px solid var(--line); background:var(--card-solid); color:var(--text); font-size:11px; font-weight:900; display:flex; align-items:center; gap:6px; }
+        .agent-plan-execute { height:34px; padding:0 13px; border-radius:999px; background:var(--strong); color:var(--strong-text); font-size:11px; font-weight:900; display:flex; align-items:center; gap:6px; box-shadow:0 10px 24px var(--shadow); }
+        .agent-plan-secondary { height:34px; padding:0 13px; border-radius:999px; border:1px solid var(--line); background:var(--card-solid); color:var(--text); font-size:11px; font-weight:900; display:flex; align-items:center; gap:6px; }
+        .agent-plan-hint { color:var(--faint); font-size:10px; font-weight:900; line-height:1.45; }
+        .agent-exec-summary { margin-top:8px; border:1px solid var(--line); border-radius:14px; background:rgba(236,253,245,.72); color:#047857; padding:9px 10px; font-size:11px; font-weight:900; line-height:1.5; }
+        .agent-exec-summary.failed { background:rgba(254,242,242,.72); color:#dc2626; border-color:#fecaca; }
+        .agent-review-panel { margin-top:8px; border:1px solid var(--line); border-radius:16px; background:rgba(248,250,252,.78); padding:10px; display:flex; flex-direction:column; gap:8px; }
+        .agent-review-head { display:flex; align-items:center; justify-content:space-between; gap:10px; color:var(--text); font-size:12px; font-weight:900; }
+        .agent-review-note { color:var(--faint); font-size:10px; font-weight:800; }
+        .agent-review-item { border:1px solid var(--line); border-radius:13px; background:var(--card-solid); padding:9px; display:flex; flex-direction:column; gap:7px; }
+        .agent-review-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+        .agent-review-title { min-width:0; color:var(--text); font-size:11px; font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .agent-review-badge { flex:0 0 auto; border-radius:999px; padding:3px 8px; font-size:10px; font-weight:900; }
+        .agent-review-badge.pass { background:rgba(16,185,129,.14); color:#047857; }
+        .agent-review-badge.fix { background:rgba(245,158,11,.16); color:#b45309; }
+        .agent-review-badge.skip { background:rgba(148,163,184,.16); color:#64748b; }
+        .agent-review-meter { height:6px; border-radius:999px; background:#e5e7eb; overflow:hidden; }
+        .agent-review-fill { height:100%; border-radius:999px; background:#10b981; }
+        .agent-review-fill.warn { background:#f59e0b; }
+        .agent-review-reason { color:var(--muted); font-size:10px; font-weight:800; line-height:1.45; }
+        .theme-dark .agent-plan-card { background:rgba(15,23,42,.65); }
+        .theme-dark .agent-plan-prompt { background:rgba(15,23,42,.58); }
+        .theme-dark .agent-plan-edit-item { background:rgba(15,23,42,.58); }
+        .theme-dark .agent-param-grid { background:rgba(15,23,42,.58); }
+        .theme-dark .agent-exec-summary { background:rgba(6,78,59,.28); color:#6ee7b7; }
+        .theme-dark .agent-exec-summary.failed { background:rgba(127,29,29,.28); color:#fca5a5; }
+        .theme-dark .agent-review-panel { background:rgba(15,23,42,.58); }
+        .theme-dark .agent-review-item { background:rgba(15,23,42,.62); }
+        .theme-dark .agent-review-meter { background:rgba(148,163,184,.18); }
+        .theme-dark .agent-log { background:rgba(15,23,42,.55); }
         .board { position:absolute; inset:0; cursor:grab; background-color:var(--page); background-image:radial-gradient(var(--grid) 1px, transparent 1px); background-size:24px 24px; }
         body.canvas-knife .board,
         body.canvas-knife .node,
@@ -104,8 +191,16 @@
         .world { position:absolute; left:0; top:0; width:6000px; height:4000px; transform-origin:0 0; }
         .links { position:absolute; inset:0; width:6000px; height:4000px; overflow:visible; pointer-events:none; z-index:1; }
         .link { stroke:var(--faint); stroke-width:2.5; fill:none; opacity:.82; pointer-events:none; }
+        .link-energy-glow { stroke:#38bdf8; stroke-width:4.5; fill:none; opacity:.34; pointer-events:none; stroke-linecap:round; stroke-dasharray:18 102; stroke-dashoffset:0; animation:linkEnergyFlow 1.45s linear infinite; filter:drop-shadow(0 0 8px rgba(56,189,248,.42)); }
+        .link-energy-core { stroke:#f8fafc; stroke-width:2.2; fill:none; opacity:.82; pointer-events:none; stroke-linecap:round; stroke-dasharray:7 113; stroke-dashoffset:0; animation:linkEnergyFlow .9s linear infinite; filter:drop-shadow(0 0 5px rgba(14,165,233,.75)); }
+        .link-energy-glow.selected { opacity:.54; stroke-width:5.2; filter:drop-shadow(0 0 10px rgba(14,165,233,.58)); }
+        .link-energy-core.selected { opacity:1; stroke-width:2.7; }
+        .link-energy-dot { fill:#38bdf8; opacity:.95; filter:drop-shadow(0 0 7px rgba(14,165,233,.9)); pointer-events:none; }
+        .link-energy-dot.hot { fill:#ffffff; filter:drop-shadow(0 0 9px rgba(56,189,248,1)); }
         .link.temp { stroke:var(--strong); stroke-dasharray:6 6; }
         .link.knife-trail { stroke:#ef4444; stroke-width:2.4; stroke-dasharray:7 6; opacity:.88; filter:drop-shadow(0 0 6px rgba(239,68,68,.35)); }
+        @keyframes linkEnergyFlow { to { stroke-dashoffset:-120; } }
+        @media (prefers-reduced-motion: reduce) { .link-energy-glow,.link-energy-core { animation:none; stroke-dashoffset:0; opacity:.26; } .link-energy-dot { display:none; } }
         .link-hit { stroke:transparent; stroke-width:18; fill:none; pointer-events:stroke; }
         .link-controls { position:absolute; inset:0; width:6000px; height:4000px; pointer-events:none; z-index:3; }
         .link-delete { position:absolute; width:22px; height:22px; border-radius:999px; display:flex; align-items:center; justify-content:center; transform:translate(-50%,-50%); color:#64748b; background:rgba(255,255,255,.94); border:1px solid #e2e8f0; box-shadow:0 8px 20px rgba(15,23,42,.12); opacity:0; pointer-events:none; transition:opacity .14s var(--ease), color .14s var(--ease), border-color .14s var(--ease), background .14s var(--ease); }
@@ -121,10 +216,18 @@
         .node-run-status { display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:6px; font-size:10px; font-weight:800; letter-spacing:.04em; }
         .node-run-status.queued { background:#e5e7eb; color:#6b7280; }
         .node-run-status.running { background:#dbeafe; color:#1d4ed8; }
+        .node-run-status.agent { background:#eef2ff; color:#4338ca; }
+        .node-run-status.agent.running { background:#e0f2fe; color:#0369a1; }
+        .node-run-status.agent.reviewing { background:#fef3c7; color:#b45309; }
+        .node-run-status.agent.retrying { background:#fae8ff; color:#a21caf; }
         .node-run-status.done { display:none; }
         .node-run-status.failed { background:#fee2e2; color:#dc2626; }
         body.theme-dark .node-run-status.queued { background:rgba(156,163,175,.22); color:#cbd5e1; }
         body.theme-dark .node-run-status.running { background:rgba(59,130,246,.22); color:#93c5fd; }
+        body.theme-dark .node-run-status.agent { background:rgba(79,70,229,.24); color:#c4b5fd; }
+        body.theme-dark .node-run-status.agent.running { background:rgba(14,165,233,.22); color:#7dd3fc; }
+        body.theme-dark .node-run-status.agent.reviewing { background:rgba(180,83,9,.22); color:#fbbf24; }
+        body.theme-dark .node-run-status.agent.retrying { background:rgba(162,28,175,.22); color:#f0abfc; }
         body.theme-dark .node-run-status.done { background:rgba(16,185,129,.22); color:#6ee7b7; }
         body.theme-dark .node-run-status.failed { background:rgba(239,68,68,.22); color:#fca5a5; }
         .node-run-status .dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
@@ -365,7 +468,9 @@
         .llm-pane-resizer { height:12px; flex:0 0 12px; display:flex; align-items:center; justify-content:center; cursor:row-resize; touch-action:none; }
         .llm-pane-resizer::before { content:""; width:52px; height:3px; border-radius:999px; background:#cbd5e1; opacity:.72; transition:opacity .14s var(--ease), background .14s var(--ease); }
         .llm-pane-resizer:hover::before { opacity:1; background:#94a3b8; }
-        .node.sized.llm-node .llm-output-wrap { flex:1; min-height:0; }
+        .node.sized.llm-node .llm-input-output { min-height:170px; }
+        .node.sized.llm-node .llm-output-wrap { min-height:260px; }
+        .node.sized.llm-node .llm-output { min-height:0; }
         .node.sized.llm-node .llm-node-pane,
         .node.sized.llm-node .llm-chat-pane { flex:1; min-height:0; display:flex; flex-direction:column; gap:6px; }
         .node.sized.llm-node .llm-run { margin-top:auto; flex-shrink:0; }
@@ -786,6 +891,8 @@
             </div>
         </div>
 
+        <button id="agentDockToggleBtn" class="agent-fab editor-only" type="button" title="Agent 创作"><i data-lucide="sparkles" class="w-4 h-4"></i><span>Agent</span></button>
+
         <aside id="assetDock" class="asset-dock panel editor-only" aria-label="素材库">
             <div class="asset-dock-head">
                 <div class="asset-dock-title">素材库</div>
@@ -798,6 +905,56 @@
             </div>
             <input id="assetDockSearch" class="asset-dock-search" type="search" placeholder="搜索素材">
             <div id="assetDockGrid" class="asset-dock-grid"></div>
+        </aside>
+
+        <aside id="agentDock" class="agent-dock panel editor-only" aria-label="Agent 创作">
+            <div class="agent-head">
+                <div>
+                    <div class="agent-title">Agent 创作</div>
+                    <div class="agent-sub">在当前画布里自动规划、创建节点、连线并执行图片生成。</div>
+                </div>
+                <button id="agentDockCloseBtn" class="agent-close" type="button" title="关闭"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="agent-field">
+                <div class="agent-label">目标</div>
+                <textarea id="agentGoalInput" class="agent-input" placeholder="例如：做一个月球少女角色项目，生成 3 张图，风格高级、统一。"></textarea>
+            </div>
+            <div id="agentModelCard" class="agent-model-card">
+                <button id="agentModelToggle" class="agent-model-toggle" type="button">
+                    <span>
+                        <span class="agent-model-title">模型与参数</span>
+                        <span id="agentModelSummary" class="agent-model-summary">自动读取 API 设置</span>
+                    </span>
+                    <i data-lucide="chevron-down" class="agent-model-chevron w-4 h-4"></i>
+                </button>
+                <div class="agent-model-panel">
+                    <div class="agent-grid">
+                        <div class="agent-field">
+                            <div class="agent-label">Agent 大脑</div>
+                            <select id="agentProviderSelect" class="agent-select"></select>
+                        </div>
+                        <div class="agent-field">
+                            <div class="agent-label">模型</div>
+                            <select id="agentModelSelect" class="agent-select"></select>
+                        </div>
+                    </div>
+                    <div class="agent-field">
+                        <div class="agent-label">生图平台</div>
+                        <select id="agentImageProviderSelect" class="agent-select"></select>
+                    </div>
+                    <div class="agent-field">
+                        <div class="agent-label">图片模型</div>
+                        <select id="agentImageModelSelect" class="agent-select"></select>
+                    </div>
+                </div>
+            </div>
+            <div class="agent-actions">
+                <button id="agentRunBtn" class="agent-run" type="button"><i data-lucide="sparkles" class="w-4 h-4"></i><span>开始 Agent</span></button>
+                <button id="agentStopBtn" class="agent-stop" type="button" disabled>停止</button>
+                <div class="agent-run-hint">停止只会中断后续流程；已经提交到生图平台的任务可能继续回传。评估失败会跳过，不影响图片结果。</div>
+            </div>
+            <div id="agentLog" class="agent-log"></div>
+            <div id="agentResult" class="agent-result">Agent 会使用 API 设置里的聊天模型作为大脑，生成普通画布节点，完成后仍可手动编辑。</div>
         </aside>
 
         <div id="canvasGate" class="canvas-gate">
@@ -1057,6 +1214,21 @@
         const assetDockGrid = document.getElementById('assetDockGrid');
         const assetDockSearch = document.getElementById('assetDockSearch');
         const assetDockUpload = document.getElementById('assetDockUpload');
+        const agentDock = document.getElementById('agentDock');
+        const agentDockToggleBtn = document.getElementById('agentDockToggleBtn');
+        const agentDockCloseBtn = document.getElementById('agentDockCloseBtn');
+        const agentModelCard = document.getElementById('agentModelCard');
+        const agentModelToggle = document.getElementById('agentModelToggle');
+        const agentModelSummary = document.getElementById('agentModelSummary');
+        const agentGoalInput = document.getElementById('agentGoalInput');
+        const agentProviderSelect = document.getElementById('agentProviderSelect');
+        const agentModelSelect = document.getElementById('agentModelSelect');
+        const agentImageProviderSelect = document.getElementById('agentImageProviderSelect');
+        const agentImageModelSelect = document.getElementById('agentImageModelSelect');
+        const agentRunBtn = document.getElementById('agentRunBtn');
+        const agentStopBtn = document.getElementById('agentStopBtn');
+        const agentLog = document.getElementById('agentLog');
+        const agentResult = document.getElementById('agentResult');
         const currentCanvasTitle = document.getElementById('currentCanvasTitle');
         const currentCanvasTime = document.getElementById('currentCanvasTime');
         const outputLightbox = document.getElementById('outputLightbox');
@@ -1086,6 +1258,11 @@
         let connections = [];
         let canvasAssets = [];
         let assetDockOpen = false;
+        let agentDockOpen = false;
+        let agentRunning = false;
+        let agentStopRequested = false;
+        let pendingAgentPlan = null;
+        let agentDockDrag = null;
         const receivedAssetMessages = new Set();
         let viewport = {x: -1800, y: -1000, scale: 1};
         let dragNode = null;
@@ -1400,7 +1577,7 @@
             return chatApiProviders().map(provider => `<option value="${escapeHtml(provider.id)}" ${provider.id === selected ? 'selected' : ''}>${escapeHtml(provider.name || provider.id)}</option>`).join('');
         }
         function providerChatModels(providerId){
-            const provider = apiProviders.find(p => p.id === providerId);
+            const provider = (apiProviders.length ? apiProviders : defaultApiProviders()).find(p => p.id === providerId);
             return uniqueModels(provider?.chat_models || []);
         }
         function resolveImageProviderId(id){
@@ -1415,7 +1592,7 @@
         }
         function providerImageModels(providerId){
             // 不走 providerById（会 fallback 到第一个 provider，造成串台），直接查精确匹配
-            const provider = apiProviders.find(p => p.id === providerId);
+            const provider = (apiProviders.length ? apiProviders : defaultApiProviders()).find(p => p.id === providerId);
             return uniqueModels(provider?.image_models || []);
         }
         function videoApiProviders(){
@@ -1443,6 +1620,782 @@
             }
             const selected = selectedModel || models[0];
             return uniqueModels([selected, ...models]).filter(Boolean).map(model => `<option value="${escapeHtml(model)}" ${model === selected ? 'selected' : ''}>${escapeHtml(model)}</option>`).join('');
+        }
+        const AGENT_DEFAULTS_KEY = 'canvas_agent_defaults_v1';
+        function loadAgentDefaults(){
+            try {
+                const parsed = JSON.parse(localStorage.getItem(AGENT_DEFAULTS_KEY) || '{}');
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch(e) {
+                return {};
+            }
+        }
+        function saveAgentDefaults(patch){
+            const next = {...loadAgentDefaults(), ...(patch || {})};
+            try { localStorage.setItem(AGENT_DEFAULTS_KEY, JSON.stringify(next)); } catch(e) {}
+            return next;
+        }
+        function agentImageApiProviders(){
+            const providers = (apiProviders.length ? apiProviders : defaultApiProviders())
+                .filter(p => p.enabled !== false && (p.image_models || []).length);
+            return providers.length ? providers : imageApiProviders();
+        }
+        function resolveAgentImageProviderId(id){
+            const providers = agentImageApiProviders();
+            return providers.find(p => p.id === id)?.id || providers[0]?.id || '';
+        }
+        function agentChineseNumberValue(text){
+            const raw = String(text || '').trim();
+            if(!raw) return 0;
+            const direct = {'一':1,'二':2,'两':2,'俩':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10};
+            if(direct[raw]) return direct[raw];
+            if(raw.includes('十')){
+                const [left, right] = raw.split('十');
+                const tens = left ? (direct[left] || 0) : 1;
+                const ones = right ? (direct[right] || 0) : 0;
+                return tens * 10 + ones;
+            }
+            return 0;
+        }
+        function agentOutputCountFromGoal(goal){
+            const text = String(goal || '');
+            const numberPattern = '(\\d{1,2}|[一二两俩三四五六七八九十]{1,3})';
+            const unitPattern = '(张|幅|个|组|套|版|款|页|镜头|分镜|images?|pics?|pictures?)';
+            const forward = text.match(new RegExp(`${numberPattern}\\s*${unitPattern}`, 'i'));
+            const backward = forward ? null : text.match(new RegExp(`${unitPattern}\\s*${numberPattern}`, 'i'));
+            const countToken = forward ? forward[1] : (backward ? backward[2] : '');
+            const unitToken = forward ? forward[2] : (backward ? backward[1] : '');
+            const value = countToken ? (Number(countToken) || agentChineseNumberValue(countToken)) : 0;
+            if(value === 1 && /组|套|版|款|分镜/i.test(unitToken) && /角色设定|角色项目|系列|套图|方案|分镜|故事板|storyboard|海报组|三视图|四视图/i.test(text)) return 3;
+            if(value) return Math.max(1, Math.min(4, value));
+            if(/多张|几张|一组|一套|系列|套图|分镜|故事板|storyboard|角色设定|角色项目|设计方案|方案|海报组|三视图|四视图/i.test(text)) return 3;
+            return 1;
+        }
+        function agentPlannedCount(plan, fallback=1){
+            const promptCount = Array.isArray(plan?.prompts) ? plan.prompts.filter(item => String(item?.prompt || '').trim()).length : 0;
+            return Math.max(1, Math.min(4, promptCount || fallback || 1));
+        }
+        function agentParamText(goal, plan={}){
+            const parts = [goal, plan?.title, plan?.prompt, plan?.note];
+            if(Array.isArray(plan?.prompts)){
+                plan.prompts.forEach(item => parts.push(item?.title, item?.prompt, item?.image_prompt, item?.description));
+            }
+            return parts.filter(Boolean).join('\n');
+        }
+        function normalizeAgentParamText(text){
+            return String(text || '')
+                .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+                .replace(/[：﹕]/g, ':')
+                .replace(/[Ｋｋ]/g, 'k')
+                .replace(/\s+/g, '')
+                .toLowerCase();
+        }
+        function agentImageParamsFromGoal(goal, plan={}){
+            const text = normalizeAgentParamText(agentParamText(goal, plan));
+            let ratio = 'square';
+            if(/9:16/.test(text)) ratio = 'story';
+            else if(/16:9/.test(text)) ratio = 'wide';
+            else if(/3:4/.test(text)) ratio = 'portrait43';
+            else if(/4:3/.test(text)) ratio = 'landscape43';
+            else if(/2:3/.test(text)) ratio = 'portrait';
+            else if(/3:2/.test(text)) ratio = 'landscape';
+            else if(/1:1/.test(text)) ratio = 'square';
+            else if(/竖图|竖版|竖屏|手机壁纸|story|vertical|tall/.test(text)) ratio = 'story';
+            else if(/横图|横版|横屏|宽屏|wide|horizontal/.test(text)) ratio = 'wide';
+            else if(/方图|方形|头像|图标|logo|icon|square/.test(text)) ratio = 'square';
+            let resolution = '1k';
+            if(/4k|四k|3840|4096/.test(text)) resolution = '4k';
+            else if(/2k|二k|2048/.test(text)) resolution = '2k';
+            return {
+                ratio,
+                resolution,
+                customRatio:'',
+                customSize:'',
+                customRatioWidth:'',
+                customRatioHeight:'',
+                customWidth:'',
+                customHeight:''
+            };
+        }
+        function agentImageParamsLabel(params={}){
+            const ratioLabels = {
+                square:'1:1',
+                portrait:'2:3',
+                landscape:'3:2',
+                portrait43:'3:4',
+                landscape43:'4:3',
+                story:'9:16',
+                wide:'16:9',
+                custom:params.customRatio || 'custom'
+            };
+            return `${ratioLabels[params.ratio] || '1:1'} / ${(params.resolution || '1k').toUpperCase()}`;
+        }
+        function updateAgentModelSummary(){
+            if(!agentModelSummary) return;
+            const provider = agentProviderSelect?.selectedOptions?.[0]?.textContent?.trim() || 'Agent';
+            const model = agentModelSelect?.value || '模型';
+            const image = agentImageProviderSelect?.selectedOptions?.[0]?.textContent?.trim() || '生图';
+            const imageModel = agentImageModelSelect?.value || '图片模型';
+            agentModelSummary.textContent = `${provider} / ${model} · ${image} / ${imageModel}`;
+        }
+        function renderAgentModelControls(){
+            if(!agentProviderSelect || !agentModelSelect || !agentImageProviderSelect || !agentImageModelSelect) return;
+            const defaults = loadAgentDefaults();
+            const chatProviders = chatApiProviders();
+            const selectedProvider = resolveChatProviderId(defaults.provider || agentProviderSelect.value);
+            agentProviderSelect.innerHTML = chatProviders.map(provider => `<option value="${escapeHtml(provider.id)}" ${provider.id === selectedProvider ? 'selected' : ''}>${escapeHtml(provider.name || provider.id)}</option>`).join('');
+            const chatModelsForProvider = providerChatModels(selectedProvider);
+            const selectedModel = preferredListValue(chatModelsForProvider, defaults.model || agentModelSelect.value, resolveChatModel('', selectedProvider));
+            agentModelSelect.innerHTML = chatModelOptions(selectedModel, selectedProvider);
+            agentModelSelect.value = selectedModel;
+            const imageProviders = agentImageApiProviders();
+            const selectedImageProvider = resolveAgentImageProviderId(defaults.imageProvider || agentImageProviderSelect.value);
+            agentImageProviderSelect.innerHTML = imageProviders.length
+                ? imageProviders.map(provider => `<option value="${escapeHtml(provider.id)}" ${provider.id === selectedImageProvider ? 'selected' : ''}>${escapeHtml(provider.name || provider.id)}</option>`).join('')
+                : `<option value="" disabled selected>${tr('canvas.noApiProviders') || '暂无 API 平台'}</option>`;
+            const imageModelsForProvider = allImageModels(selectedImageProvider);
+            const selectedImageModel = preferredListValue(imageModelsForProvider, defaults.imageModel || agentImageModelSelect.value, imageModelsForProvider[0] || '');
+            agentImageModelSelect.innerHTML = imageModelsForProvider.length
+                ? imageModelsForProvider.map(model => `<option value="${escapeHtml(model)}" ${model === selectedImageModel ? 'selected' : ''}>${escapeHtml(model)}</option>`).join('')
+                : `<option value="" disabled selected>${tr('canvas.noModelsHint') || '暂无模型，请到 API 设置添加'}</option>`;
+            agentImageModelSelect.value = selectedImageModel;
+            updateAgentModelSummary();
+        }
+        async function toggleAgentDock(force){
+            agentDockOpen = typeof force === 'boolean' ? force : !agentDockOpen;
+            agentDock?.classList.toggle('open', agentDockOpen);
+            agentDockToggleBtn?.classList.toggle('active', agentDockOpen);
+            if(agentDockOpen){
+                toggleAssetDock(false);
+                if(!apiProviders.length){
+                    try { await loadConfig(); } catch(e) {}
+                }
+                placeAgentDock();
+                renderAgentModelControls();
+                setTimeout(() => agentGoalInput?.focus(), 50);
+            }
+            refreshIcons();
+        }
+        function placeAgentDock(){
+            if(!agentDock) return;
+            agentDock.style.left = '';
+            agentDock.style.right = '';
+            agentDock.style.top = '';
+            agentDock.dataset.placed = 'drawer';
+        }
+        function isAgentDockDrawer(){
+            return true;
+        }
+        function clampAgentDock(left, top){
+            if(!agentDock) return {left, top};
+            const rect = agentDock.getBoundingClientRect();
+            const minLeft = 92;
+            const maxLeft = Math.max(minLeft, window.innerWidth - rect.width - 12);
+            const minTop = 52;
+            const maxTop = Math.max(minTop, window.innerHeight - rect.height - 12);
+            return {
+                left:Math.max(minLeft, Math.min(maxLeft, left)),
+                top:Math.max(minTop, Math.min(maxTop, top))
+            };
+        }
+        function agentLogLine(text, state='running'){
+            if(!agentLog) return null;
+            const row = document.createElement('div');
+            row.className = `agent-log-line ${state}`;
+            row.innerHTML = `<span class="agent-log-dot"></span><span>${escapeHtml(text)}</span>`;
+            agentLog.appendChild(row);
+            agentLog.scrollTop = agentLog.scrollHeight;
+            return row;
+        }
+        function setAgentLineState(row, state, text=''){
+            if(!row) return;
+            row.className = `agent-log-line ${state}`;
+            if(text) row.querySelector('span:last-child').textContent = text;
+        }
+        function setAgentRunLabel(text='开始 Agent'){
+            const span = agentRunBtn?.querySelector('span');
+            if(span) span.textContent = text;
+        }
+        function agentSelectOptions(options, selected){
+            return options.map(item => `<option value="${escapeAttr(item.value)}" ${item.value === selected ? 'selected' : ''}>${escapeHtml(item.label)}</option>`).join('');
+        }
+        function agentParamEditorHtml(imageParams={}){
+            const ratio = imageParams.ratio || 'square';
+            const resolution = imageParams.resolution || '1k';
+            const ratioOptions = [
+                {value:'square', label:'1:1 方图'},
+                {value:'story', label:'9:16 竖图'},
+                {value:'wide', label:'16:9 横图'},
+                {value:'portrait', label:'2:3 竖图'},
+                {value:'landscape', label:'3:2 横图'},
+                {value:'portrait43', label:'3:4 竖图'},
+                {value:'landscape43', label:'4:3 横图'}
+            ];
+            const resolutionOptions = [
+                {value:'1k', label:'1K 默认'},
+                {value:'2k', label:'2K'},
+                {value:'4k', label:'4K'}
+            ];
+            return `
+                <div class="agent-param-grid">
+                    <label class="agent-param-field">
+                        <span class="agent-param-label">比例</span>
+                        <select class="agent-param-select" data-agent-plan-ratio>${agentSelectOptions(ratioOptions, ratio)}</select>
+                    </label>
+                    <label class="agent-param-field">
+                        <span class="agent-param-label">清晰度</span>
+                        <select class="agent-param-select" data-agent-plan-resolution>${agentSelectOptions(resolutionOptions, resolution)}</select>
+                    </label>
+                </div>`;
+        }
+        function renderAgentPlanResult(plan, count, context=[], mode='result', imageParams={}){
+            if(!agentResult) return;
+            const contextImages = agentContextImages(context).length;
+            const contextTexts = (context || []).filter(item => item.prompt).length;
+            const promptItems = agentPlanPrompts(plan, count);
+            const paramLabel = agentImageParamsLabel(imageParams);
+            const displayPrompt = promptItems.length > 1
+                ? promptItems.map((item, index) => `【${item.title || `图 ${index + 1}`}】\n${item.prompt}`).join('\n\n')
+                : (promptItems[0]?.prompt || plan.prompt || '');
+            const meta = [
+                `尺寸 ${paramLabel}`,
+                `生图 ${count} 张`,
+                context.length ? `上下文 ${context.length} 个` : '无选中上下文',
+                contextImages ? `参考图 ${contextImages} 张` : '',
+                contextTexts ? `参考文本 ${contextTexts} 段` : ''
+            ].filter(Boolean).join(' · ');
+            const previewActions = mode === 'preview'
+                ? `
+                        <button class="agent-plan-execute" type="button" data-agent-execute-plan="1">
+                            <i data-lucide="play" class="w-3.5 h-3.5"></i><span>执行计划</span>
+                        </button>
+                        <button class="agent-plan-secondary" type="button" data-agent-regenerate-plan="1">
+                            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>重新规划</span>
+                        </button>
+                        <button class="agent-plan-secondary" type="button" data-agent-discard-plan="1">
+                            <i data-lucide="x" class="w-3.5 h-3.5"></i><span>放弃</span>
+                        </button>`
+                : '';
+            const hint = mode === 'preview'
+                ? '<div class="agent-plan-hint">规划已生成，但还没有写入画布。确认后才会创建节点、连线并开始生图。</div>'
+                : '';
+            const titleHtml = mode === 'preview'
+                ? `<input class="agent-plan-title-input" data-agent-plan-project-title value="${escapeAttr(plan.title || 'Agent 计划')}" aria-label="Agent 计划标题">`
+                : `<div class="agent-plan-title">${escapeHtml(plan.title || 'Agent 计划')}</div>`;
+            const paramsHtml = mode === 'preview' ? agentParamEditorHtml(imageParams) : '';
+            const promptHtml = mode === 'preview'
+                ? `<div class="agent-plan-edit-list">
+                    ${promptItems.map((item, index) => `
+                        <div class="agent-plan-edit-item" data-agent-plan-row="${index}">
+                            <div class="agent-plan-edit-head">
+                                <span class="agent-plan-edit-index">${index + 1}</span>
+                                <input class="agent-plan-item-title" data-agent-plan-title value="${escapeAttr(item.title || `图 ${index + 1}`)}" aria-label="第 ${index + 1} 张标题">
+                            </div>
+                            <textarea class="agent-plan-textarea" data-agent-plan-prompt aria-label="第 ${index + 1} 张提示词">${escapeHtml(item.prompt || '')}</textarea>
+                        </div>
+                    `).join('')}
+                </div>`
+                : `<div class="agent-plan-prompt">${escapeHtml(displayPrompt)}</div>`;
+            agentResult.innerHTML = `
+                <div class="agent-plan-card" data-agent-preview="${mode === 'preview' ? '1' : '0'}">
+                    ${titleHtml}
+                    <div class="agent-plan-meta">${escapeHtml(meta)}</div>
+                    ${paramsHtml}
+                    ${promptHtml}
+                    ${hint}
+                    <div class="agent-plan-actions">
+                        ${previewActions}
+                        <button class="agent-plan-copy" type="button" data-agent-copy-prompt="${escapeAttr(displayPrompt)}">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i><span>复制提示词</span>
+                        </button>
+                    </div>
+                </div>`;
+            refreshIcons();
+        }
+        function appendAgentExecutionSummary({total=0, success=0, failed=0, imageParams={}, adjusted=0}={}){
+            if(!agentResult) return;
+            const failedClass = failed ? ' failed' : '';
+            const adjustedText = adjusted ? `，Agent 自动修正 ${adjusted} 个分支` : '';
+            const text = failed
+                ? `执行完成：成功 ${success}/${total}，失败 ${failed}${adjustedText}。失败分支已保留在画布节点上，可以点“重试本支”。`
+                : `执行完成：成功 ${success}/${total}${adjustedText}，尺寸 ${agentImageParamsLabel(imageParams)}，结果已进入 Output 和素材库。`;
+            agentResult.insertAdjacentHTML('beforeend', `<div class="agent-exec-summary${failedClass}">${escapeHtml(text)}</div>`);
+        }
+        function appendAgentReviewSummary(results=[]){
+            if(!agentResult) return;
+            const items = (results || []).filter(item => item?.review || item?.error);
+            if(!items.length) return;
+            const rows = items.map(item => {
+                const review = item.review || {};
+                const score = Math.max(0, Math.min(100, Number(review.score || 0) || 0));
+                const skipped = review.skipped || (!item.ok && !review.reason);
+                const needsFix = review.pass === false || item.adjusted || !item.ok;
+                const badgeClass = skipped ? 'skip' : (needsFix ? 'fix' : 'pass');
+                const badgeText = skipped ? '跳过' : (needsFix ? (item.adjusted ? '已修正' : '建议修正') : '通过');
+                const title = item.title || `图 ${Number(item.index || 0) + 1}`;
+                const reason = item.error || review.reason || (needsFix ? '结果与目标可能不够一致。' : '结果与目标基本匹配。');
+                const fillClass = needsFix ? ' warn' : '';
+                const meter = skipped ? '' : `<div class="agent-review-meter"><div class="agent-review-fill${fillClass}" style="width:${score || (needsFix ? 48 : 82)}%"></div></div>`;
+                const scoreText = skipped ? '' : ` · ${score || (needsFix ? 48 : 82)}分`;
+                return `
+                    <div class="agent-review-item">
+                        <div class="agent-review-top">
+                            <div class="agent-review-title">${escapeHtml(title)}${scoreText}</div>
+                            <span class="agent-review-badge ${badgeClass}">${escapeHtml(badgeText)}</span>
+                        </div>
+                        ${meter}
+                        <div class="agent-review-reason">${escapeHtml(reason)}</div>
+                    </div>`;
+            }).join('');
+            agentResult.insertAdjacentHTML('beforeend', `
+                <div class="agent-review-panel">
+                    <div class="agent-review-head">
+                        <span>Agent 评估</span>
+                        <span class="agent-review-note">只做建议，不自动删除结果</span>
+                    </div>
+                    ${rows}
+                </div>`);
+        }
+        function agentPlanDisplayText(plan, count=1){
+            const promptItems = agentPlanPrompts(plan, count);
+            return promptItems.length > 1
+                ? promptItems.map((item, index) => `【${item.title || `图 ${index + 1}`}】\n${item.prompt}`).join('\n\n')
+                : (promptItems[0]?.prompt || plan?.prompt || '');
+        }
+        function collectAgentPlanFromPreview(){
+            if(!pendingAgentPlan || !agentResult) return pendingAgentPlan;
+            const card = agentResult.querySelector('[data-agent-preview="1"]');
+            if(!card) return pendingAgentPlan;
+            const rows = Array.from(card.querySelectorAll('[data-agent-plan-row]'));
+            const prompts = rows.map((row, index) => {
+                const title = String(row.querySelector('[data-agent-plan-title]')?.value || '').trim() || `图 ${index + 1}`;
+                const prompt = String(row.querySelector('[data-agent-plan-prompt]')?.value || '').trim();
+                return {title, prompt};
+            }).filter(item => item.prompt);
+            if(!prompts.length) return null;
+            const title = String(card.querySelector('[data-agent-plan-project-title]')?.value || '').trim() || pendingAgentPlan.plan.title || 'Agent 计划';
+            pendingAgentPlan.plan = {
+                ...pendingAgentPlan.plan,
+                title,
+                prompts,
+                prompt:prompts.map((item, index) => `【${item.title || `图 ${index + 1}`}】\n${item.prompt}`).join('\n\n')
+            };
+            pendingAgentPlan.count = prompts.length;
+            const parsedParams = agentImageParamsFromGoal(pendingAgentPlan.goal, pendingAgentPlan.plan);
+            pendingAgentPlan.imageParams = {
+                ...parsedParams,
+                ratio:card.querySelector('[data-agent-plan-ratio]')?.value || parsedParams.ratio,
+                resolution:card.querySelector('[data-agent-plan-resolution]')?.value || parsedParams.resolution
+            };
+            return pendingAgentPlan;
+        }
+        function ensureAgentNotStopped(){
+            if(agentStopRequested) throw new Error('Agent 已停止');
+        }
+        function parseAgentPlanText(text, goal){
+            const raw = String(text || '').trim();
+            const match = raw.match(/\{[\s\S]*\}/);
+            if(match){
+                try {
+                    const data = JSON.parse(match[0]);
+                    const items = Array.isArray(data.images || data.items || data.prompts)
+                        ? (data.images || data.items || data.prompts).map((item, index) => {
+                            const value = typeof item === 'string' ? {prompt:item} : (item || {});
+                            return {
+                                title:String(value.title || value.name || `图 ${index + 1}`).slice(0, 60),
+                                prompt:String(value.image_prompt || value.prompt || value.description || '').trim()
+                            };
+                        }).filter(item => item.prompt)
+                        : [];
+                    const prompt = String(data.image_prompt || data.prompt || data.description || items[0]?.prompt || goal || '').trim();
+                    return {
+                        title:String(data.title || goal || 'Agent 项目').slice(0, 80),
+                        prompt,
+                        prompts:items.length ? items : [{title:'图 1', prompt}],
+                        note:String(data.note || data.summary || '').trim()
+                    };
+                } catch(e) {}
+            }
+            return {
+                title:String(goal || 'Agent 项目').slice(0, 80),
+                prompt:raw || String(goal || '').trim(),
+                prompts:[{title:'图 1', prompt:raw || String(goal || '').trim()}],
+                note:''
+            };
+        }
+        function agentPlanPrompts(plan, count=1){
+            const wanted = Math.max(1, count);
+            const items = Array.isArray(plan?.prompts) ? plan.prompts : [];
+            const clean = items.map((item, index) => ({
+                title:String(item?.title || `图 ${index + 1}`).slice(0, 60),
+                prompt:String(item?.prompt || '').trim()
+            })).filter(item => item.prompt);
+            if(clean.length >= wanted) return clean.slice(0, wanted);
+            const basePrompt = String(plan?.prompt || clean[0]?.prompt || '').trim();
+            const filled = clean.slice();
+            while(basePrompt && filled.length < wanted){
+                filled.push({
+                    title:`图 ${filled.length + 1}`,
+                    prompt:filled.length ? `${basePrompt}\n构图和细节需要与前一张有差异，但整体主题、角色和风格保持统一。` : basePrompt
+                });
+            }
+            if(filled.length) return filled;
+            return Array.from({length:wanted}, (_, index) => ({
+                title:`图 ${index + 1}`,
+                prompt:basePrompt
+            })).filter(item => item.prompt);
+        }
+        function agentContextImages(context){
+            return uniqueModels((context || []).flatMap(item => item.refs || []).filter(Boolean)).slice(0, 8);
+        }
+        async function buildAgentPlan(goal, provider, model, context=[], count=1){
+            const contextText = agentContextText(context);
+            const contextImages = agentContextImages(context);
+            const contextBlock = [
+                contextText ? `画布选中节点的参考文本：\n${contextText}` : '',
+                contextImages.length ? `画布选中节点包含 ${contextImages.length} 张参考图，写提示词时要保持主体、风格、构图或用户目标要求的一致性。` : ''
+            ].filter(Boolean).join('\n\n');
+            const message = `请把用户的创作目标转成适合文生图的高质量提示词。只返回 JSON，不要解释。初步建议规划 ${count} 张图；如果用户目标明确要求更多/更少，或者目标明显只是单张作品，可以按目标自行调整为 1-4 张。JSON 格式：{"title":"项目标题","image_prompt":"整体统一提示词","images":[{"title":"图1标题","image_prompt":"第1张可直接用于生图的完整中文提示词"}],"note":"简短创作说明"}。如果是多张图，images 里的每条提示词要主题统一但构图/角度/细节有差异；如果是角色/系列/方案/分镜项目，优先输出 3 张左右。\n\n用户目标：${goal}${contextBlock ? `\n\n${contextBlock}` : ''}`;
+            const result = await fetch('/api/canvas-llm', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    message,
+                    model,
+                    ms_model: provider === 'modelscope' ? model : '',
+                    provider,
+                    system_prompt:'你是 Infinite Canvas 的创作 Agent，负责把自然语言目标变成可执行的图像生成提示词。输出必须是严格 JSON。',
+                    messages:[],
+                    images:contextImages
+                })
+            }).then(async r => {
+                if(!r.ok) throw new Error(await responseErrorMessage(r, 'Agent 大脑请求失败'));
+                return r.json();
+            });
+            return parseAgentPlanText(result.text || '', goal);
+        }
+        function agentContextSources(){
+            const contextNodes = Array.from(selected).map(id => nodes.find(n => n.id === id)).filter(Boolean);
+            return contextNodes.map(n => {
+                if(n.type === 'image' && n.url) return {node:n, prompt:'', refs:[n.url]};
+                if(n.type === 'output' && (n.images || []).length) return {node:n, prompt:'', refs:(n.images || []).map(outputUrlValue).filter(Boolean).filter(url => !isVideoUrl(url)).slice(-4)};
+                if(CANVAS_IMAGE_OUTPUT_TYPES.includes(n.type)) return {node:n, prompt:'', refs:generatedImageRefs(n).map(ref => ref.url).filter(Boolean).slice(-4)};
+                if(n.type === 'prompt') return {node:n, prompt:n.text || '', refs:[]};
+                if(n.type === 'llm') return {node:n, prompt:n.outputText || '', refs:[]};
+                if(n.type === 'promptGroup') {
+                    const prompt = (n.items || []).map(id => nodes.find(x => x.id === id)).filter(Boolean).map(p => p.text || '').filter(Boolean).join('\n\n');
+                    return {node:n, prompt, refs:[]};
+                }
+                if(n.type === 'group') {
+                    const items = (n.items || []).map(id => nodes.find(x => x.id === id)).filter(Boolean);
+                    return {
+                        node:n,
+                        prompt:items.filter(x => x.type === 'prompt').map(p => p.text || '').filter(Boolean).join('\n\n'),
+                        refs:items.filter(x => x.type === 'image' && x.url).map(x => x.url).slice(0, 4)
+                    };
+                }
+                return null;
+            }).filter(item => item && (item.prompt || item.refs.length));
+        }
+        function agentContextText(context){
+            const prompts = context.map(item => item.prompt).filter(Boolean);
+            if(!prompts.length) return '';
+            return prompts.map((text, index) => `参考文本 ${index + 1}：${text}`).join('\n\n');
+        }
+        function agentPlacementBase(context=[]){
+            const ids = uniqueModels([
+                ...(context || []).map(item => item?.node?.id).filter(Boolean),
+                ...Array.from(selected || [])
+            ]).filter(id => nodes.some(n => n.id === id));
+            if(ids.length){
+                const box = nodeBounds(ids);
+                if(box && Number.isFinite(box.x)){
+                    return {x:box.x + box.w + 140, y:Math.max(box.y, box.y + box.h / 2 - 130)};
+                }
+            }
+            return defaultPoint(-260, -120);
+        }
+        function createAgentNodes(plan, count, imageProviderId, imageModel, context=[], imageParams={}){
+            pushUndo();
+            const base = agentPlacementBase(context);
+            const promptItems = agentPlanPrompts(plan, count);
+            const branchGap = 270;
+            const imageModelsForProvider = allImageModels(imageProviderId);
+            const genDefaults = defaultsForNode('generator');
+            const targetParams = {
+                ratio:'square',
+                resolution:'1k',
+                customRatio:'',
+                customSize:'',
+                customRatioWidth:'',
+                customRatioHeight:'',
+                customWidth:'',
+                customHeight:'',
+                ...(imageParams || {})
+            };
+            const prompts = [];
+            const gens = [];
+            const out = {
+                id:uid('out'),
+                type:'output',
+                x:base.x + 860,
+                y:base.y + ((promptItems.length - 1) * branchGap) / 2 - 8,
+                images:[]
+            };
+            promptItems.forEach((item, index) => {
+                const y = base.y + index * branchGap;
+                const prompt = {
+                    id:uid('prompt'),
+                    type:'prompt',
+                    x:base.x,
+                    y,
+                    text:`${item.title || `图 ${index + 1}`}\n\n${item.prompt || plan.prompt || ''}`.trim()
+                };
+                const gen = {
+                    id:uid('gen'),
+                    type:'generator',
+                    x:base.x + 380,
+                    y:y - 8,
+                    apiProvider:imageProviderId,
+                    model:preferredListValue(imageModelsForProvider, imageModel || genDefaults.model, imageModelsForProvider[0] || ''),
+                    ratio:targetParams.ratio || 'square',
+                    resolution:targetParams.resolution || '1k',
+                    customRatio:targetParams.customRatio || '',
+                    customSize:targetParams.customSize || '',
+                    customRatioWidth:targetParams.customRatioWidth || '',
+                    customRatioHeight:targetParams.customRatioHeight || '',
+                    customWidth:targetParams.customWidth || '',
+                    customHeight:targetParams.customHeight || '',
+                    count:1,
+                    inputs:[]
+                };
+                prompts.push(prompt);
+                gens.push(gen);
+                nodes.push(prompt, gen);
+                connections.push({id:uid('c'), from:prompt.id, to:gen.id});
+                context.forEach(ctx => {
+                    if(ctx?.node?.id && ctx.node.id !== prompt.id) connections.push({id:uid('c'), from:ctx.node.id, to:gen.id});
+                });
+                connections.push({id:uid('c'), from:gen.id, to:out.id});
+            });
+            nodes.push(out);
+            selected.clear();
+            prompts.forEach(prompt => selected.add(prompt.id));
+            gens.forEach((gen, index) => {
+                gen._agentActive = true;
+                gen._agentFailed = false;
+                gen._agentIdx = `${index + 1}/${gens.length}`;
+                gen.runStatus = 'queued';
+                gen.runError = '';
+                selected.add(gen.id);
+            });
+            selected.add(out.id);
+            render();
+            focusNodeIds([...prompts.map(item => item.id), ...gens.map(item => item.id), out.id]);
+            scheduleSave();
+            return {prompt:prompts[0], gen:gens[0], prompts, gens, out};
+        }
+        async function executeAgentPlan(){
+            if(agentRunning) return;
+            if(!ensureCanvas()) return;
+            if(!pendingAgentPlan){
+                return runCanvasAgent();
+            }
+            const {plan, count, context, provider, model, imageProviderId, imageModel, goal, imageParams={}} = pendingAgentPlan;
+            agentRunning = true;
+            agentStopRequested = false;
+            agentRunBtn.disabled = true;
+            agentStopBtn.disabled = false;
+            try {
+                ensureAgentNotStopped();
+                let row = agentLogLine('确认计划，正在创建 Prompt / API生成 / Output 节点并自动连线');
+                const created = createAgentNodes(plan, count, imageProviderId, imageModel, context, imageParams);
+                pendingAgentPlan = null;
+                const generators = created.gens || [created.gen].filter(Boolean);
+                const originalItems = agentPlanPrompts(plan, count);
+                setAgentLineState(row, 'done', `已创建 ${generators.length} 组生图分支，接入上下文 ${context.length} 个`);
+                renderAgentPlanResult(plan, count, context, 'result', imageParams);
+                ensureAgentNotStopped();
+                row = agentLogLine(`同时提交 ${generators.length} 个生图任务，等待各自回传结果`);
+                let successCount = 0;
+                let failedCount = 0;
+                generators.forEach((gen, index) => {
+                    gen._agentActive = true;
+                    gen._agentFailed = false;
+                    gen._agentIdx = `${index + 1}/${generators.length}`;
+                    gen.runStatus = 'running';
+                    gen.runError = '';
+                });
+                refreshNodes(generators.map(gen => gen.id));
+                const branchResults = await Promise.all(generators.map(async (gen, index) => {
+                    ensureAgentNotStopped();
+                    let rewriteRow = null;
+                    let branchReview = null;
+                    const branchTitle = originalItems[index]?.title || `图 ${index + 1}`;
+                    try {
+                        let runResult = await runGenerator(gen.id, {
+                            cascade:true,
+                            safetyRewrite:true,
+                            onSafetyRewriteStart:error => {
+                                rewriteRow = agentLogLine(`第 ${index + 1} 张检测到上游审核/敏感词拦截，正在保留原意并安全改写提示词`, 'running');
+                            },
+                            onSafetyRewriteDone:rewritten => {
+                                setAgentLineState(rewriteRow, 'done', rewritten ? `第 ${index + 1} 张安全改写完成，已重试生成` : `第 ${index + 1} 张安全改写未产生可用结果`);
+                            }
+                        });
+                        const images = runResult?.images || generatedImageRefs(gen).map(ref => ref.url).slice(-1);
+                        if(images.length){
+                            gen.runStatus = 'reviewing';
+                            gen.runError = '';
+                            refreshNodes([gen.id]);
+                            const item = originalItems[index] || {};
+                            const reviewRow = agentLogLine(`第 ${index + 1} 张已返回，正在评估是否符合目标`, 'running');
+                            try {
+                                const review = await reviewAgentBranchResult({
+                                    goal,
+                                    title:item.title || `图 ${index + 1}`,
+                                    prompt:runResult?.prompt || item.prompt || '',
+                                    images,
+                                    provider,
+                                    model,
+                                    imageParams
+                                });
+                                branchReview = review;
+                                gen.agentReview = review;
+                                if(review.pass === false && review.improvedPrompt){
+                                    gen.runStatus = 'retrying';
+                                    gen.runError = review.reason || 'Agent 评估建议修正后重试';
+                                    refreshNodes([gen.id]);
+                                    setAgentLineState(reviewRow, 'running', `第 ${index + 1} 张评估未通过，正在按建议自动重试一次：${review.reason || '结果与目标不够一致'}`);
+                                    if(applyAgentPromptRevision(gen, item.title || `图 ${index + 1}`, review.improvedPrompt)){
+                                        runResult = await runGenerator(gen.id, {
+                                            cascade:true,
+                                            safetyRewrite:true,
+                                            onSafetyRewriteStart:error => agentLogLine(`第 ${index + 1} 张修正重试触发审核拦截，继续安全改写`, 'running'),
+                                            onSafetyRewriteDone:rewritten => agentLogLine(rewritten ? `第 ${index + 1} 张修正重试安全改写完成` : `第 ${index + 1} 张修正重试未产生可用改写`, rewritten ? 'done' : 'failed')
+                                        });
+                                        setAgentLineState(reviewRow, 'done', `第 ${index + 1} 张已自动修正并重试`);
+                                        return {ok:true, index, gen, title:branchTitle, adjusted:true, review};
+                                    }
+                                    setAgentLineState(reviewRow, 'failed', `第 ${index + 1} 张需要修正，但没有找到可更新的 Prompt 节点`);
+                                } else {
+                                    setAgentLineState(reviewRow, 'done', `第 ${index + 1} 张评估通过${review.reason ? `：${review.reason}` : ''}`);
+                                }
+                            } catch(reviewErr) {
+                                branchReview = {pass:true, skipped:true, reason:reviewErr.message || String(reviewErr)};
+                                gen.agentReview = branchReview;
+                                setAgentLineState(reviewRow, 'done', `第 ${index + 1} 张评估跳过：${reviewErr.message || String(reviewErr)}`);
+                            }
+                        }
+                        gen.runStatus = 'done';
+                        gen.runError = '';
+                        gen._agentFailed = false;
+                        return {ok:true, index, gen, title:branchTitle, adjusted:false, review:branchReview};
+                    } catch(err) {
+                        gen.runStatus = 'failed';
+                        gen.runError = err.message || String(err);
+                        gen._agentFailed = true;
+                        gen._agentActive = true;
+                        agentLogLine(`第 ${index + 1} 张失败：${gen.runError}`, 'failed');
+                        return {ok:false, index, gen, title:branchTitle, error:gen.runError};
+                    } finally {
+                        refreshNodes([gen.id]);
+                        const completedCount = generators.filter(item => item.runStatus === 'done' || item.runStatus === 'failed').length;
+                        const failedSoFar = generators.filter(item => item.runStatus === 'failed' && item._agentFailed).length;
+                        setAgentLineState(row, 'running', `已回收 ${completedCount} / ${generators.length} 个生图结果，失败 ${failedSoFar} 个`);
+                    }
+                }));
+                successCount = branchResults.filter(item => item.ok).length;
+                failedCount = branchResults.length - successCount;
+                const finalItems = originalItems.map((item, index) => {
+                    const reviewPrompt = generators[index]?.agentReviewPrompt;
+                    const safePrompt = generators[index]?.safePrompt;
+                    const finalPrompt = reviewPrompt || safePrompt;
+                    const suffix = reviewPrompt ? '（Agent 修正）' : (safePrompt ? '（安全改写）' : '');
+                    return finalPrompt
+                        ? {...item, title:`${item.title || `图 ${index + 1}`}${suffix}`, prompt:finalPrompt}
+                        : item;
+                });
+                const rewritten = finalItems.some((item, index) => item.prompt !== originalItems[index]?.prompt);
+                const finalPlan = rewritten
+                    ? {...plan, prompts:finalItems, prompt:finalItems.map((item, index) => `【${item.title || `图 ${index + 1}`}】\n${item.prompt}`).join('\n\n')}
+                    : plan;
+                setAgentLineState(row, failedCount ? 'failed' : 'done', failedCount
+                    ? `Agent 执行完成：成功 ${successCount}，失败 ${failedCount}`
+                    : (rewritten ? '生图完成，部分提示词已安全改写，结果进入 Output 和素材库' : '生图完成，结果已进入 Output 和素材库'));
+                renderAgentPlanResult(finalPlan, count, context, 'result', imageParams);
+                const adjustedCount = branchResults.filter(item => item.adjusted).length;
+                appendAgentExecutionSummary({total:generators.length, success:successCount, failed:failedCount, imageParams, adjusted:adjustedCount});
+                appendAgentReviewSummary(branchResults);
+                if(successCount) focusNodeIds([created.out.id], {padding:260});
+                scheduleSave();
+                setAgentRunLabel('开始 Agent');
+            } catch(err) {
+                agentLogLine(err.message || String(err), 'failed');
+                if(agentResult) agentResult.textContent = `失败：${err.message || String(err)}`;
+                if(!pendingAgentPlan) setAgentRunLabel('开始 Agent');
+                else setAgentRunLabel('重新规划');
+            } finally {
+                agentRunning = false;
+                agentStopRequested = false;
+                agentRunBtn.disabled = false;
+                agentStopBtn.disabled = true;
+                refreshIcons();
+            }
+        }
+        async function runCanvasAgent(){
+            if(agentRunning) return;
+            if(!ensureCanvas()) return;
+            const goal = String(agentGoalInput?.value || '').trim();
+            if(!goal){
+                showErrorModal('请先输入 Agent 创作目标。', 'Agent 缺少目标');
+                return;
+            }
+            renderAgentModelControls();
+            const provider = resolveChatProviderId(agentProviderSelect?.value || '');
+            const model = resolveChatModel(agentModelSelect?.value || '', provider);
+            const imageProviderId = resolveAgentImageProviderId(agentImageProviderSelect?.value || '');
+            const imageModel = preferredListValue(allImageModels(imageProviderId), agentImageModelSelect?.value || '', allImageModels(imageProviderId)[0] || '');
+            if(!provider || !model) return showErrorModal('请先到 API 设置添加可用的聊天模型。', 'Agent 大脑未配置');
+            if(!imageProviderId) return showErrorModal('请先到 API 设置添加可用的生图模型。', 'Agent 生图未配置');
+            if(!imageModel) return showErrorModal('请先到 API 设置添加可用的图片模型。', 'Agent 图片模型未配置');
+            const count = agentOutputCountFromGoal(goal);
+            const context = agentContextSources();
+            saveAgentDefaults({provider, model, imageProvider:imageProviderId, imageModel});
+            pendingAgentPlan = null;
+            agentRunning = true;
+            agentStopRequested = false;
+            agentRunBtn.disabled = true;
+            agentStopBtn.disabled = false;
+            if(agentLog) agentLog.innerHTML = '';
+            if(agentResult) agentResult.textContent = `正在规划：LLM 1 次，预计生图 ${count} 组。`;
+            try {
+                agentLogLine(`模型：${provider} / ${model}；生图：${imageProviderId} / ${imageModel}`, 'done');
+                agentLogLine('说明：停止只中断后续流程，已提交到生图平台的任务可能继续回传。评估失败会跳过，不影响图片结果。', 'done');
+                if(context.length) agentLogLine(`已读取 ${context.length} 个选中节点作为上下文`, 'done');
+                else agentLogLine('未选择上下文，将按目标描述直接规划', 'done');
+                let row = agentLogLine('分析目标并生成创作计划');
+                const plan = await buildAgentPlan(goal, provider, model, context, count);
+                const plannedCount = agentPlannedCount(plan, count);
+                const imageParams = agentImageParamsFromGoal(goal, plan);
+                setAgentLineState(row, 'done', `计划完成：${plan.title || goal}，${plannedCount} 张`);
+                agentLogLine(`出图参数：${agentImageParamsLabel(imageParams)}`, 'done');
+                ensureAgentNotStopped();
+                pendingAgentPlan = {goal, plan, count:plannedCount, context, provider, model, imageProviderId, imageModel, imageParams};
+                agentLogLine('规划已生成，等待确认执行。', 'done');
+                renderAgentPlanResult(plan, plannedCount, context, 'preview', imageParams);
+                setAgentRunLabel('重新规划');
+            } catch(err) {
+                agentLogLine(err.message || String(err), 'failed');
+                if(agentResult) agentResult.textContent = `失败：${err.message || String(err)}`;
+                setAgentRunLabel('开始 Agent');
+            } finally {
+                agentRunning = false;
+                agentStopRequested = false;
+                agentRunBtn.disabled = false;
+                agentStopBtn.disabled = true;
+                refreshIcons();
+            }
         }
         function allImageModels(providerId){
             const providerModels = providerImageModels(providerId || managedProviderId);
@@ -1836,6 +2789,7 @@
                 if(e.data?.type === 'providers-changed' || e.data?.type === 'workflows-changed'){
                     await loadConfig();
                     pruneMissingComfyWorkflows();
+                    if(agentDockOpen) renderAgentModelControls();
                     if(typeof render === 'function') render();
                 }
             };
@@ -2463,6 +3417,130 @@
                 .catch(err => setStatus(err.message || '素材上传失败'))
                 .finally(() => { event.target.value = ''; });
         });
+        agentDockToggleBtn?.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleAgentDock();
+        });
+        agentDockCloseBtn?.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleAgentDock(false);
+        });
+        agentModelToggle?.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            agentModelCard?.classList.toggle('open');
+            refreshIcons();
+        });
+        agentDock?.querySelector('.agent-head')?.addEventListener('pointerdown', event => {
+            if(isAgentDockDrawer()) return;
+            if(event.button !== 0 || event.target.closest('button, input, select, textarea')) return;
+            event.preventDefault();
+            placeAgentDock();
+            const rect = agentDock.getBoundingClientRect();
+            agentDockDrag = {sx:event.clientX, sy:event.clientY, left:rect.left, top:rect.top};
+            agentDock.setPointerCapture?.(event.pointerId);
+        });
+        agentDock?.addEventListener('pointermove', event => {
+            if(!agentDockDrag) return;
+            const next = clampAgentDock(
+                agentDockDrag.left + event.clientX - agentDockDrag.sx,
+                agentDockDrag.top + event.clientY - agentDockDrag.sy
+            );
+            agentDock.style.left = `${next.left}px`;
+            agentDock.style.right = 'auto';
+            agentDock.style.top = `${next.top}px`;
+        });
+        agentDock?.addEventListener('pointerup', () => { agentDockDrag = null; });
+        window.addEventListener('resize', () => {
+            if(isAgentDockDrawer()) return;
+            if(!agentDock?.classList.contains('open')) return;
+            const rect = agentDock.getBoundingClientRect();
+            const next = clampAgentDock(rect.left, rect.top);
+            agentDock.style.left = `${next.left}px`;
+            agentDock.style.top = `${next.top}px`;
+        });
+        agentRunBtn?.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            runCanvasAgent();
+        });
+        agentStopBtn?.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            agentStopRequested = true;
+            if(agentStopBtn) agentStopBtn.disabled = true;
+            agentLogLine('已请求停止，当前请求完成后中断。', 'failed');
+        });
+        agentResult?.addEventListener('click', event => {
+            const executeBtn = event.target.closest('[data-agent-execute-plan]');
+            if(executeBtn){
+                event.preventDefault();
+                event.stopPropagation();
+                if(!collectAgentPlanFromPreview()){
+                    showErrorModal('请至少保留 1 条可执行的图片提示词。', 'Agent 计划为空');
+                    return;
+                }
+                executeAgentPlan();
+                return;
+            }
+            const regenBtn = event.target.closest('[data-agent-regenerate-plan]');
+            if(regenBtn){
+                event.preventDefault();
+                event.stopPropagation();
+                runCanvasAgent();
+                return;
+            }
+            const discardBtn = event.target.closest('[data-agent-discard-plan]');
+            if(discardBtn){
+                event.preventDefault();
+                event.stopPropagation();
+                pendingAgentPlan = null;
+                setAgentRunLabel('开始 Agent');
+                if(agentResult) agentResult.textContent = '已放弃当前规划。可以重新输入目标或再次开始 Agent。';
+                agentLogLine('已放弃当前规划。', 'failed');
+                return;
+            }
+            const btn = event.target.closest('[data-agent-copy-prompt]');
+            if(!btn) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const collected = collectAgentPlanFromPreview();
+            const text = collected ? agentPlanDisplayText(collected.plan, collected.count) : (btn.getAttribute('data-agent-copy-prompt') || '');
+            if(!text) return;
+            copyTextToClipboard(text).then(ok => {
+                const span = btn.querySelector('span');
+                if(!span) return;
+                const oldText = span.textContent;
+                span.textContent = ok ? '已复制' : '复制失败';
+                clearTimeout(btn._copyTimer);
+                btn._copyTimer = setTimeout(() => { span.textContent = oldText || '复制提示词'; }, 1200);
+            });
+        });
+        agentProviderSelect?.addEventListener('change', event => {
+            const provider = event.target.value;
+            const models = providerChatModels(provider);
+            const model = models[0] || '';
+            saveAgentDefaults({provider, model});
+            renderAgentModelControls();
+        });
+        agentModelSelect?.addEventListener('change', event => {
+            saveAgentDefaults({model:event.target.value});
+            updateAgentModelSummary();
+        });
+        agentImageProviderSelect?.addEventListener('change', event => {
+            saveAgentDefaults({imageProvider:event.target.value});
+            const models = allImageModels(event.target.value);
+            saveAgentDefaults({imageModel:models[0] || ''});
+            renderAgentModelControls();
+        });
+        agentImageModelSelect?.addEventListener('change', event => {
+            saveAgentDefaults({imageModel:event.target.value});
+            updateAgentModelSummary();
+        });
+        window.toggleAgentDock = toggleAgentDock;
+        window.runCanvasAgent = runCanvasAgent;
 
         function addNode(node){
             if(!ensureCanvas()) return;
@@ -3264,7 +4342,7 @@
             return (node?.images || []).map(outputUrlValue).filter(url => url && !isVideoUrl(url));
         }
         function outputDownloadableImageUrls(node){
-            return outputImageUrls(node).filter(url => !isMissingAssetUrl(url) && (url.startsWith('/output/') || url.startsWith('/assets/')));
+            return outputImageUrls(node).filter(url => !isMissingAssetUrl(url));
         }
         function createInputGroupFromOutput(node, point){
             const urls = outputImageUrls(node);
@@ -3347,19 +4425,36 @@
                 return;
             }
             try {
+                const filename = `${(canvas?.title || 'canvas-output').slice(0, 48)}-${node.id}.zip`;
+                const params = new URLSearchParams({filename});
+                urls.forEach(url => params.append('url', url));
+                const href = `/api/canvas-assets/download?${params.toString()}`;
+                if(href.length < 6000){
+                    if(window.parent && window.parent !== window){
+                        window.parent.postMessage({type:'studio-download', href, filename}, '*');
+                        return;
+                    }
+                    const directLink = document.createElement('a');
+                    directLink.href = href;
+                    directLink.download = filename;
+                    document.body.appendChild(directLink);
+                    directLink.click();
+                    directLink.remove();
+                    return;
+                }
                 const res = await fetch('/api/canvas-assets/download', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
                     body:JSON.stringify({
                         urls,
-                        filename:`${(canvas?.title || 'canvas-output').slice(0, 48)}-${node.id}.zip`
+                        filename
                     })
                 });
                 if(!res.ok) throw new Error(await responseErrorMessage(res, tr('canvas.outputDownloadEmpty')));
                 const blob = await res.blob();
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
-                link.download = `${(canvas?.title || 'canvas-output').slice(0, 48)}-${node.id}.zip`;
+                link.download = filename;
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
@@ -4477,11 +5572,14 @@
             };
             const title = node.type === 'image' ? 'Image' : node.type === 'prompt' ? 'Prompt' : node.type === 'loop' ? tr('canvas.loopNode') : node.type === 'promptGroup' ? 'Prompts' : node.type === 'group' ? 'Group' : node.type === 'output' ? 'Output' : node.type === 'llm' ? 'LLM' : node.type === 'comfy' ? 'ComfyUI' : node.type === 'msgen' ? tr('canvas.modelscopeGenerate') : node.type === 'video' ? tr('canvas.videoGenerateNode') : tr('canvas.apiGenerate');
             // 失败徽章只在一键运行模式中显示，单节点失败已通过 alert 提示
-            const showStatus = ['generator','msgen','comfy','llm'].includes(node.type) && node.runStatus
-                && (node.runStatus !== 'failed' || node._cascadeFailed);
+            const showStatus = ['generator','msgen','comfy','llm','video'].includes(node.type) && node.runStatus
+                && (node.runStatus !== 'failed' || node._cascadeFailed || node._agentFailed || node._agentActive);
             const statusHtml = showStatus ? (() => {
-                const label = { queued:'排队中', running:'运行中', done:'完成', failed:'失败' }[node.runStatus] || '';
-                return `<span class="node-run-status ${node.runStatus}"><span class="dot"></span>${escapeHtml(label)}${node._cascadeIdx?' '+node._cascadeIdx:''}</span>`;
+                const label = node._agentActive
+                    ? ({ queued:'Agent 等待', running:'Agent 生成', reviewing:'Agent 评估', retrying:'Agent 重试', done:'Agent 完成', failed:'Agent 失败' }[node.runStatus] || '')
+                    : ({ queued:'排队中', running:'运行中', done:'完成', failed:'失败' }[node.runStatus] || '');
+                const idx = node._agentIdx || node._cascadeIdx || '';
+                return `<span class="node-run-status ${node.runStatus}${node._agentActive ? ' agent' : ''}"><span class="dot"></span>${escapeHtml(label)}${idx?' '+idx:''}</span>`;
             })() : '';
             el.innerHTML = `<div class="node-head"><span class="node-title">${title}</span><div style="display:flex;align-items:center;gap:8px">${statusHtml}<button onclick="deleteNode('${node.id}', event)" class="text-gray-300 hover:text-red-500"><i data-lucide="x" class="w-4 h-4"></i></button></div></div>`;
             const body = document.createElement('div');
@@ -5160,10 +6258,10 @@
             const inputPlaceholder = langIsEn() ? 'Type input, or connect a Prompt node…' : '直接输入，或连接提示词节点…';
             container.innerHTML = `
                 <div class="llm-pane-label">Input${isReadonly ? ' <span style="font-size:9px;opacity:.5;font-weight:600;text-transform:none;letter-spacing:0">(来自连接)</span>' : ''}</div>
-                <textarea class="llm-input-area llm-input-output" style="height:${inputHeight}px; flex:0 0 ${inputHeight}px;" ${isReadonly ? 'readonly' : ''} placeholder="${inputPlaceholder}">${escapeHtml(inputValue)}</textarea>
+                <textarea class="llm-input-area llm-input-output" style="height:${inputHeight}px; flex:1 1 ${inputHeight}px;" data-pane-height="${inputHeight}" ${isReadonly ? 'readonly' : ''} placeholder="${inputPlaceholder}">${escapeHtml(inputValue)}</textarea>
                 <div class="llm-pane-resizer" title="${tr('canvas.resizePanes')}"></div>
                 <div class="llm-pane-label">Output</div>
-                <div class="llm-output-wrap" style="height:${outputHeight}px; flex:0 0 ${outputHeight}px;">
+                <div class="llm-output-wrap" style="height:${outputHeight}px; flex:1.45 1 ${outputHeight}px;" data-pane-height="${outputHeight}">
                     <button class="llm-copy-btn llm-output-copy" type="button" title="复制"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
                     <div class="llm-output llm-result-output">${escapeHtml(node.outputText || tr('canvas.llmOutputEmpty'))}</div>
                 </div>
@@ -5319,7 +6417,7 @@
             const el = nodesEl.querySelector(`.node[data-id="${llmPaneDrag.node.id}"]`);
             if(el){
                 const inputEl = el.querySelector('.llm-input-output');
-                const outputEl = el.querySelector('.llm-result-output');
+                const outputEl = el.querySelector('.llm-output-wrap');
                 if(inputEl){
                     inputEl.style.height = `${llmPaneDrag.node.llmInputHeight}px`;
                     inputEl.style.flexBasis = `${llmPaneDrag.node.llmInputHeight}px`;
@@ -6203,6 +7301,128 @@
                 if(gen.type === 'video') renderVideoImageInputs(el.querySelector('.video-img-list'), gen, imageInputs);
             });
         }
+        function looksLikePromptSafetyError(err){
+            const message = String(err?.message || err || '').toLowerCase();
+            if(!message) return false;
+            return [
+                'policy', 'safety', 'moderation', 'not allowed', 'prohibited', 'sensitive',
+                'unsafe', 'violate', 'risk', 'invalid prompt', 'content filter',
+                '违禁', '敏感', '审核', '风控', '合规', '不合规', '禁止', '拒绝', '违规', '命中'
+            ].some(word => message.includes(word));
+        }
+        function stripCodeFence(text){
+            return String(text || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+        }
+        function parseSafePromptText(text, fallback){
+            const raw = stripCodeFence(text);
+            const match = raw.match(/\{[\s\S]*\}/);
+            if(match){
+                try {
+                    const data = JSON.parse(match[0]);
+                    const prompt = String(data.safe_prompt || data.prompt || data.image_prompt || '').trim();
+                    if(prompt) return prompt;
+                } catch(e) {}
+            }
+            return raw || fallback;
+        }
+        async function rewritePromptForImageSafety(prompt, errorMessage='', refs=[]){
+            const provider = resolveChatProviderId(loadAgentDefaults().provider || '');
+            const model = resolveChatModel(loadAgentDefaults().model || '', provider);
+            if(!provider || !model) return '';
+            const message = [
+                '请把下面这个图片生成提示词改写成更容易通过图片生成平台审核的版本。',
+                '要求：',
+                '1. 保持主体、构图、镜头、风格、颜色、数量、场景和关键锚点不变。',
+                '2. 只替换可能触发审核/违禁/敏感拦截的表达，不要扩写成另一个主题。',
+                '3. 如果涉及人物年龄、暴力、血腥、裸露、色情、仇恨、违法等风险表达，改成安全、成年、非露骨、非血腥、非违法的中性描述。',
+                '4. 只返回 JSON，不要解释。格式：{"safe_prompt":"改写后的完整提示词"}',
+                errorMessage ? `上游错误：${errorMessage}` : '',
+                `原提示词：\n${prompt}`
+            ].filter(Boolean).join('\n\n');
+            const result = await fetch('/api/canvas-llm', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    message,
+                    model,
+                    ms_model: provider === 'modelscope' ? model : '',
+                    provider,
+                    system_prompt:'你是图片生成提示词安全改写助手。你只能做最小必要改写，必须保留原提示词的创作意图和锚点，只降低审核风险。输出必须是严格 JSON。',
+                    messages:[],
+                    images:(refs || []).slice(0, 4)
+                })
+            }).then(async r => {
+                if(!r.ok) throw new Error(await responseErrorMessage(r, '提示词安全改写失败'));
+                return r.json();
+            });
+            const rewritten = parseSafePromptText(result.text || '', prompt);
+            return rewritten && rewritten !== prompt ? rewritten : '';
+        }
+        function parseAgentReviewText(text){
+            const raw = stripCodeFence(text);
+            const match = raw.match(/\{[\s\S]*\}/);
+            if(match){
+                try {
+                    const data = JSON.parse(match[0]);
+                    const passValue = data.pass ?? data.ok ?? data.accepted ?? data.accept;
+                    return {
+                        pass: passValue === false || passValue === 'false' ? false : true,
+                        score: Math.max(0, Math.min(100, Number(data.score || data.match_score || 0) || 0)),
+                        reason: String(data.reason || data.comment || '').trim().slice(0, 260),
+                        improvedPrompt: String(data.improved_prompt || data.revised_prompt || data.prompt || data.image_prompt || '').trim()
+                    };
+                } catch(e) {}
+            }
+            return {pass:true, score:0, reason:raw.slice(0, 220), improvedPrompt:''};
+        }
+        async function reviewAgentBranchResult({goal='', title='', prompt='', images=[], provider='', model='', imageParams={}}={}){
+            const cleanImages = uniqueModels((images || []).map(outputUrlValue).filter(Boolean).filter(url => !isVideoUrl(url))).slice(-4);
+            if(!cleanImages.length || !provider || !model) return {pass:true, skipped:true, reason:'缺少图片或评估模型，跳过评估。'};
+            const message = [
+                '请评估这次 Agent 生图结果是否满足用户目标和本分支提示词。',
+                '只返回 JSON，不要解释。格式：{"pass":true,"score":0-100,"reason":"一句话原因","improved_prompt":"如果不通过，给出可直接重新生图的完整修正提示词；通过则留空"}',
+                '判断原则：',
+                '1. 只有主体、数量、构图、比例、风格、关键锚点明显不符合时，才返回 pass:false。',
+                '2. 小瑕疵、审美偏好、你无法可靠看清图片时，返回 pass:true。',
+                '3. 如果不通过，improved_prompt 必须保留原提示词的核心意图和锚点，只强化约束，不要换主题。',
+                `用户总目标：${goal || '未提供'}`,
+                `本分支标题：${title || '未命名'}`,
+                `目标尺寸：${agentImageParamsLabel(imageParams)}`,
+                `本分支提示词：\n${prompt || '未提供'}`
+            ].join('\n\n');
+            const result = await fetch('/api/canvas-llm', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    message,
+                    model,
+                    ms_model: provider === 'modelscope' ? model : '',
+                    provider,
+                    system_prompt:'你是 Infinite Canvas 的图片结果评估 Agent。你要严格但克制，只在明显偏离目标时要求重试，并输出严格 JSON。',
+                    messages:[],
+                    images:cleanImages
+                })
+            }).then(async r => {
+                if(!r.ok) throw new Error(await responseErrorMessage(r, 'Agent 结果评估失败'));
+                return r.json();
+            });
+            return parseAgentReviewText(result.text || '');
+        }
+        function agentPromptNodeForGenerator(gen){
+            return connections
+                .filter(c => c.to === gen?.id)
+                .map(c => nodes.find(n => n.id === c.from))
+                .find(n => n?.type === 'prompt') || null;
+        }
+        function applyAgentPromptRevision(gen, title='', prompt=''){
+            const promptNode = agentPromptNodeForGenerator(gen);
+            if(!promptNode || !prompt) return false;
+            if(!promptNode.agentOriginalText) promptNode.agentOriginalText = promptNode.text || '';
+            promptNode.text = `${title || 'Agent 修正'}\n\n${prompt}`.trim();
+            gen.agentReviewPrompt = prompt;
+            gen.agentReviewAt = new Date().toISOString();
+            return true;
+        }
         async function runGenerator(genId, opts={}){
             const gen = nodes.find(n => n.id === genId);
             if(!gen || (gen.running && !opts.cascade)) return;
@@ -6212,44 +7432,79 @@
             if(!prompt && !refs.length){ alert(tr('canvas.needPromptOrImage')); return; }
             const count = Math.max(1, Math.min(8, Number(gen.count || 1)));
             let out = outputForNode(gen, 460, !opts.cascade);
-            const run = runSnapshot(gen, prompt || 'Edit the reference images.', refs);
+            const originalPrompt = prompt || 'Edit the reference images.';
+            const run = runSnapshot(gen, originalPrompt, refs);
             const payload = {
-                prompt: prompt || 'Edit the reference images.',
+                prompt: originalPrompt,
                 provider_id:resolveImageProviderId(gen.apiProvider || 'comfly'),
                 model:resolveImageModel(gen.model),
                 size:apiImageSize(gen.ratio ?? 'square', gen.resolution || '1k', gen.customRatio || '', gen.customSize || ''),
                 reference_images:refs
             };
             let pendingIds = [];
+            let safetyRewritten = '';
+            const beforeOutputs = new Set((gen.generatedOutputs || []).map(outputUrlValue).filter(Boolean));
+            const currentRunImages = () => (gen.generatedOutputs || []).map(outputUrlValue).filter(Boolean).filter(url => !beforeOutputs.has(url));
             if(!opts.cascade){ gen.running = true; }
             try {
-                const taskInfos = await Promise.all(Array.from({length:count}, () => createCanvasImageTask(payload)));
-                pendingIds = taskInfos.map(() => uid('p'));
-                if(out){
-                    out._pending = [
-                        ...(out._pending || []),
-                        ...taskInfos.map((task, index) => makePending(pendingIds[index], run, {
-                            canvasTaskId:task.task_id,
-                            canvasTaskType:'online-image',
-                            appendGenerated:Boolean(opts.cascade)
-                        }))
-                    ];
-                    refreshRunNodes(gen, out);
-                    scheduleSave();
-                    await saveCanvas();
-                    const statuses = await Promise.all(taskInfos.map(task => pollCanvasImageTask(task.task_id)));
-                    if(statuses.includes('failed')) throw new Error(gen.runError || tr('canvas.generationFailed'));
-                } else {
-                    const results = await Promise.all(taskInfos.map(task => pollCanvasImageTaskResult(task.task_id)));
-                    const images = results.flatMap(result => result.images || []);
-                    if(!images.length) throw new Error(tr('canvas.generationFailed'));
-                    mergeGeneratedOutputs(gen, images, Boolean(opts.cascade));
-                    gen.runStatus = 'done';
-                    gen.runError = '';
-                    gen.running = false;
-                    addGenerationLog({run, outputs:images, runMs:0});
-                    refreshRunNodes(gen, null);
-                    scheduleSave();
+                for(let attempt = 0; attempt < 2; attempt++){
+                    try {
+                        const taskInfos = await Promise.all(Array.from({length:count}, () => createCanvasImageTask(payload)));
+                        pendingIds = taskInfos.map(() => uid('p'));
+                        if(out){
+                            const pendingRun = safetyRewritten
+                                ? {...run, prompt:safetyRewritten, originalPrompt, safetyRewritten:true}
+                                : run;
+                            out._pending = [
+                                ...(out._pending || []),
+                                ...taskInfos.map((task, index) => makePending(pendingIds[index], pendingRun, {
+                                    canvasTaskId:task.task_id,
+                                    canvasTaskType:'online-image',
+                                    appendGenerated:Boolean(opts.cascade)
+                                }))
+                            ];
+                            refreshRunNodes(gen, out);
+                            scheduleSave();
+                            await saveCanvas();
+                            const statuses = await Promise.all(taskInfos.map(task => pollCanvasImageTask(task.task_id)));
+                            if(statuses.includes('failed')) throw new Error(gen.runError || tr('canvas.generationFailed'));
+                            return {images:currentRunImages(), prompt:payload.prompt, originalPrompt, safetyRewritten, out};
+                        } else {
+                            const results = await Promise.all(taskInfos.map(task => pollCanvasImageTaskResult(task.task_id)));
+                            const images = results.flatMap(result => result.images || []);
+                            if(!images.length) throw new Error(tr('canvas.generationFailed'));
+                            mergeGeneratedOutputs(gen, images, Boolean(opts.cascade));
+                            gen.runStatus = 'done';
+                            gen.runError = '';
+                            gen.running = false;
+                            addGenerationLog({run:safetyRewritten ? {...run, prompt:safetyRewritten, originalPrompt, safetyRewritten:true} : run, outputs:images, runMs:0});
+                            refreshRunNodes(gen, null);
+                            scheduleSave();
+                            return {images, prompt:payload.prompt, originalPrompt, safetyRewritten, out:null};
+                        }
+                    } catch(err) {
+                        const remainingIds = pendingIds.filter(id => pendingById(out, id));
+                        if(remainingIds.length && out) out._pending = (out._pending || []).filter(p => !remainingIds.includes(p.id));
+                        pendingIds = [];
+                        if(opts.safetyRewrite && attempt === 0 && prompt && looksLikePromptSafetyError(err)){
+                            gen.runStatus = 'running';
+                            gen.runError = '检测到可能的提示词审核拦截，正在安全改写后重试';
+                            refreshRunNodes(gen, out);
+                            scheduleSave();
+                            if(typeof opts.onSafetyRewriteStart === 'function') opts.onSafetyRewriteStart(err);
+                            const rewritten = await rewritePromptForImageSafety(originalPrompt, err.message || String(err), refs);
+                            if(typeof opts.onSafetyRewriteDone === 'function') opts.onSafetyRewriteDone(rewritten);
+                            if(rewritten){
+                                safetyRewritten = rewritten;
+                                payload.prompt = rewritten;
+                                gen.safePrompt = rewritten;
+                                gen.originalPromptBeforeSafetyRewrite = originalPrompt;
+                                gen.safetyRewriteAt = new Date().toISOString();
+                                continue;
+                            }
+                        }
+                        throw err;
+                    }
                 }
             } catch(err) {
                 const remainingIds = pendingIds.filter(id => pendingById(out, id));
@@ -6671,7 +7926,14 @@
         }
         function retryBarHtml(node){
             // 只在一键运行模式中失败才显示；普通单节点失败直接弹 alert，不显示这条
-            if(node.runStatus !== 'failed' || !node._cascadeFailed) return '';
+            if(node.runStatus !== 'failed' || (!node._cascadeFailed && !node._agentFailed)) return '';
+            if(node._agentFailed){
+                return `<div class="node-retry-bar" data-retry-bar>
+                    <span class="node-retry-msg" title="${escapeAttr(node.runError||'')}">${escapeHtml((node.runError||tr('canvas.generationFailed')).slice(0,60))}</span>
+                    <button class="node-retry-btn" type="button" data-agent-retry="${node.id}">重试本支</button>
+                    <button class="node-stop-btn" type="button" data-agent-dismiss="${node.id}">忽略</button>
+                </div>`;
+            }
             return `<div class="node-retry-bar" data-retry-bar>
                 <span class="node-retry-msg" title="${escapeAttr(node.runError||'')}">${escapeHtml((node.runError||tr('canvas.generationFailed')).slice(0,60))}</span>
                 <button class="node-retry-btn" type="button" data-retry="${node.id}">重试</button>
@@ -6694,6 +7956,14 @@
             wrap.querySelectorAll(`[data-stop="${nodeId}"]`).forEach(b => {
                 b.onmousedown = e => e.stopPropagation();
                 b.onclick = e => { e.stopPropagation(); cancelCascade(nodeId); };
+            });
+            wrap.querySelectorAll(`[data-agent-retry="${nodeId}"]`).forEach(b => {
+                b.onmousedown = e => e.stopPropagation();
+                b.onclick = e => { e.stopPropagation(); retryAgentBranch(nodeId); };
+            });
+            wrap.querySelectorAll(`[data-agent-dismiss="${nodeId}"]`).forEach(b => {
+                b.onmousedown = e => e.stopPropagation();
+                b.onclick = e => { e.stopPropagation(); dismissAgentBranchFailure(nodeId); };
             });
         }
         // —— 一键运行：从目标节点反向追溯到所有上游生成节点，按拓扑顺序串行执行 ——
@@ -7042,6 +8312,52 @@
                 }
             });
             refreshNodes(order);
+        }
+
+        async function retryAgentBranch(nodeId){
+            const node = nodes.find(n => n.id === nodeId);
+            if(!node || node.running || node.runStatus === 'running') return;
+            node._agentActive = true;
+            node._agentFailed = false;
+            node.runStatus = 'running';
+            node.runError = '';
+            refreshNodes([node.id]);
+            const row = agentLogLine(`正在重试 Agent 分支 ${node._agentIdx || ''}`.trim(), 'running');
+            try {
+                if(node.type === 'generator'){
+                    await runGenerator(node.id, {
+                        cascade:true,
+                        safetyRewrite:true,
+                        onSafetyRewriteStart:error => agentLogLine('重试分支检测到审核拦截，正在安全改写提示词', 'running'),
+                        onSafetyRewriteDone:rewritten => agentLogLine(rewritten ? '重试分支安全改写完成' : '重试分支未产生可用改写', rewritten ? 'done' : 'failed')
+                    });
+                } else {
+                    await runCascadeNodeByType(node, {cascade:true});
+                }
+                node.runStatus = 'done';
+                node.runError = '';
+                node._agentFailed = false;
+                setAgentLineState(row, 'done', `Agent 分支 ${node._agentIdx || ''} 重试成功`.trim());
+            } catch(err) {
+                node.runStatus = 'failed';
+                node.runError = err.message || String(err);
+                node._agentFailed = true;
+                setAgentLineState(row, 'failed', `Agent 分支 ${node._agentIdx || ''} 重试失败：${node.runError}`.trim());
+            } finally {
+                refreshNodes([node.id]);
+                scheduleSave();
+            }
+        }
+        function dismissAgentBranchFailure(nodeId){
+            const node = nodes.find(n => n.id === nodeId);
+            if(!node) return;
+            node._agentFailed = false;
+            node._agentActive = false;
+            node._agentIdx = '';
+            node.runStatus = '';
+            node.runError = '';
+            refreshNodes([node.id]);
+            scheduleSave();
         }
 
         async function runLLMChat(nodeId){
@@ -7505,16 +8821,36 @@
             scheduleSave();
         }
         async function downloadUrl(url, filename){
-            const res = await fetch(url);
+            if(!url) return;
+            if(!String(url).startsWith('data:')){
+                const href = `/api/download-url?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || outputDownloadName(url))}`;
+                if(window.parent && window.parent !== window){
+                    window.parent.postMessage({type:'studio-download', href, filename: filename || outputDownloadName(url)}, '*');
+                    return;
+                }
+                const link = document.createElement('a');
+                link.href = href;
+                link.download = filename || outputDownloadName(url);
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                return;
+            }
+            const res = await fetch('/api/download-url', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({url, filename})
+            });
             if(!res.ok) throw new Error('下载失败');
             const blob = await res.blob();
             const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = filename;
+            const objectUrl = URL.createObjectURL(blob);
+            link.href = objectUrl;
+            link.download = filename || outputDownloadName(url);
             document.body.appendChild(link);
             link.click();
             link.remove();
-            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
         }
         function setOutputCompareMode(active){
             outputPreview.classList.toggle('compare-mode', active);
@@ -7705,6 +9041,7 @@
                     downloadUrl(url, outputDownloadName(url)).catch(err => alert(err.message || '下载失败'));
                 };
                 outputLightbox.classList.add('open');
+                notifyOutputPreviewState(true);
                 refreshIcons();
                 return;
             }
@@ -7729,10 +9066,12 @@
                 downloadUrl(url, outputDownloadName(url)).catch(err => alert(err.message || '下载失败'));
             };
             outputLightbox.classList.add('open');
+            notifyOutputPreviewState(true);
             refreshIcons();
         }
         function closeOutputLightbox(){
             outputLightbox.classList.remove('open');
+            notifyOutputPreviewState(false);
             setOutputCompareMode(false);
             outputLightboxImg.src = '';
             outputLightboxVideo.pause();
@@ -7750,6 +9089,11 @@
             currentOutputLightboxOutId = '';
             currentOutputLightboxUrl = '';
             setupOutputPromptPanel(null);
+        }
+        function notifyOutputPreviewState(open){
+            try {
+                window.parent?.postMessage({type:'canvas-output-preview', open:!!open}, '*');
+            } catch(e) {}
         }
         function groupSelectedImages(){
             if(!ensureCanvas()) return;
@@ -7784,6 +9128,24 @@
             const x2 = Math.max(...rects.map(r => r.x + r.w));
             const y2 = Math.max(...rects.map(r => r.y + r.h));
             return {x:x1, y:y1, w:x2 - x1, h:y2 - y1};
+        }
+        function focusNodeIds(ids, opts={}){
+            const validIds = (ids || []).filter(id => nodes.some(n => n.id === id));
+            if(!validIds.length) return;
+            const box = nodeBounds(validIds);
+            if(!box || !Number.isFinite(box.x) || !Number.isFinite(box.w)) return;
+            const rect = board.getBoundingClientRect();
+            const padding = Number(opts.padding || 180);
+            const fitScale = Math.min(
+                (rect.width - padding) / Math.max(box.w, 1),
+                (rect.height - padding) / Math.max(box.h, 1)
+            );
+            const nextScale = Math.max(.55, Math.min(1, fitScale || viewport.scale || 1));
+            viewport.scale = nextScale;
+            viewport.x = rect.width / 2 - (box.x + box.w / 2) * viewport.scale;
+            viewport.y = rect.height / 2 - (box.y + box.h / 2) * viewport.scale;
+            applyViewport();
+            refreshGeometryAfterLayout();
         }
 
         function startSelection(e){
@@ -8246,7 +9608,13 @@
             linkControlsEl.innerHTML = '';
             connections.forEach(c => {
                 const a = portPoint(c.from, 'out'), b = portPoint(c.to, 'in');
+                const selectedLink = isConnectionSelected(c);
                 linksEl.appendChild(pathEl(a.x, a.y, b.x, b.y, 'link'));
+                if(selectedLink){
+                    linksEl.appendChild(pathEl(a.x, a.y, b.x, b.y, 'link-energy-glow selected'));
+                    linksEl.appendChild(pathEl(a.x, a.y, b.x, b.y, 'link-energy-core selected'));
+                    linksEl.appendChild(linkEnergyDots(a.x, a.y, b.x, b.y));
+                }
                 const btn = linkDeleteButton(c, a, b);
                 linkControlsEl.appendChild(btn);
                 linksEl.appendChild(linkHitEl(a.x, a.y, b.x, b.y, c.id));
@@ -8338,10 +9706,32 @@
         }
         function pathEl(x1,y1,x2,y2,cls){
             const p = document.createElementNS('http://www.w3.org/2000/svg','path');
-            const dx = Math.max(80, Math.abs(x2 - x1) * .45);
-            p.setAttribute('d', `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`);
+            p.setAttribute('d', linkPathD(x1, y1, x2, y2));
             p.setAttribute('class', cls);
+            if(String(cls || '').includes('link-energy')) p.setAttribute('pathLength', '120');
             return p;
+        }
+        function linkPathD(x1,y1,x2,y2){
+            const dx = Math.max(80, Math.abs(x2 - x1) * .45);
+            return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+        }
+        function linkEnergyDots(x1,y1,x2,y2){
+            const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+            const d = linkPathD(x1, y1, x2, y2);
+            [['link-energy-dot', '3.8', '1.35s', '0s'], ['link-energy-dot hot', '2.4', '1.35s', '-.48s']].forEach(([cls, r, dur, begin]) => {
+                const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+                dot.setAttribute('class', cls);
+                dot.setAttribute('r', r);
+                const motion = document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+                motion.setAttribute('dur', dur);
+                motion.setAttribute('begin', begin);
+                motion.setAttribute('repeatCount', 'indefinite');
+                motion.setAttribute('path', d);
+                motion.setAttribute('rotate', 'auto');
+                dot.appendChild(motion);
+                g.appendChild(dot);
+            });
+            return g;
         }
         function pointSegmentDistance(p, a, b){
             const dx = b.x - a.x, dy = b.y - a.y;

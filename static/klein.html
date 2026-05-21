@@ -542,7 +542,8 @@
                     outputImg.src = result.images[0];
                     outputImg.classList.remove('hidden');
                     downloadBtn.classList.remove('hidden');
-                    downloadBtn.href = result.images[0];
+                    downloadBtn.href = '#';
+                    downloadBtn.onclick = e => downloadDirectImage(e, result.images[0], `Klein-${Date.now()}.png`);
                     renderImageCard(result, true);
                 } else if (result.error) {
                     alert("Generation failed: " + result.error);
@@ -618,7 +619,8 @@
                     outputImg.src = result.url;
                     outputImg.classList.remove('hidden');
                     downloadBtn.classList.remove('hidden');
-                    downloadBtn.href = result.url;
+                    downloadBtn.href = '#';
+                    downloadBtn.onclick = e => downloadDirectImage(e, result.url, `Klein-${Date.now()}.png`);
                     renderImageCard(resultData, true);
                     setCloudStatus('Done!', false);
                 }
@@ -798,9 +800,46 @@
 
         function zoomImage() { if (currentResult) openLightbox(currentResult); }
 
-        function downloadLightboxImage() {
+        async function downloadDirectImage(e, url, filename) {
+            if(e) e.preventDefault();
+            if(e) e.stopPropagation();
+            if(!url) return;
+            if(!String(url).startsWith('data:')){
+                const href = `/api/download-url?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || `Klein-${Date.now()}.png`)}`;
+                if(window.parent && window.parent !== window){
+                    window.parent.postMessage({type:'studio-download', href, filename: filename || `Klein-${Date.now()}.png`}, '*');
+                    return;
+                }
+                const link = document.createElement('a');
+                link.href = href;
+                link.download = filename || `Klein-${Date.now()}.png`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                return;
+            }
+            const res = await fetch('/api/download-url', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({url, filename})
+            });
+            if(!res.ok) return alert('下载失败');
+            const blob = await res.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = filename || `Klein-${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        }
+
+        async function downloadLightboxImage() {
             const url = currentLightboxData?.images[0];
             if (!url) return;
+            await downloadDirectImage(null, url, `Klein-${Date.now()}.png`);
+            return;
             const link = document.createElement('a');
             link.href = url;
             link.download = `Klein-${Date.now()}.png`;

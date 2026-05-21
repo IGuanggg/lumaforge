@@ -509,7 +509,7 @@
                     method:'POST', headers:{'Content-Type':'application/json'},
                     body:JSON.stringify({ prompt, provider_id:provider, model:selectedModel, size:currentSize(), reference_images:Object.values(refs).filter(Boolean) })
                 }).then(async r => { if(!r.ok) throw new Error((await r.json()).detail || '生成失败'); return r.json(); });
-                currentResult = result; out.src = result.images[0]; out.classList.remove('hidden'); dl.href = result.images[0]; dl.classList.remove('hidden'); renderImageCard(result, true);
+                currentResult = result; out.src = result.images[0]; out.classList.remove('hidden'); dl.href = '#'; dl.onclick = e => downloadDirectImage(e, result.images[0], `online-${Date.now()}.png`); dl.classList.remove('hidden'); renderImageCard(result, true);
             } catch(err) {
                 alert(err.message || 'Generation failed'); placeholder.classList.remove('hidden');
             } finally {
@@ -571,10 +571,46 @@
             document.body.style.overflow='auto';
         }
         function handleOutsideClick(e){ if(e.target.id === 'lightbox') closeLightbox(); }
+        async function downloadDirectImage(e, url, filename){
+            if(e) e.stopPropagation();
+            if(e) e.preventDefault();
+            if(!url) return;
+            if(!String(url).startsWith('data:')){
+                const href = `/api/download-url?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || `image-${Date.now()}.png`)}`;
+                if(window.parent && window.parent !== window){
+                    window.parent.postMessage({type:'studio-download', href, filename: filename || `image-${Date.now()}.png`}, '*');
+                    return;
+                }
+                const link = document.createElement('a');
+                link.href = href;
+                link.download = filename || `image-${Date.now()}.png`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                return;
+            }
+            const res = await fetch('/api/download-url', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({url, filename})
+            });
+            if(!res.ok) return alert('下载失败');
+            const blob = await res.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = filename || `image-${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        }
         async function downloadLightboxImage(e){
             e.stopPropagation();
             const url = currentLightboxData?.images?.[0];
             if(!url) return;
+            await downloadDirectImage(e, url, `image-${Date.now()}.png`);
+            return;
             const res = await fetch(url);
             if(!res.ok) return alert('下载失败');
             const blob = await res.blob();

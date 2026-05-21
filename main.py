@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger("infinite_canvas")
-APP_VERSION = os.getenv("APP_VERSION", "1.0.7")
+APP_VERSION = os.getenv("APP_VERSION", "1.0.8")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/Infinite-Canvas/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
@@ -837,10 +837,11 @@ def build_cloud_config(include_secrets=False):
         "MODELSCOPE_CHAT_MODELS": ",".join(MODELSCOPE_CHAT_MODELS),
     }
     config = {
-        "version": 1,
+        "version": 2,
         "exported_at": now_ms(),
         "api_providers": providers,
         "env": env_values,
+        "canvases": export_cloud_canvases(),
     }
     if include_secrets:
         api_keys = {}
@@ -887,7 +888,8 @@ def apply_cloud_config(config):
                     COMFYUI_INSTANCES = cleaned
                     COMFYUI_ADDRESS = cleaned[0]
                     BACKEND_LOCAL_LOAD = {addr: BACKEND_LOCAL_LOAD.get(addr, 0) for addr in cleaned}
-    return {"providers": [public_provider(p) for p in load_api_providers()], "comfyui_instances": COMFYUI_INSTANCES}
+    canvas_result = import_cloud_canvases(config.get("canvases") or [])
+    return {"providers": [public_provider(p) for p in load_api_providers()], "comfyui_instances": COMFYUI_INSTANCES, "canvases": canvas_result}
 
 async def try_apply_cloud_config_from_account(session):
     base_url = cloud_base_url(session)
@@ -1256,6 +1258,14 @@ class AssetUpdateRequest(BaseModel):
     title: Optional[str] = Field(default=None, max_length=200)
     tags: Optional[List[str]] = None
     favorite: Optional[bool] = None
+
+class DownloadUrlRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=5000)
+    filename: str = Field(default="", max_length=220)
+
+class CanvasAssetsDownloadRequest(BaseModel):
+    urls: List[str] = []
+    filename: str = Field(default="canvas-assets.zip", max_length=220)
 
 class PromptSnippetRequest(BaseModel):
     title: str = Field(min_length=1, max_length=120)
@@ -1652,6 +1662,7 @@ def save_canvas(canvas):
     with CANVAS_LOCK:
         with open(canvas_path(canvas["id"]), 'w', encoding='utf-8') as f:
             json.dump(canvas, f, ensure_ascii=False, indent=2)
+    schedule_cloud_config_sync()
 
 def new_canvas(title="未命名画布", icon="layers"):
     timestamp = now_ms()
@@ -1736,6 +1747,65 @@ def list_canvases():
 def list_deleted_canvases():
     records = iter_canvas_records(include_deleted=True)
     return sorted(records, key=lambda item: item["deleted_at"], reverse=True)
+
+def export_cloud_canvases(limit=200):
+    cleanup_expired_canvas_trash()
+    docs = []
+    with CANVAS_LOCK:
+        for filename in os.listdir(CANVAS_DIR):
+            if not filename.endswith(".json"):
+                continue
+            path = os.path.join(CANVAS_DIR, filename)
+            try:
+                with open(path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception:
+                continue
+            cid = str(data.get("id") or "").strip()
+            if not re.fullmatch(r"[a-zA-Z0-9_-]{8,80}", cid):
+                continue
+            docs.append(data)
+    docs.sort(key=lambda item: int(item.get("updated_at") or item.get("created_at") or 0), reverse=True)
+    return docs[:max(1, min(int(limit or 200), 500))]
+
+def import_cloud_canvases(items):
+    if not isinstance(items, list):
+        return {"imported": 0, "skipped": 0}
+    imported = 0
+    skipped = 0
+    with CANVAS_LOCK:
+        for raw in items[:500]:
+            if not isinstance(raw, dict):
+                skipped += 1
+                continue
+            cid = str(raw.get("id") or "").strip()
+            if not re.fullmatch(r"[a-zA-Z0-9_-]{8,80}", cid):
+                skipped += 1
+                continue
+            data = dict(raw)
+            data["id"] = cid
+            data["title"] = str(data.get("title") or "未命名画布")[:80]
+            data["icon"] = str(data.get("icon") or "layers")[:16]
+            data["nodes"] = data.get("nodes") if isinstance(data.get("nodes"), list) else []
+            data["connections"] = data.get("connections") if isinstance(data.get("connections"), list) else []
+            data["viewport"] = data.get("viewport") if isinstance(data.get("viewport"), dict) else {"x": 0, "y": 0, "scale": 1}
+            data["created_at"] = int(data.get("created_at") or data.get("updated_at") or now_ms())
+            data["updated_at"] = int(data.get("updated_at") or data["created_at"])
+            path = canvas_path(cid)
+            local_updated = 0
+            if os.path.exists(path):
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        local_updated = int((json.load(f) or {}).get("updated_at") or 0)
+                except Exception:
+                    local_updated = 0
+            if local_updated and local_updated > int(data.get("updated_at") or 0):
+                skipped += 1
+                continue
+            with open(path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            imported += 1
+    return {"imported": imported, "skipped": skipped}
 
 def display_title(text):
     title = re.sub(r"\s+", " ", text or "").strip()
@@ -1978,7 +2048,12 @@ def output_path_for(filename, category="output"):
 def output_file_from_url(url):
     if isinstance(url, dict):
         url = url.get("url", "")
-    if not url or not (url.startswith("/output/") or url.startswith("/assets/")):
+    if not url:
+        return None
+    if isinstance(url, str) and url.lower().startswith(("http://", "https://")):
+        parsed = urllib.parse.urlparse(url)
+        url = parsed.path or ""
+    if not (url.startswith("/output/") or url.startswith("/assets/")):
         return None
     clean = urllib.parse.unquote(url.split("?", 1)[0]).replace("\\", "/")
     if clean.startswith("/assets/"):
@@ -2009,6 +2084,53 @@ def content_type_for_path(path):
     if ext == ".webp":
         return "image/webp"
     return "image/png"
+
+def safe_download_filename(name: str, fallback: str = "download"):
+    raw = urllib.parse.unquote(str(name or "").strip()) or fallback
+    raw = os.path.basename(raw.replace("\\", "/")).strip(" .")
+    raw = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", raw)
+    return (raw[:180].strip(" .") or fallback)
+
+def filename_from_url(url: str, fallback: str = "download"):
+    try:
+        parsed = urllib.parse.urlparse(str(url or ""))
+        name = os.path.basename(urllib.parse.unquote(parsed.path or ""))
+        return safe_download_filename(name, fallback)
+    except Exception:
+        return fallback
+
+def content_type_for_filename(name: str):
+    return content_type_for_path(name or "")
+
+async def bytes_from_download_url(url: str):
+    value = str(url or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="下载地址为空")
+    local_path = output_file_from_url(value)
+    if local_path:
+        with open(local_path, "rb") as fh:
+            return os.path.basename(local_path), fh.read(), content_type_for_path(local_path)
+    if value.startswith("data:"):
+        try:
+            header, payload = value.split(",", 1)
+            content_type = header.split(";", 1)[0].replace("data:", "") or "application/octet-stream"
+            raw = base64.b64decode(payload) if ";base64" in header.lower() else urllib.parse.unquote_to_bytes(payload)
+            return "image.png", raw, content_type
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="data URL 无法解析") from exc
+    if value.lower().startswith(("http://", "https://")):
+        try:
+            timeout = httpx.Timeout(connect=20.0, read=300.0, write=60.0, pool=20.0)
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+                response = await client.get(value)
+                response.raise_for_status()
+                content_type = response.headers.get("content-type", "application/octet-stream").split(";")[0].strip() or "application/octet-stream"
+                return filename_from_url(str(response.url), "download"), response.content, content_type
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(status_code=exc.response.status_code, detail="远程文件下载失败") from exc
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail=f"远程文件下载失败：{exc}") from exc
+    raise HTTPException(status_code=400, detail="只支持本地 /assets、/output、data URL 或 http(s) 地址")
 
 def convert_output_to_jpg(url, quality=88):
     path = output_file_from_url(url)
@@ -3258,6 +3380,53 @@ def download_output(url: str, name: str = ""):
         raise HTTPException(status_code=404, detail="文件不存在")
     filename = os.path.basename(name) if name else os.path.basename(path)
     return FileResponse(path, media_type=content_type_for_path(path), filename=filename)
+
+@app.post("/api/download-url")
+async def download_url(payload: DownloadUrlRequest):
+    source_name, raw, content_type = await bytes_from_download_url(payload.url)
+    filename = safe_download_filename(payload.filename or source_name, source_name or "download")
+    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"}
+    return Response(content=raw, media_type=content_type or "application/octet-stream", headers=headers)
+
+@app.get("/api/download-url")
+async def download_url_get(url: str, filename: str = ""):
+    return await download_url(DownloadUrlRequest(url=url, filename=filename))
+
+@app.post("/api/canvas-assets/download")
+async def download_canvas_assets(payload: CanvasAssetsDownloadRequest):
+    urls = []
+    for url in payload.urls or []:
+        if isinstance(url, str) and url.strip() and url.strip() not in urls:
+            urls.append(url.strip())
+    if not urls:
+        raise HTTPException(status_code=400, detail="没有可下载文件")
+    zip_buffer = BytesIO()
+    used_names = set()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for index, url in enumerate(urls, start=1):
+            source_name, raw, _content_type = await bytes_from_download_url(url)
+            name = safe_download_filename(source_name, f"asset-{index}.png")
+            stem, ext = os.path.splitext(name)
+            if not ext:
+                ext = ".png"
+            candidate = f"{stem}{ext}"
+            n = 2
+            while candidate.lower() in used_names:
+                candidate = f"{stem}-{n}{ext}"
+                n += 1
+            used_names.add(candidate.lower())
+            zf.writestr(candidate, raw)
+    zip_buffer.seek(0)
+    filename = safe_download_filename(payload.filename or "canvas-assets.zip", "canvas-assets.zip")
+    if not filename.lower().endswith(".zip"):
+        filename += ".zip"
+    headers = {"Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}"}
+    return Response(content=zip_buffer.getvalue(), media_type="application/zip", headers=headers)
+
+@app.get("/api/canvas-assets/download")
+async def download_canvas_assets_get(request: Request, filename: str = "canvas-assets.zip"):
+    urls = request.query_params.getlist("url")
+    return await download_canvas_assets(CanvasAssetsDownloadRequest(urls=urls, filename=filename))
 
 @app.get("/api/assets")
 def list_assets(type: str = "", q: str = "", favorite: Optional[bool] = None, limit: int = 80, offset: int = 0):

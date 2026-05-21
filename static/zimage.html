@@ -615,9 +615,38 @@
             document.body.style.overflow = 'auto';
         }
         function handleOutsideClick(e) { if (e.target.id === 'lightbox') closeLightbox(); }
-        function downloadImage() {
-            const a = document.createElement('a'); a.href = document.getElementById('lightboxImg').src;
-            a.download = `Art-${Date.now()}.png`; a.click();
+        async function downloadImage() {
+            const url = document.getElementById('lightboxImg').src;
+            if(!url) return;
+            if(!String(url).startsWith('data:')){
+                const href = `/api/download-url?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(`Art-${Date.now()}.png`)}`;
+                if(window.parent && window.parent !== window){
+                    window.parent.postMessage({type:'studio-download', href, filename:`Art-${Date.now()}.png`}, '*');
+                    return;
+                }
+                const a = document.createElement('a');
+                a.href = href;
+                a.download = `Art-${Date.now()}.png`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                return;
+            }
+            const res = await fetch('/api/download-url', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({url, filename:`Art-${Date.now()}.png`})
+            });
+            if(!res.ok) return alert('下载失败');
+            const blob = await res.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = objectUrl;
+            a.download = `Art-${Date.now()}.png`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
         }
         function applySameStyle() {
             document.getElementById('prompt').value = document.getElementById('lightboxPrompt').innerText;

@@ -268,7 +268,7 @@
                     <div class="side-section-title" data-i18n="api.providersTitle">平台列表</div>
                     <div id="providerList" class="provider-list"></div>
                     <button class="add-btn" type="button" onclick="addProvider()"><i data-lucide="plus" class="w-4 h-4"></i><span data-i18n="api.addProvider">新增平台</span></button>
-                    <a class="api-link-btn" href="https://apimart.ai/zh/register" target="_blank" rel="noopener noreferrer"><i data-lucide="key-round" class="w-4 h-4"></i><span data-i18n="api.getApi">获取API</span></a>
+                    <a class="api-link-btn" data-api-signup-link href="https://apimart.ai/register?aff=pUM7Te" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault();event.stopPropagation();var u=this.href;var w=null;try{w=window.open(u,'_blank','noopener,noreferrer');}catch(e){}if(!w){try{window.parent&&window.parent.postMessage({type:'open-external-url',url:u},'*');}catch(e){}setTimeout(function(){try{window.top.location.href=u;}catch(e){window.location.href=u;}},80);}return false;"><i data-lucide="key-round" class="w-4 h-4"></i><span data-i18n="api.getApi">获取API</span></a>
                 </aside>
 
                 <main class="content">
@@ -1028,6 +1028,30 @@
             return String(str || '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
         }
         function escapeAttr(str){ return escapeHtml(str).replace(/`/g, '&#96;'); }
+        const API_SIGNUP_URL = 'https://apimart.ai/register?aff=pUM7Te';
+        window.openApiSignup = function openApiSignup(event){
+            if(event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+            let opened = null;
+            try {
+                opened = window.open(API_SIGNUP_URL, '_blank', 'noopener,noreferrer');
+            } catch(e) {}
+            if(!opened){
+                try {
+                    window.parent?.postMessage({ type:'open-external-url', url:API_SIGNUP_URL }, '*');
+                } catch(e) {}
+                setTimeout(() => {
+                    try {
+                        window.top.location.href = API_SIGNUP_URL;
+                    } catch(e) {
+                        window.location.href = API_SIGNUP_URL;
+                    }
+                }, 80);
+            }
+            return false;
+        };
         window.addEventListener('message', event => {
             if(event.data?.type === 'studio-theme' && window.StudioTheme) window.StudioTheme.set(event.data.theme);
             if(event.data?.type === 'studio-lang' && window.StudioI18n) {

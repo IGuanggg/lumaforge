@@ -341,6 +341,18 @@
 
         async function downloadAsset(asset){
             if(!asset) return;
+            const directLink = document.createElement('a');
+            const href = `/api/assets/${encodeURIComponent(asset.id)}/download`;
+            if(window.parent && window.parent !== window){
+                window.parent.postMessage({type:'studio-download', href, filename: asset.title || `asset-${asset.id}`}, '*');
+                return;
+            }
+            directLink.href = href;
+            directLink.download = asset.title || `asset-${asset.id}`;
+            document.body.appendChild(directLink);
+            directLink.click();
+            directLink.remove();
+            return;
             const res = await fetch(`/api/assets/${encodeURIComponent(asset.id)}/download`);
             if(!res.ok) throw new Error('下载失败');
             const blob = await res.blob();
@@ -351,7 +363,7 @@
             document.body.appendChild(link);
             link.click();
             link.remove();
-            URL.revokeObjectURL(url);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
         }
 
         async function toggleFavorite(asset){

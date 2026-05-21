@@ -939,7 +939,6 @@
             });
 
             const dataUri = await toBase64(uploadedFile);
-            console.log("DataURI generated, length:", dataUri.length);
 
             // Submit task via dedicated Angle endpoint
             // Get Client ID from parent if available
@@ -1113,7 +1112,8 @@
                 outputImg.classList.remove('hidden');
                 document.getElementById('loadingState').classList.add('hidden');
 
-                downloadBtn.href = data.images[0];
+                downloadBtn.href = '#';
+                downloadBtn.onclick = e => downloadDirectImage(e, data.images[0], `Angle-${Date.now()}.png`);
                 downloadBtn.classList.remove('hidden');
                 downloadBtn.download = `Angle-${Date.now()}.png`;
 
@@ -1258,8 +1258,45 @@
             if (e.target.id === 'lightbox') closeLightbox();
         }
 
-        function downloadLightboxImage() {
+        async function downloadDirectImage(e, url, filename) {
+            if(e) e.preventDefault();
+            if(e) e.stopPropagation();
+            if(!url) return;
+            if(!String(url).startsWith('data:')){
+                const href = `/api/download-url?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || `Angle-${Date.now()}.png`)}`;
+                if(window.parent && window.parent !== window){
+                    window.parent.postMessage({type:'studio-download', href, filename: filename || `Angle-${Date.now()}.png`}, '*');
+                    return;
+                }
+                const link = document.createElement('a');
+                link.href = href;
+                link.download = filename || `Angle-${Date.now()}.png`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                return;
+            }
+            const res = await fetch('/api/download-url', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({url, filename})
+            });
+            if(!res.ok) return alert('下载失败');
+            const blob = await res.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = filename || `Angle-${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        }
+
+        async function downloadLightboxImage() {
             const imgUrl = document.getElementById('lightboxImg').src;
+            await downloadDirectImage(null, imgUrl, `Angle-Master-${Date.now()}.png`);
+            return;
             const link = document.createElement('a');
             link.href = imgUrl;
             link.download = `Angle-Master-${Date.now()}.png`;
