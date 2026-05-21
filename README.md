@@ -2,7 +2,7 @@
 
 本地部署的 AI 创作工作台。无限画布 + 节点连线，统一调度 ComfyUI、在线 API、LLM 完成图文视频生成。
 
-> 当前版本：v1.0.8
+> 当前版本：v1.0.9
 
 ---
 
@@ -10,8 +10,8 @@
 
 | 版本 | 说明 | 大小 |
 |------|------|------|
-| [桌面窗口版](https://github.com/IGuanggg/Infinite-Canvas/releases/download/v1.0.8/Infinite-Canvas-desktop-v1.0.8-windows.zip) | 独立窗口，无终端，推荐正式使用 | ~27 MB |
-| [浏览器版](https://github.com/IGuanggg/Infinite-Canvas/releases/download/v1.0.8/Infinite-Canvas-browser-v1.0.8.zip) | 打开浏览器，有终端窗口，推荐调试 | ~22 MB |
+| [桌面窗口版](https://github.com/IGuanggg/Infinite-Canvas/releases/download/v1.0.9/Infinite-Canvas-desktop-v1.0.9-windows.zip) | 独立窗口，无终端，推荐正式使用 | ~27 MB |
+| [浏览器版](https://github.com/IGuanggg/Infinite-Canvas/releases/download/v1.0.9/Infinite-Canvas-browser-v1.0.9.zip) | 打开浏览器，有终端窗口，推荐调试 | ~22 MB |
 
 桌面版需要 [Edge WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/)（Windows 11 自带，Win10 可能需安装）。
 
@@ -175,7 +175,7 @@ docker compose -f docker-compose.cloud.yml up -d --build
 
 ```bash
 curl https://your-cloud-domain/version
-# → {"name":"infinite-canvas-cloud","version":"1.0.8"}
+# → {"name":"infinite-canvas-cloud","version":"1.0.9"}
 ```
 
 ---
@@ -202,7 +202,7 @@ curl https://your-cloud-domain/version
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
-| `CLOUD_APP_VERSION` | 版本号 | `1.0.8` |
+| `CLOUD_APP_VERSION` | 版本号 | `1.0.9` |
 | `CLOUD_PUBLIC_URL` | 公网 HTTPS 地址 | 空 |
 | `SMTP_HOST` / `SMTP_PORT` | 邮件服务器 | 空 / `587` |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | 邮件账号 | 空 |
@@ -294,7 +294,7 @@ A: 桌面版备份 `%APPDATA%\Infinite Canvas\`。浏览器版备份 `userdata/`
 
 ## 发布状态
 
-当前版本 **v1.0.8**。
+当前版本 **v1.0.9**。
 
 - 核心功能完整
 - 安全加固已完成（认证、脱敏、路径防护、异步架构）
