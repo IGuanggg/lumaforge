@@ -32,7 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.2")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260522-202-goals1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
@@ -2902,6 +2903,7 @@ async def app_info():
         "brand": APP_BRAND_NAME,
         "repository": APP_REPOSITORY_NAME,
         "version": APP_VERSION,
+        "build_id": APP_BUILD_ID,
         "desktop": os.getenv("LUMAFORGE_DESKTOP") == "1" or os.getenv("INFINITE_CANVAS_DESKTOP") == "1",
         "cloud_url": CLOUD_SYNC_BASE_URL,
         "update_check_configured": bool(APP_UPDATE_CHECK_URL),
@@ -3837,6 +3839,39 @@ async def ai_config():
 @app.get("/api/models")
 async def ai_models():
     return {"chat_models": CHAT_MODELS, "image_models": IMAGE_MODELS, "video_models": VIDEO_MODELS}
+
+@app.get("/api/model-capabilities")
+async def model_capabilities():
+    providers = [public_provider(p) for p in load_api_providers()]
+    by_kind = {"chat": [], "image": [], "video": []}
+    for provider in providers:
+        base = {
+            "id": provider.get("id"),
+            "name": provider.get("name"),
+            "base_url": provider.get("base_url"),
+            "enabled": provider.get("enabled", True),
+            "has_key": provider.get("has_key", False),
+        }
+        for kind, key in (("chat", "chat_models"), ("image", "image_models"), ("video", "video_models")):
+            models = provider.get(key) or []
+            if models:
+                by_kind[kind].append({**base, "models": models})
+    return {
+        "version": APP_VERSION,
+        "build_id": APP_BUILD_ID,
+        "defaults": {
+            "chat": CHAT_MODEL,
+            "image": IMAGE_MODEL,
+            "video": VIDEO_MODELS[0] if VIDEO_MODELS else "",
+        },
+        "models": {
+            "chat": CHAT_MODELS,
+            "image": IMAGE_MODELS,
+            "video": VIDEO_MODELS,
+        },
+        "providers": providers,
+        "by_kind": by_kind,
+    }
 
 @app.get("/api/providers")
 async def api_providers():

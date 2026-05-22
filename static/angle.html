@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 
 <head>
@@ -19,10 +19,10 @@
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="/static/theme.js?v=20260522-201-polish1"></script>
-    <script src="/static/i18n.js?v=20260522-201-polish1"></script>
-    <script src="/static/image-preview.js?v=20260522-201-polish1"></script>
-    <script src="/static/history-bulk-manager.js?v=20260522-201-polish1"></script>
+    <script src="/static/theme.js?v=20260522-202-goals1"></script>
+    <script src="/static/i18n.js?v=20260522-202-goals1"></script>
+    <script src="/static/image-preview.js?v=20260522-202-goals1"></script>
+    <script src="/static/history-bulk-manager.js?v=20260522-202-goals1"></script>
     <script type="importmap">
         {
             "imports": {
@@ -224,8 +224,25 @@
             transition: transform 0.3s var(--easing);
             z-index: 1;
         }
+
+        .glass-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 18px;
+            box-shadow: 0 14px 34px rgba(15, 23, 42, 0.04);
+        }
+
+        .btn-secondary {
+            border: 1px solid #e5e7eb;
+            background: #f8fafc;
+            color: #0f172a;
+        }
+
+        .btn-secondary:hover {
+            border-color: #0f172a;
+        }
     </style>
-    <link rel="stylesheet" href="/static/theme.css?v=20260522-201-polish1">
+    <link rel="stylesheet" href="/static/theme.css?v=20260522-202-goals1">
 </head>
 
 <body class="selection:bg-black selection:text-white">
@@ -378,16 +395,35 @@
                     <!-- Engine Switcher -->
                     <div class="mode-switcher">
                         <div id="modeLocal" class="mode-btn active flex items-center justify-center gap-1.5"
-                            onclick="switchEngine('local')">
+                            type="button">
                             <i data-lucide="monitor" class="w-3 h-3"></i>
                             <span>Local</span>
                         </div>
                         <div id="modeCloud" class="mode-btn flex items-center justify-center gap-1.5"
-                            onclick="switchEngine('cloud')">
+                            type="button">
                             <i data-lucide="cloud" class="w-3 h-3"></i>
                             <span>ModelScope</span>
                         </div>
                         <div id="glider" class="mode-glider"></div>
+                    </div>
+
+                    <div class="glass-card p-4 space-y-2" id="angleLocalPanel">
+                        <div class="text-[10px] font-black uppercase tracking-[0.24em] text-gray-400">Local Workflow</div>
+                        <div class="text-sm font-black text-gray-900">ComfyUI · 2511.json</div>
+                        <p class="text-[11px] leading-5 font-bold text-gray-400">本地模式调用本机 ComfyUI 工作流，不使用云端图片模型列表。</p>
+                    </div>
+
+                    <div class="glass-card p-4 space-y-3 hidden" id="angleModelPanel">
+                        <div class="flex items-center justify-between gap-3">
+                            <div>
+                                <div class="text-[10px] font-black uppercase tracking-[0.24em] text-gray-400">ModelScope Model</div>
+                                <div id="angleModelSummary" class="text-xs font-black text-emerald-600 mt-1">读取 API 设置...</div>
+                            </div>
+                            <button id="refreshAngleModelsBtn" class="btn-secondary h-9 px-3 rounded-lg text-[11px] font-black" type="button">
+                                刷新
+                            </button>
+                        </div>
+                        <select id="angleModelSelect" class="nano-input w-full px-4 py-3 text-sm font-black outline-none"></select>
                     </div>
 
                     <button id="genBtn" onclick="handleGenerate()"
@@ -730,7 +766,8 @@
     </script>
 
     <script>
-        lucide.createIcons();
+        const renderIcons = () => window.lucide?.createIcons?.();
+        renderIcons();
         function tr(key){ return window.StudioI18n ? StudioI18n.t(key) : key; }
         function applyLanguage(lang){
             if(lang && window.StudioI18n) StudioI18n.set(lang);
@@ -746,25 +783,91 @@
         // --- Engine Switcher Logic (UI Only) ---
         let currentEngine = 'local';
         const ENGINE_MODE_KEY = 'angle_engine_mode';
+        const ANGLE_MODEL_KEY = 'angle_cloud_model';
+        const DEFAULT_ANGLE_MODEL = 'Qwen/Qwen-Image-Edit-2511';
+        const FALLBACK_MODELSCOPE_ANGLE_MODELS = [
+            'Qwen/Qwen-Image-Edit-2511',
+            'Tongyi-MAI/Z-Image-Turbo',
+            'Qwen/Qwen-Image-2512',
+            'black-forest-labs/FLUX.2-klein-9B'
+        ];
+        let angleCloudModels = [DEFAULT_ANGLE_MODEL];
+        let selectedAngleModel = localStorage.getItem(ANGLE_MODEL_KEY) || DEFAULT_ANGLE_MODEL;
 
-        window.switchEngine = function(mode) {
+        function switchEngine(mode) {
             currentEngine = mode;
             localStorage.setItem(ENGINE_MODE_KEY, mode);
 
             const glider = document.getElementById('glider');
             const localBtn = document.getElementById('modeLocal');
             const cloudBtn = document.getElementById('modeCloud');
+            const localPanel = document.getElementById('angleLocalPanel');
+            const modelPanel = document.getElementById('angleModelPanel');
 
             if (mode === 'local') {
                 glider.style.transform = 'translateX(0)';
                 localBtn.classList.add('active');
                 cloudBtn.classList.remove('active');
+                localPanel?.classList.remove('hidden');
+                modelPanel?.classList.add('hidden');
             } else {
                 glider.style.transform = 'translateX(100%)';
                 cloudBtn.classList.add('active');
                 localBtn.classList.remove('active');
+                modelPanel?.classList.remove('hidden');
+                localPanel?.classList.add('hidden');
             }
-        };
+        }
+
+        function isModelScopeProvider(provider){
+            const text = `${provider?.id || ''} ${provider?.name || ''} ${provider?.base_url || ''}`.toLowerCase();
+            return text.includes('modelscope') || text.includes('api-inference.modelscope.cn');
+        }
+
+        function isLikelyModelScopeAngleModel(model){
+            const value = String(model || '').toLowerCase();
+            if(!value) return false;
+            if(value.includes('gpt-image') || value.includes('nano-banana')) return false;
+            return value.includes('qwen') || value.includes('tongyi') || value.includes('flux') || value.includes('modelscope');
+        }
+
+        function renderAngleModelSelect(){
+            const select = document.getElementById('angleModelSelect');
+            const summary = document.getElementById('angleModelSummary');
+            if(!select) return;
+            const models = [...new Set([selectedAngleModel, ...angleCloudModels, DEFAULT_ANGLE_MODEL].filter(Boolean))]
+                .filter(isLikelyModelScopeAngleModel);
+            select.innerHTML = models.map(model => `<option value="${model}">${model}</option>`).join('');
+            select.value = models.includes(selectedAngleModel) ? selectedAngleModel : models[0];
+            selectedAngleModel = select.value;
+            if(summary) summary.textContent = `${models.length} 个图片模型可用`;
+        }
+
+        async function loadAngleModelConfig(){
+            const summary = document.getElementById('angleModelSummary');
+            try {
+                const cfg = await fetch('/api/config').then(r => r.ok ? r.json() : Promise.reject(new Error('读取模型失败')));
+                const providers = Array.isArray(cfg.api_providers) ? cfg.api_providers : [];
+                const modelscopeProvider = providers.find(provider => provider.enabled !== false && isModelScopeProvider(provider));
+                const models = modelscopeProvider ? (modelscopeProvider.image_models || []) : [];
+                angleCloudModels = [...new Set([...(models.length ? models : FALLBACK_MODELSCOPE_ANGLE_MODELS), DEFAULT_ANGLE_MODEL])]
+                    .filter(isLikelyModelScopeAngleModel);
+                renderAngleModelSelect();
+            } catch(e) {
+                console.warn(e);
+                if(summary) summary.textContent = '读取失败，使用默认模型';
+                renderAngleModelSelect();
+            }
+        }
+
+        document.getElementById('modeLocal')?.addEventListener('click', () => switchEngine('local'));
+        document.getElementById('modeCloud')?.addEventListener('click', () => switchEngine('cloud'));
+        document.getElementById('refreshAngleModelsBtn')?.addEventListener('click', loadAngleModelConfig);
+        document.getElementById('angleModelSelect')?.addEventListener('change', event => {
+            selectedAngleModel = event.target.value || DEFAULT_ANGLE_MODEL;
+            localStorage.setItem(ANGLE_MODEL_KEY, selectedAngleModel);
+            renderAngleModelSelect();
+        });
 
         function generateUUID() {
             if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -953,7 +1056,7 @@
                 "prompt": promptInput.value,
                 "api_key": token,
                 "type": "angle",
-                "model": "Qwen/Qwen-Image-Edit-2511",
+                "model": selectedAngleModel || DEFAULT_ANGLE_MODEL,
                 "image_urls": [dataUri],
                 "client_id": clientId
             };
@@ -1069,7 +1172,7 @@
             btn.disabled = true;
             btn.style.backgroundColor = '#333';
             btn.innerHTML = `<i data-lucide="zap" class="w-4 h-4 text-yellow-400 fill-yellow-400 animate-pulse"></i><span class="tracking-[0.4em] text-[11px] uppercase">${tr('studio.processing')}</span>`;
-            lucide.createIcons();
+            renderIcons();
 
             document.getElementById('emptyState').classList.add('hidden');
             document.getElementById('outputImg').classList.add('hidden');
@@ -1120,7 +1223,7 @@
                 btn.style.backgroundColor = '';
                 btn.innerHTML = `<i data-lucide="zap" class="w-4 h-4 text-yellow-400"></i><span id="btnText">${tr('studio.generateAngle')}</span>`;
                 btn.disabled = false;
-                lucide.createIcons();
+                renderIcons();
 
                 // Add to history
                 renderImageCard({
@@ -1134,7 +1237,7 @@
                 console.error(err);
                 btn.style.backgroundColor = '';
                 btn.innerHTML = `<i data-lucide="zap" class="w-4 h-4 text-yellow-400"></i><span id="btnText">Generation Failed</span>`;
-                lucide.createIcons();
+                renderIcons();
                 document.getElementById('loadingState').classList.add('hidden');
                 document.getElementById('emptyState').classList.remove('hidden');
                 btn.disabled = false;
@@ -1152,7 +1255,7 @@
                 btn.innerHTML = `<i data-lucide="check" class="w-3 h-3"></i> Copied`;
                 setTimeout(() => {
                     btn.innerHTML = originalHTML;
-                    lucide.createIcons();
+                    renderIcons();
                 }, 2000);
             });
         };
@@ -1327,6 +1430,7 @@
             }
 
             loadHistory();
+            loadAngleModelConfig();
             window.HistoryBulkManager?.attach({masonry:'#masonry'});
             observer.observe(document.getElementById('loadMoreTrigger'));
         };

@@ -13,7 +13,7 @@
         })();
     </script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="/static/theme.js?v=20260522-201-polish1"></script>
+    <script src="/static/theme.js?v=20260522-202-goals1"></script>
     <style>
         :root {
             --bg:#f7f8fb;
@@ -61,6 +61,7 @@
         .asset-grid { columns:5 180px; column-gap:14px; }
         .asset-card { break-inside:avoid; display:block; margin:0 0 14px; border:1px solid var(--line); border-radius:14px; overflow:hidden; background:var(--panel); position:relative; box-shadow:0 12px 30px rgba(15,23,42,.04); }
         .asset-card:hover { border-color:rgba(15,23,42,.28); transform:translateY(-1px); }
+        .asset-card.selected { border-color:var(--accent); box-shadow:0 0 0 2px rgba(15,23,42,.12), 0 14px 34px rgba(15,23,42,.08); }
         .asset-media { position:relative; background:var(--soft); }
         .asset-card img, .asset-card video { width:100%; display:block; background:var(--soft); }
         .asset-card video { min-height:128px; object-fit:cover; }
@@ -69,6 +70,9 @@
         .quick-btn, .fav { width:32px; height:32px; border:1px solid rgba(255,255,255,.5); border-radius:999px; background:rgba(255,255,255,.92); color:#111827; display:flex; align-items:center; justify-content:center; box-shadow:0 12px 28px rgba(15,23,42,.14); }
         html.studio-theme-dark .quick-btn, html.studio-theme-dark .fav { background:rgba(15,19,26,.9); color:#eef2f8; border-color:rgba(255,255,255,.12); }
         .fav { position:absolute; top:8px; right:8px; color:#c2a21b; }
+        .asset-select { position:absolute; top:8px; left:8px; z-index:2; width:32px; height:32px; border:1px solid rgba(255,255,255,.62); border-radius:999px; background:rgba(255,255,255,.92); color:#111827; display:flex; align-items:center; justify-content:center; box-shadow:0 12px 28px rgba(15,23,42,.14); }
+        .asset-select.active { background:var(--accent); color:var(--bg); border-color:var(--accent); }
+        html.studio-theme-dark .asset-select { background:rgba(15,19,26,.9); color:#eef2f8; border-color:rgba(255,255,255,.12); }
         .asset-meta { padding:11px; display:flex; flex-direction:column; gap:7px; }
         .asset-title { font-size:12px; font-weight:950; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .asset-prompt { color:var(--muted); font-size:11px; line-height:1.35; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
@@ -88,6 +92,7 @@
         .prompt-content { color:var(--muted); font-size:12px; line-height:1.45; white-space:pre-wrap; }
         .mini-actions { display:flex; gap:8px; flex-wrap:wrap; }
         .mini { height:30px; border:1px solid var(--line); background:var(--panel); color:var(--text); border-radius:999px; padding:0 10px; font-size:12px; font-weight:900; display:inline-flex; gap:6px; align-items:center; }
+        .mini.danger { color:var(--danger); }
         .sync-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:10px 0 12px; }
         .sync-stat { border:1px solid var(--line); background:var(--bg); border-radius:14px; padding:10px; }
         .sync-stat b { display:block; font-size:16px; color:var(--text); margin-top:4px; }
@@ -95,6 +100,11 @@
         .sync-note { margin-top:10px; }
         .badge.cloud-ok { color:#059669; border-color:rgba(5,150,105,.24); background:rgba(16,185,129,.08); }
         .badge.cloud-fail { color:var(--danger); border-color:rgba(239,68,68,.24); background:rgba(239,68,68,.08); }
+        .bulk-bar { max-width:1460px; margin:-8px auto 18px; border:1px solid var(--line); background:rgba(255,255,255,.84); border-radius:18px; padding:10px; display:none; align-items:center; justify-content:space-between; gap:12px; box-shadow:0 12px 34px rgba(15,23,42,.06); }
+        html.studio-theme-dark .bulk-bar { background:rgba(15,19,26,.84); }
+        .bulk-bar.show { display:flex; }
+        .bulk-bar strong { font-size:13px; }
+        .bulk-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
         .empty { border:1px dashed var(--line); border-radius:18px; min-height:260px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-weight:900; text-align:center; padding:24px; background:rgba(255,255,255,.35); }
         .context-menu { position:fixed; z-index:50; width:206px; background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:0 18px 44px rgba(15,23,42,.18); padding:7px; display:none; }
         .context-menu.open { display:block; }
@@ -142,6 +152,17 @@
                 <button class="tab" data-type="file" type="button">文件</button>
             </div>
             <button class="btn icon-btn" id="favoriteFilterBtn" type="button" title="只看收藏"><i data-lucide="star" size="17"></i></button>
+        </section>
+
+        <section id="bulkBar" class="bulk-bar" aria-live="polite">
+            <strong id="bulkCount">已选择 0 个素材</strong>
+            <div class="bulk-actions">
+                <button class="mini" id="bulkCanvasBtn" type="button"><i data-lucide="send-to-back" size="13"></i><span>加入画布</span></button>
+                <button class="mini" id="bulkFavBtn" type="button"><i data-lucide="star" size="13"></i><span>收藏</span></button>
+                <button class="mini" id="bulkUnfavBtn" type="button"><i data-lucide="star-off" size="13"></i><span>取消收藏</span></button>
+                <button class="mini danger" id="bulkDeleteBtn" type="button"><i data-lucide="trash-2" size="13"></i><span>删除所选</span></button>
+                <button class="mini" id="bulkClearBtn" type="button"><i data-lucide="x" size="13"></i><span>取消选择</span></button>
+            </div>
         </section>
 
         <section class="layout">
@@ -223,7 +244,7 @@
     <div id="toast" class="toast"></div>
 
     <script>
-        const state = { type:'', q:'', favorite:null, assets:[], prompts:[], activeAsset:null, previewAsset:null, syncBusy:false };
+        const state = { type:'', q:'', favorite:null, assets:[], prompts:[], activeAsset:null, previewAsset:null, syncBusy:false, selected:new Set() };
         const $ = id => document.getElementById(id);
 
         function showToast(text){
@@ -271,7 +292,26 @@
             if(state.favorite !== null) params.set('favorite', String(state.favorite));
             const data = await fetch('/api/assets?' + params.toString()).then(jsonOrThrow);
             state.assets = data.items || [];
+            pruneSelected();
             renderAssets();
+        }
+
+        function pruneSelected(){
+            const visible = new Set(state.assets.map(asset => asset.id));
+            [...state.selected].forEach(id => { if(!visible.has(id)) state.selected.delete(id); });
+            renderBulkBar();
+        }
+
+        function selectedAssets(){
+            return state.assets.filter(asset => state.selected.has(asset.id));
+        }
+
+        function renderBulkBar(){
+            const bar = $('bulkBar');
+            const count = state.selected.size;
+            if(!bar) return;
+            bar.classList.toggle('show', count > 0);
+            $('bulkCount').textContent = `已选择 ${count} 个素材`;
         }
 
         function renderAssets(){
@@ -282,9 +322,10 @@
                     ? `<video src="${esc(asset.local_url)}" muted loop playsinline preload="metadata"></video>`
                     : `<img src="${esc(asset.thumb_url || asset.local_url)}" loading="lazy" alt="">`;
                 return `
-                    <article class="asset-card" data-id="${esc(asset.id)}">
+                    <article class="asset-card ${state.selected.has(asset.id) ? 'selected' : ''}" data-id="${esc(asset.id)}">
                         <div class="asset-media">
                             ${media}
+                            <button class="asset-select ${state.selected.has(asset.id) ? 'active' : ''}" data-action="select" type="button" title="选择">${state.selected.has(asset.id) ? '<i data-lucide="check" size="16"></i>' : '<i data-lucide="circle" size="16"></i>'}</button>
                             <button class="fav" data-action="favorite" type="button" title="收藏">${asset.favorite ? '<i data-lucide="star" size="16" fill="currentColor"></i>' : '<i data-lucide="star" size="16"></i>'}</button>
                             <div class="asset-quick">
                                 <button class="quick-btn" data-action="canvas" type="button" title="加入无限画布"><i data-lucide="send-to-back" size="15"></i></button>
@@ -306,6 +347,7 @@
             }).join('');
             empty.hidden = state.assets.length > 0;
             grid.hidden = state.assets.length === 0;
+            renderBulkBar();
             grid.querySelectorAll('.asset-card').forEach(card => {
                 const asset = state.assets.find(x => x.id === card.dataset.id);
                 card.addEventListener('click', event => {
@@ -377,6 +419,50 @@
             renderAssets();
         }
 
+        function toggleSelect(asset){
+            if(!asset) return;
+            if(state.selected.has(asset.id)) state.selected.delete(asset.id);
+            else state.selected.add(asset.id);
+            renderAssets();
+        }
+
+        async function bulkSetFavorite(favorite){
+            const items = selectedAssets();
+            if(!items.length) return;
+            await Promise.all(items.map(asset => fetch(`/api/assets/${encodeURIComponent(asset.id)}`, {
+                method:'PUT',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ favorite })
+            }).then(jsonOrThrow)));
+            state.assets.forEach(asset => { if(state.selected.has(asset.id)) asset.favorite = favorite; });
+            renderAssets();
+            showToast(favorite ? '已批量收藏' : '已取消收藏');
+        }
+
+        async function bulkDeleteSelected(){
+            const ids = [...state.selected];
+            if(!ids.length) return;
+            if(!confirm(`确定删除选中的 ${ids.length} 个素材，并同时删除本地文件吗？`)) return;
+            await fetch('/api/assets/bulk-delete', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ ids, delete_file:true })
+            }).then(jsonOrThrow);
+            state.assets = state.assets.filter(asset => !state.selected.has(asset.id));
+            state.selected.clear();
+            renderAssets();
+            closePreview();
+            loadCloudMediaStatus().catch(() => {});
+            showToast('已批量删除');
+        }
+
+        function bulkSendToCanvas(){
+            const items = selectedAssets();
+            if(!items.length) return;
+            items.forEach(sendAssetToCanvas);
+            showToast(`已加入画布 ${items.length} 个素材`);
+        }
+
         async function deleteAsset(asset){
             if(!asset) return;
             if(!confirm('删除后会从素材库移除。是否同时删除本地文件？')) return;
@@ -430,6 +516,7 @@
         }
         async function handleAssetAction(action, asset){
             closeContext();
+            if(action === 'select') return toggleSelect(asset);
             if(action === 'canvas') sendAssetToCanvas(asset);
             if(action === 'preview') openPreview(asset);
             if(action === 'download') await downloadAsset(asset).catch(err => showToast(err.message));
@@ -646,6 +733,11 @@
             if(!confirm('清理云端会删除云端存在、但本地素材库没有记录的孤儿文件。确定继续吗？')) return;
             runCloudMediaSync({ missing_only:true, retry_failed:false, delete_remote_missing:true }).catch(err => showToast(err.message));
         });
+        $('bulkCanvasBtn').addEventListener('click', bulkSendToCanvas);
+        $('bulkFavBtn').addEventListener('click', () => bulkSetFavorite(true).catch(err => showToast(err.message)));
+        $('bulkUnfavBtn').addEventListener('click', () => bulkSetFavorite(false).catch(err => showToast(err.message)));
+        $('bulkDeleteBtn').addEventListener('click', () => bulkDeleteSelected().catch(err => showToast(err.message)));
+        $('bulkClearBtn').addEventListener('click', () => { state.selected.clear(); renderAssets(); });
         $('contextMenu').addEventListener('click', event => {
             const action = event.target.closest('button')?.dataset.action;
             handleAssetAction(action, state.activeAsset);
