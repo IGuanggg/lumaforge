@@ -17,7 +17,7 @@ import hashlib
 import subprocess
 from typing import List, Dict, Any, Optional
 from contextlib import asynccontextmanager
-from threading import Lock
+from threading import Lock, RLock
 import httpx
 from PIL import Image
 from io import BytesIO
@@ -336,6 +336,7 @@ ASSETS_DIR = os.path.abspath(os.getenv("APP_ASSETS_DIR") or os.path.join(RUNTIME
 OUTPUT_INPUT_DIR = os.path.abspath(os.getenv("APP_ASSET_INPUT_DIR") or os.path.join(ASSETS_DIR, "input"))
 OUTPUT_OUTPUT_DIR = os.path.abspath(os.getenv("APP_ASSET_OUTPUT_DIR") or os.path.join(ASSETS_DIR, "output"))
 ASSET_THUMB_DIR = os.path.abspath(os.getenv("APP_ASSET_THUMBS_DIR") or os.path.join(ASSETS_DIR, "thumbs"))
+ASSET_LIBRARY_DIR = os.path.abspath(os.getenv("APP_ASSET_LIBRARY_DIR") or os.path.join(ASSETS_DIR, "library"))
 APP_LOG_DIR = os.path.abspath(os.getenv("APP_LOG_DIR") or os.path.join(RUNTIME_DIR, "logs"))
 APP_CACHE_DIR = os.path.abspath(os.getenv("APP_CACHE_DIR") or os.path.join(RUNTIME_DIR, "cache"))
 UPDATE_DIR = os.path.join(RUNTIME_DIR, "updates")
@@ -358,7 +359,7 @@ CANVAS_TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000
 QUEUE = []
 QUEUE_LOCK = asyncio.Lock()
 HISTORY_LOCK = Lock()
-ASSET_LOCK = Lock()
+ASSET_LOCK = RLock()
 GLOBAL_CONFIG_LOCK = Lock()
 CONVERSATION_LOCK = Lock()
 CANVAS_LOCK = Lock()
@@ -1003,6 +1004,7 @@ os.makedirs(ASSETS_DIR, exist_ok=True)
 os.makedirs(OUTPUT_INPUT_DIR, exist_ok=True)
 os.makedirs(OUTPUT_OUTPUT_DIR, exist_ok=True)
 os.makedirs(ASSET_THUMB_DIR, exist_ok=True)
+os.makedirs(ASSET_LIBRARY_DIR, exist_ok=True)
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(WORKFLOW_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -1042,6 +1044,7 @@ def init_asset_library():
                     id TEXT PRIMARY KEY,
                     title TEXT DEFAULT '',
                     type TEXT NOT NULL,
+                    category_id TEXT DEFAULT 'inbox',
                     local_url TEXT NOT NULL UNIQUE,
                     local_path TEXT NOT NULL,
                     thumb_url TEXT DEFAULT '',
@@ -1082,6 +1085,14 @@ def init_asset_library():
                     cloud_key TEXT DEFAULT '',
                     deleted_at REAL NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS asset_library_categories (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL
+                );
             """)
             existing = {row["name"] for row in conn.execute("PRAGMA table_info(assets)").fetchall()}
             for column, ddl in {
@@ -1089,9 +1100,103 @@ def init_asset_library():
                 "cloud_url": "ALTER TABLE assets ADD COLUMN cloud_url TEXT DEFAULT ''",
                 "cloud_synced_at": "ALTER TABLE assets ADD COLUMN cloud_synced_at REAL DEFAULT 0",
                 "cloud_error": "ALTER TABLE assets ADD COLUMN cloud_error TEXT DEFAULT ''",
+                "category_id": "ALTER TABLE assets ADD COLUMN category_id TEXT DEFAULT 'inbox'",
             }.items():
                 if column not in existing:
                     conn.execute(ddl)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_assets_category_created ON assets(category_id, created_at DESC)")
+            ensure_default_asset_library_categories(conn)
+
+
+DEFAULT_ASSET_LIBRARY_CATEGORIES = (
+    {"id": "inbox", "name": "默认", "type": "image"},
+    {"id": "characters", "name": "角色", "type": "image"},
+    {"id": "scenes", "name": "场景", "type": "image"},
+    {"id": "workflows", "name": "工作流", "type": "workflow"},
+)
+
+
+def ensure_default_asset_library_categories(conn):
+    now = time.time()
+    for category in DEFAULT_ASSET_LIBRARY_CATEGORIES:
+        exists = conn.execute(
+            "SELECT id FROM asset_library_categories WHERE id = ?",
+            (category["id"],),
+        ).fetchone()
+        if not exists:
+            conn.execute(
+                """
+                INSERT INTO asset_library_categories (id, name, type, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    category["id"],
+                    category["name"],
+                    category["type"],
+                    now,
+                    now,
+                ),
+            )
+    # 让旧资产默认进“默认”文件夹，避免升级后看不见
+    conn.execute(
+        "UPDATE assets SET category_id = 'inbox' WHERE COALESCE(category_id, '') = ''"
+    )
+
+
+def asset_library_url_for(filename):
+    return f"/assets/library/{filename}"
+
+
+def sanitize_asset_name(name, fallback="asset"):
+    name = re.sub(r'[\\/:*?"<>|]+', "_", str(name or fallback)).strip()
+    return name[:120] or fallback
+
+
+def asset_library_category_row_to_dict(row, items=None):
+    data = dict(row)
+    data["items"] = items or []
+    return data
+
+
+def asset_library_item_from_asset_row(row):
+    if not row:
+        return None
+    title = (row["title"] or "").strip() or os.path.basename(row["local_path"] or row["local_url"] or "asset")
+    return {
+        "id": row["id"],
+        "name": title,
+        "url": row["local_url"] or row["thumb_url"] or "",
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "type": row["type"],
+        "category_id": row["category_id"] or "",
+        "favorite": bool(row["favorite"]),
+    }
+
+
+def load_asset_library():
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            ensure_default_asset_library_categories(conn)
+            categories = conn.execute(
+                "SELECT * FROM asset_library_categories ORDER BY CASE WHEN id = 'inbox' THEN 0 ELSE 1 END, created_at ASC"
+            ).fetchall()
+            library_categories = []
+            for category in categories:
+                rows = conn.execute(
+                    """
+                    SELECT * FROM assets
+                    WHERE COALESCE(category_id, '') = ?
+                    ORDER BY created_at DESC
+                    """,
+                    (category["id"],),
+                ).fetchall()
+                items = [asset_library_item_from_asset_row(row) for row in rows if row]
+                library_categories.append(asset_library_category_row_to_dict(category, items))
+            return {
+                "updated_at": now_ms(),
+                "categories": library_categories,
+            }
 
 def json_list(value):
     if isinstance(value, list):
@@ -1155,13 +1260,13 @@ def asset_row_to_dict(row):
     data["favorite"] = bool(data.get("favorite"))
     return data
 
-def index_local_asset(local_url, *, source_type="", prompt="", model="", source_url="", tags=None, favorite=False, created_at=None):
+def index_local_asset(local_url, *, source_type="", prompt="", model="", source_url="", tags=None, favorite=False, created_at=None, category_id=""):
     path = output_file_from_url(local_url)
     if not path or not os.path.isfile(path):
         return None
     try:
         digest = file_sha256(path)
-        asset_id = digest[:20]
+        asset_id = uuid.uuid4().hex[:20]
         kind = asset_type_for_path(path)
         width, height = image_dimensions(path) if kind == "image" else (0, 0)
         thumb_url = make_asset_thumbnail(asset_id, path)
@@ -1170,17 +1275,19 @@ def index_local_asset(local_url, *, source_type="", prompt="", model="", source_
         title = os.path.basename(path)
         size_bytes = os.path.getsize(path)
         tag_json = json.dumps(json_list(tags), ensure_ascii=False)
+        category_value = str(category_id or "inbox").strip() or "inbox"
         with ASSET_LOCK:
             with asset_db() as conn:
                 conn.execute(
                     """
                     INSERT INTO assets (
-                        id, title, type, local_url, local_path, thumb_url, source_url, source_type,
+                        id, title, type, category_id, local_url, local_path, thumb_url, source_url, source_type,
                         prompt, model, width, height, tags, favorite, sha256, size_bytes, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(local_url) DO UPDATE SET
                         title=excluded.title,
                         type=excluded.type,
+                        category_id=COALESCE(NULLIF(excluded.category_id, ''), assets.category_id),
                         local_path=excluded.local_path,
                         thumb_url=COALESCE(NULLIF(excluded.thumb_url, ''), assets.thumb_url),
                         source_url=COALESCE(NULLIF(excluded.source_url, ''), assets.source_url),
@@ -1196,7 +1303,7 @@ def index_local_asset(local_url, *, source_type="", prompt="", model="", source_
                         updated_at=excluded.updated_at
                     """,
                     (
-                        asset_id, title, kind, local_url, path, thumb_url, source_url, source_type,
+                        asset_id, title, kind, category_value, local_url, path, thumb_url, source_url, source_type,
                         prompt or "", model or "", width, height, tag_json, 1 if favorite else 0,
                         digest, size_bytes, created, now,
                     ),
@@ -1280,6 +1387,21 @@ class PromptSnippetRequest(BaseModel):
     content: str = Field(min_length=1, max_length=ONLINE_IMAGE_PROMPT_MAX_LENGTH)
     tags: List[str] = []
     favorite: bool = False
+
+
+class AssetLibraryCategoryRequest(BaseModel):
+    name: str = Field(default="新文件夹", max_length=120)
+    type: str = Field(default="image", max_length=20)
+
+
+class AssetLibraryAddRequest(BaseModel):
+    category_id: str = Field(default="", max_length=80)
+    url: str = Field(default="", max_length=5000)
+    name: str = Field(default="", max_length=220)
+
+
+class AssetLibraryRenameRequest(BaseModel):
+    name: str = Field(default="", max_length=120)
 
 class TokenRequest(BaseModel):
     token: str = Field(min_length=1, max_length=500)
@@ -1443,6 +1565,8 @@ class CanvasCreateRequest(BaseModel):
     title: str = Field(default="未命名画布", max_length=TITLE_MAX_LENGTH)
     icon: str = "🧩"
 
+    kind: str = Field(default="classic", max_length=20)
+
 class CanvasSaveRequest(BaseModel):
     title: str = Field(default="未命名画布", max_length=TITLE_MAX_LENGTH)
     icon: str = "🧩"
@@ -1450,6 +1574,7 @@ class CanvasSaveRequest(BaseModel):
     connections: List[Dict[str, Any]] = []
     viewport: Dict[str, Any] = {}
     logs: List[Dict[str, Any]] = []
+    settings: Dict[str, Any] = {}
     client_id: str = Field(default="", max_length=CLIENT_ID_MAX_LENGTH)
     base_updated_at: int = 0
 
@@ -1675,12 +1800,17 @@ def save_canvas(canvas):
             json.dump(canvas, f, ensure_ascii=False, indent=2)
     schedule_cloud_config_sync()
 
-def new_canvas(title="未命名画布", icon="layers"):
+def normalize_canvas_kind(kind="classic"):
+    return "smart" if str(kind or "").strip().lower() == "smart" else "classic"
+
+def new_canvas(title="未命名画布", icon="layers", kind="classic"):
     timestamp = now_ms()
+    canvas_kind = normalize_canvas_kind(kind)
     canvas = {
         "id": uuid.uuid4().hex,
-        "title": (title or "未命名画布")[:80],
-        "icon": (icon or "🧩")[:4],
+        "title": (title or ("智能画布" if canvas_kind == "smart" else "未命名画布"))[:80],
+        "icon": (icon or ("sparkles" if canvas_kind == "smart" else "🧩"))[:32],
+        "kind": canvas_kind,
         "created_at": timestamp,
         "updated_at": timestamp,
         "nodes": [],
@@ -1712,6 +1842,7 @@ def canvas_record(data):
         "id": data.get("id"),
         "title": data.get("title", "未命名画布"),
         "icon": data.get("icon", "🧩"),
+        "kind": normalize_canvas_kind(data.get("kind")),
         "created_at": data.get("created_at", 0),
         "updated_at": data.get("updated_at", 0),
         "deleted_at": data.get("deleted_at", 0),
@@ -3615,6 +3746,154 @@ def delete_asset(asset_id: str, delete_file: bool = False):
             logger.warning("Asset file delete failed for %s: %s", row["local_path"], e)
     return {"ok": True}
 
+@app.get("/api/asset-library")
+def get_asset_library():
+    return {"library": load_asset_library()}
+
+
+@app.post("/api/asset-library/categories")
+def create_asset_library_category(payload: AssetLibraryCategoryRequest):
+    cat_type = "workflow" if str(payload.type or "").lower() == "workflow" else "image"
+    category_id = f"cat_{uuid.uuid4().hex[:12]}"
+    now = time.time()
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            ensure_default_asset_library_categories(conn)
+            conn.execute(
+                """
+                INSERT INTO asset_library_categories (id, name, type, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    category_id,
+                    sanitize_asset_name(payload.name, "新文件夹"),
+                    cat_type,
+                    now,
+                    now,
+                ),
+            )
+    library = load_asset_library()
+    category = next((cat for cat in library.get("categories", []) if cat.get("id") == category_id), None)
+    return {"library": library, "category": category}
+
+
+@app.patch("/api/asset-library/categories/{category_id}")
+def rename_asset_library_category(category_id: str, payload: AssetLibraryRenameRequest):
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            row = conn.execute("SELECT * FROM asset_library_categories WHERE id = ?", (category_id,)).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="分类不存在")
+            conn.execute(
+                "UPDATE asset_library_categories SET name = ?, updated_at = ? WHERE id = ?",
+                (sanitize_asset_name(payload.name, row["name"] or "新文件夹"), time.time(), category_id),
+            )
+    library = load_asset_library()
+    category = next((cat for cat in library.get("categories", []) if cat.get("id") == category_id), None)
+    return {"library": library, "category": category}
+
+
+@app.delete("/api/asset-library/categories/{category_id}")
+def delete_asset_library_category(category_id: str):
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            row = conn.execute("SELECT * FROM asset_library_categories WHERE id = ?", (category_id,)).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="分类不存在")
+            if category_id == "inbox":
+                raise HTTPException(status_code=400, detail="默认文件夹不能删除")
+            fallback = conn.execute(
+                "SELECT id FROM asset_library_categories WHERE type = 'image' AND id != ? ORDER BY CASE WHEN id = 'inbox' THEN 0 ELSE 1 END, created_at ASC LIMIT 1",
+                (category_id,),
+            ).fetchone()
+            if row["type"] == "image":
+                fallback_id = (fallback["id"] if fallback else "inbox") or "inbox"
+                conn.execute(
+                    "UPDATE assets SET category_id = ? WHERE COALESCE(category_id, '') = ?",
+                    (fallback_id, category_id),
+                )
+            conn.execute("DELETE FROM asset_library_categories WHERE id = ?", (category_id,))
+    library = load_asset_library()
+    return {"library": library}
+
+
+@app.post("/api/asset-library/items")
+async def add_asset_library_item(payload: AssetLibraryAddRequest):
+    category_id = str(payload.category_id or "inbox").strip() or "inbox"
+    src = output_file_from_url(payload.url)
+    if not src:
+        raise HTTPException(status_code=400, detail="只支持本地 /assets 或 /output 文件")
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            ensure_default_asset_library_categories(conn)
+            category = conn.execute("SELECT * FROM asset_library_categories WHERE id = ?", (category_id,)).fetchone()
+            if not category:
+                raise HTTPException(status_code=404, detail="分类不存在")
+            if category["type"] != "image":
+                raise HTTPException(status_code=400, detail="该分类暂不支持添加图片")
+    base_name = sanitize_asset_name(payload.name or os.path.basename(src), "asset")
+    stem, ext = os.path.splitext(base_name)
+    ext = ext or os.path.splitext(src)[1].lower() or ".png"
+    if ext.lower() not in IMAGE_EXTENSIONS and ext.lower() not in VIDEO_EXTENSIONS:
+        ext = os.path.splitext(src)[1].lower() or ".png"
+    dest_name = f"lib_{uuid.uuid4().hex[:12]}_{stem}{ext}"
+    dest_path = os.path.join(ASSET_LIBRARY_DIR, dest_name)
+    shutil.copy2(src, dest_path)
+    local_url = asset_library_url_for(dest_name)
+    item = index_local_asset(
+        local_url,
+        source_type="asset-library",
+        source_url=payload.url,
+        tags=["asset-library"],
+        created_at=time.time(),
+        category_id=category_id,
+    )
+    if not item:
+        raise HTTPException(status_code=500, detail="保存资产失败")
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            conn.execute(
+                "UPDATE assets SET title = ?, category_id = ?, updated_at = ? WHERE id = ?",
+                (stem[:120] or "asset", category_id, time.time(), item["id"]),
+            )
+            row = conn.execute("SELECT * FROM assets WHERE id = ?", (item["id"],)).fetchone()
+    library_item = asset_library_item_from_asset_row(row) if row else asset_library_item_from_asset_row(item)
+    library = load_asset_library()
+    return {"library": library, "item": library_item}
+
+
+@app.patch("/api/asset-library/items/{item_id}")
+def rename_asset_library_item(item_id: str, payload: AssetLibraryRenameRequest):
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            row = conn.execute("SELECT * FROM assets WHERE id = ?", (item_id,)).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="资产不存在")
+            conn.execute(
+                "UPDATE assets SET title = ?, updated_at = ? WHERE id = ?",
+                (sanitize_asset_name(payload.name, row["title"] or "asset")[:120], time.time(), item_id),
+            )
+            row = conn.execute("SELECT * FROM assets WHERE id = ?", (item_id,)).fetchone()
+    return {"library": load_asset_library(), "item": asset_library_item_from_asset_row(row)}
+
+
+@app.delete("/api/asset-library/items/{item_id}")
+def delete_asset_library_item(item_id: str):
+    deleted_path = ""
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            row = conn.execute("SELECT * FROM assets WHERE id = ?", (item_id,)).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="资产不存在")
+            deleted_path = row["local_path"] or ""
+            conn.execute("DELETE FROM assets WHERE id = ?", (item_id,))
+    if deleted_path and os.path.isfile(deleted_path):
+        try:
+            os.remove(deleted_path)
+        except Exception as e:
+            logger.warning("Asset library file delete failed for %s: %s", deleted_path, e)
+    return {"library": load_asset_library()}
+
 def prompt_row_to_dict(row):
     data = dict(row)
     data["tags"] = json_list(data.get("tags"))
@@ -3823,6 +4102,8 @@ async def ai_config():
     preferred_chat_model = next((m for m in CHAT_MODELS if m == "gpt-5.5"), CHAT_MODELS[0] if CHAT_MODELS else CHAT_MODEL)
     providers = [public_provider(p) for p in load_api_providers()]
     return {
+        "app_version": APP_VERSION,
+        "app_build_id": APP_BUILD_ID,
         "base_url": AI_BASE_URL,
         "chat_model": preferred_chat_model,
         "image_model": IMAGE_MODEL,
@@ -5300,7 +5581,7 @@ async def trashed_canvases():
 
 @app.post("/api/canvases")
 async def create_canvas(payload: CanvasCreateRequest):
-    return {"canvas": new_canvas(payload.title, payload.icon)}
+    return {"canvas": new_canvas(payload.title, payload.icon, payload.kind)}
 
 @app.get("/api/canvases/{canvas_id}/meta")
 async def get_canvas_meta(canvas_id: str):
@@ -5310,6 +5591,7 @@ async def get_canvas_meta(canvas_id: str):
         "updated_at": canvas.get("updated_at", 0),
         "title": canvas.get("title", "未命名画布"),
         "icon": canvas.get("icon", "layers"),
+        "kind": normalize_canvas_kind(canvas.get("kind")),
     }
 
 @app.get("/api/canvases/{canvas_id}")
@@ -5328,10 +5610,12 @@ async def update_canvas(canvas_id: str, payload: CanvasSaveRequest):
         })
     canvas["title"] = (payload.title or canvas.get("title") or "未命名画布")[:80]
     canvas["icon"] = (payload.icon or canvas.get("icon") or "layers")[:32]
+    canvas["kind"] = normalize_canvas_kind(canvas.get("kind"))
     canvas["nodes"] = payload.nodes
     canvas["connections"] = payload.connections
     canvas["viewport"] = payload.viewport
     canvas["logs"] = payload.logs[-500:]
+    canvas["settings"] = payload.settings or {}
     save_canvas(canvas)
     await manager.broadcast_canvas_updated(canvas_id, int(canvas.get("updated_at") or now_ms()), payload.client_id)
     return {"canvas": canvas}

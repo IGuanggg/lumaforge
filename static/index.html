@@ -1053,7 +1053,7 @@
             </div>
 
             <nav>
-                <div class="nav-item active" onclick="switchUI(this, 'zimage')">
+                <div class="nav-item active" onclick="switchUI(this, 'smart-canvas')">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.587-1.587a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
                     </svg>
@@ -1095,6 +1095,13 @@
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                     </svg>
                     <span class="nav-text" data-i18n="nav.gpt">GPT 对话</span>
+                </div>
+                <div class="nav-item" onclick="switchUI(this, 'smart-canvas')">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 4h16v16H4z"></path>
+                        <path d="M8 8h8v8H8z"></path>
+                    </svg>
+                    <span class="nav-text" data-i18n="nav.smartCanvas">智能画布</span>
                 </div>
                 <div class="nav-item" onclick="switchUI(this, 'canvas')">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1216,6 +1223,7 @@
             <iframe id="frame-klein" data-src="/static/klein.html" scrolling="yes"></iframe>
             <iframe id="frame-angle" data-src="/static/angle.html" scrolling="yes"></iframe>
             <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html" scrolling="yes"></iframe>
+            <iframe id="frame-smart-canvas" data-src="/static/smart-canvas.html" scrolling="yes"></iframe>
             <iframe id="frame-canvas" data-src="/static/canvas.html" scrolling="yes"></iframe>
             <iframe id="frame-assets" data-src="/static/assets.html" scrolling="yes"></iframe>
             <iframe id="frame-api-settings" data-src="/static/api-settings.html" scrolling="yes"></iframe>
@@ -1440,11 +1448,31 @@
         const ACTIVE_PAGE_KEY = 'studio_active_page';
         const ACCOUNT_REMEMBER_KEY = 'studio_account_remember_password';
         const ACCOUNT_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
-        const DEFAULT_PAGE_ID = 'zimage';
-        const PAGE_IDS = ['zimage','enhance','klein','angle','gpt-chat','canvas','assets','api-settings','comfyui-settings','app-settings'];
+        const DEFAULT_PAGE_ID = 'smart-canvas';
+        const PAGE_IDS = ['zimage','enhance','klein','angle','gpt-chat','smart-canvas','canvas','assets','api-settings','comfyui-settings','app-settings'];
         const APP_BUILD_ID = '20260522-202-goals1';
         let appStatus = { online_count: 1, queue_text: '0', busy: false };
         let accountState = { logged_in:false, email:'', email_verified:false, display_name:'', avatar_url:'', base_url:'', custom_cloud:false };
+
+        function isCanvasWorkspace(id) {
+            return id === 'smart-canvas' || id === 'canvas';
+        }
+
+        function pageTrigger(id) {
+            return document.querySelector(`[onclick*="'${id}'"],[onclick*='"${id}"']`);
+        }
+
+        function activeCanvasPageId() {
+            const remembered = localStorage.getItem(ACTIVE_PAGE_KEY);
+            if (remembered === 'smart-canvas') return remembered;
+            return document.getElementById('frame-smart-canvas') ? 'smart-canvas' : 'canvas';
+        }
+
+        function activePromptPageId() {
+            const remembered = localStorage.getItem(ACTIVE_PAGE_KEY);
+            if (remembered === 'zimage' || remembered === 'online') return 'zimage';
+            return document.getElementById('frame-smart-canvas') ? 'smart-canvas' : 'zimage';
+        }
 
         function withBuildId(src) {
             if(!src || /^https?:\/\//i.test(src)) return src;
@@ -2057,8 +2085,8 @@
             const target = document.getElementById('frame-' + id);
             target.classList.add('active');
             const stage = document.querySelector('.stage');
-            stage?.classList.toggle('is-canvas-page', id === 'canvas');
-            if(id !== 'canvas') stage?.classList.remove('canvas-output-preview-open');
+            stage?.classList.toggle('is-canvas-page', isCanvasWorkspace(id));
+            if(!isCanvasWorkspace(id)) stage?.classList.remove('canvas-output-preview-open');
             document.body.classList.toggle('canvas-compact-nav', id === 'canvas');
             if (!target.src) target.src = withBuildId(target.dataset.src);
             if(!options.skipRemember) localStorage.setItem(ACTIVE_PAGE_KEY, id);
@@ -2105,16 +2133,16 @@
                 return;
             }
             if(event.data?.type === 'asset-add-to-canvas') {
-                const trigger = document.querySelector(`[onclick*="'canvas'"],[onclick*='"canvas"']`);
-                switchUI(trigger, 'canvas');
-                const target = document.getElementById('frame-canvas');
+                const pageId = activeCanvasPageId();
+                switchUI(pageTrigger(pageId), pageId);
+                const target = document.getElementById('frame-' + pageId);
                 relayAssetToCanvas(target, event.data.asset, event.data.message_id);
                 return;
             }
             if(event.data?.type !== 'asset-insert-prompt') return;
-            const trigger = document.querySelector(`[onclick*="'zimage'"],[onclick*='"zimage"']`);
-            switchUI(trigger, 'zimage');
-            const target = document.getElementById('frame-zimage');
+            const pageId = activePromptPageId();
+            switchUI(pageTrigger(pageId), pageId);
+            const target = document.getElementById('frame-' + pageId);
             const send = () => target.contentWindow?.postMessage({ type:'asset-insert-prompt', prompt:event.data.prompt || '' }, '*');
             if(target.src) setTimeout(send, 80);
             else target.addEventListener('load', send, { once:true });
@@ -2148,7 +2176,8 @@
         }
 
         function restoreActivePage() {
-            const id = PAGE_IDS.includes(localStorage.getItem(ACTIVE_PAGE_KEY)) ? localStorage.getItem(ACTIVE_PAGE_KEY) : DEFAULT_PAGE_ID;
+            let id = PAGE_IDS.includes(localStorage.getItem(ACTIVE_PAGE_KEY)) ? localStorage.getItem(ACTIVE_PAGE_KEY) : DEFAULT_PAGE_ID;
+            if(id === 'canvas') id = DEFAULT_PAGE_ID;
             const trigger = document.querySelector(`[onclick*="'${id}'"],[onclick*='"${id}"']`);
             switchUI(trigger, id, { skipRemember:true });
             document.documentElement.classList.remove('studio-route-booting');
