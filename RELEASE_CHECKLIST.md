@@ -1,6 +1,6 @@
 # LumaForge Release Checklist
 
-Version target: `2.0.0`
+Version target: `2.0.1`
 
 Run this checklist before tagging a GitHub release or building Docker/EXE artifacts.
 
@@ -33,10 +33,11 @@ Upgrade must preserve mounted cloud data under `/opt/lumaforge-cloud`.
 
 - Start browser app on `127.0.0.1:3010`.
 - Confirm navigation works: 文生图, 细节增强, 图片编辑, 角度控制, GPT 对话, 无限画布, 素材库, 应用设置.
-- Confirm generated images save locally and appear in素材库.
+- Confirm generated images save locally and appear in 素材库.
 - Confirm download buttons save images from local files first.
-- Confirm chat reference images do not enter素材库.
+- Confirm chat reference images do not enter 素材库.
 - Confirm status chips show real queue and online counts.
+- Confirm 2.0.1 cache-busted entries load the current GPT 对话, 细节增强, 无限画布, and 素材库 pages.
 
 ## 4. Canvas Checks
 
@@ -58,20 +59,20 @@ Upgrade must preserve mounted cloud data under `/opt/lumaforge-cloud`.
 Browser/source release:
 
 ```powershell
-Compress-Archive -Path main.py,cloud_config_server.py,launcher.py,desktop_launcher.py,static,workflows,requirements.txt,requirements-cloud.txt,Dockerfile,Dockerfile.cloud,docker-compose.yml,docker-compose.cloud.yml,*.spec,*.bat,README.md,APP_PACKAGING.md,RELEASE_CHECKLIST.md,docs,scripts -DestinationPath releases\lumaforge-browser-v2.0.0.zip -Force
+Compress-Archive -Path main.py,cloud_config_server.py,launcher.py,desktop_launcher.py,static,workflows,requirements.txt,requirements-cloud.txt,Dockerfile,Dockerfile.cloud,docker-compose.yml,docker-compose.cloud.yml,*.spec,*.bat,README.md,APP_PACKAGING.md,RELEASE_CHECKLIST.md,docs,scripts -DestinationPath releases\lumaforge-browser-v2.0.1.zip -Force
 ```
 
 Desktop EXE:
 
 ```powershell
 .\build_desktop.bat
-Compress-Archive -Path "dist\LumaForge\*" -DestinationPath releases\LumaForge-desktop-v2.0.0-windows.zip -Force
+Compress-Archive -Path "dist\LumaForge\*" -DestinationPath releases\LumaForge-desktop-v2.0.1-windows.zip -Force
 ```
 
 Cloud Docker:
 
 ```bash
-docker buildx build --platform linux/amd64,linux/arm64 -f Dockerfile.cloud -t iguang9881/lumaforge-cloud:2.0.0 -t iguang9881/lumaforge-cloud:latest --push .
+docker buildx build --platform linux/amd64,linux/arm64 -f Dockerfile.cloud -t iguang9881/lumaforge-cloud:2.0.1 -t iguang9881/lumaforge-cloud:latest --push .
 ```
 
 Server upgrade command:
@@ -79,16 +80,15 @@ Server upgrade command:
 ```bash
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
-docker pull iguang9881/lumaforge-cloud:2.0.0
+docker pull iguang9881/lumaforge-cloud:2.0.1
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.0 \
+  -e CLOUD_APP_VERSION=2.0.1 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.0
+  iguang9881/lumaforge-cloud:2.0.1
 ```
-

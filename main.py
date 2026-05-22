@@ -32,7 +32,7 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.0")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
@@ -1262,6 +1262,10 @@ class AssetUpdateRequest(BaseModel):
     tags: Optional[List[str]] = None
     favorite: Optional[bool] = None
 
+class AssetBulkDeleteRequest(BaseModel):
+    ids: List[str] = []
+    delete_file: bool = False
+
 class DownloadUrlRequest(BaseModel):
     url: str = Field(min_length=1, max_length=5000)
     filename: str = Field(default="", max_length=220)
@@ -1306,6 +1310,9 @@ class OnlineImageRequest(BaseModel):
     size: str = "1024x1024"
     quality: str = "auto"
     reference_images: List[AIReference] = []
+
+class AIEnhanceRequest(OnlineImageRequest):
+    pass
 
 CANVAS_TASKS: Dict[str, Dict[str, Any]] = {}
 CANVAS_TASK_LOCK = Lock()
@@ -3506,6 +3513,72 @@ def download_asset(asset_id: str):
         raise HTTPException(status_code=404, detail="Asset not found")
     return FileResponse(row["local_path"], media_type=content_type_for_path(row["local_path"]), filename=row["title"] or os.path.basename(row["local_path"]))
 
+@app.post("/api/assets/bulk-delete")
+def bulk_delete_assets(payload: AssetBulkDeleteRequest):
+    ids = []
+    seen = set()
+    for raw in payload.ids or []:
+        asset_id = str(raw or "").strip()
+        if asset_id and asset_id not in seen:
+            ids.append(asset_id)
+            seen.add(asset_id)
+    if not ids:
+        raise HTTPException(status_code=400, detail="No asset ids")
+    if len(ids) > 500:
+        raise HTTPException(status_code=400, detail="Too many asset ids")
+
+    deleted_rows = []
+    missing = []
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            for asset_id in ids:
+                row = conn.execute("SELECT * FROM assets WHERE id = ?", (asset_id,)).fetchone()
+                if not row:
+                    missing.append(asset_id)
+                    continue
+                if row["sha256"]:
+                    conn.execute(
+                        """
+                        INSERT INTO asset_deletions (sha256, title, local_path, cloud_key, deleted_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON CONFLICT(sha256) DO UPDATE SET
+                            title=excluded.title,
+                            local_path=excluded.local_path,
+                            cloud_key=excluded.cloud_key,
+                            deleted_at=excluded.deleted_at
+                        """,
+                        (
+                            row["sha256"],
+                            row["title"] or "",
+                            row["local_path"] or "",
+                            row["cloud_key"] or "",
+                            time.time(),
+                        ),
+                    )
+                conn.execute("DELETE FROM assets WHERE id = ?", (asset_id,))
+                deleted_rows.append(dict(row))
+
+    file_deleted = 0
+    file_failed = 0
+    if payload.delete_file:
+        for row in deleted_rows:
+            local_path = row.get("local_path") or ""
+            if os.path.isfile(local_path):
+                try:
+                    os.remove(local_path)
+                    file_deleted += 1
+                except Exception as e:
+                    file_failed += 1
+                    logger.warning("Asset file delete failed for %s: %s", local_path, e)
+
+    return {
+        "ok": True,
+        "deleted": len(deleted_rows),
+        "missing": missing,
+        "file_deleted": file_deleted,
+        "file_failed": file_failed,
+    }
+
 @app.delete("/api/assets/{asset_id}")
 def delete_asset(asset_id: str, delete_file: bool = False):
     with ASSET_LOCK:
@@ -3695,7 +3768,6 @@ async def upload_ai_reference(files: List[UploadFile] = File(...)):
         with open(path, "wb") as f:
             f.write(content)
         local_url = output_url_for(filename, "input")
-        index_local_asset(local_url, source_type="upload", tags=["input"])
         uploaded.append({"url": local_url, "name": file.filename or filename})
     return {"files": uploaded}
 
@@ -4734,14 +4806,14 @@ async def fetch_upstream_models(provider_id: str):
         grouped[classify_model_id(mid)].append(mid)
     return {"total": len(ids), "image_models": grouped["image"], "chat_models": grouped["chat"], "video_models": grouped["video"], "all": ids}
 
-async def build_online_image_result(payload: OnlineImageRequest):
+async def build_online_image_result(payload: OnlineImageRequest, history_type: str = "online", prefix: str = "online_"):
     provider = get_api_provider(payload.provider_id)
     default_model = (provider.get("image_models") or [IMAGE_MODEL])[0]
     model = selected_model(payload.model, default_model)
     refs = [ref.dict() for ref in payload.reference_images if ref.url]
     try:
         image_data, raw = await generate_ai_image(payload.prompt, payload.size, payload.quality, model, refs, provider["id"])
-        local_url = await save_ai_image_to_output(image_data, prefix="online_")
+        local_url = await save_ai_image_to_output(image_data, prefix=prefix)
     except httpx.HTTPStatusError as exc:
         text = exc.response.text or ''
         # 把上游英文错误转成中文友好提示
@@ -4767,7 +4839,7 @@ async def build_online_image_result(payload: OnlineImageRequest):
         "prompt": payload.prompt,
         "images": [local_url],
         "timestamp": time.time(),
-        "type": "online",
+        "type": history_type,
         "model": model,
         "provider_id": provider["id"],
         "provider_name": provider.get("name") or provider["id"],
@@ -4783,6 +4855,10 @@ async def build_online_image_result(payload: OnlineImageRequest):
 @app.post("/api/online-image")
 async def online_image(payload: OnlineImageRequest):
     return await build_online_image_result(payload)
+
+@app.post("/api/ai-enhance")
+async def ai_enhance(payload: AIEnhanceRequest):
+    return await build_online_image_result(payload, history_type="enhance", prefix="enhance_")
 
 async def run_canvas_image_task(task_id: str, payload: OnlineImageRequest):
     with CANVAS_TASK_LOCK:

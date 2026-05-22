@@ -2,7 +2,7 @@
 
 LumaForge 是一个本地优先的 AI 创作工作台，核心是无限画布、素材库、Agent 创作、GPT 对话、图像增强、视频生成和云同步。
 
-当前版本：`2.0.0`
+当前版本：`2.0.1`
 
 ## 核心功能
 
@@ -82,7 +82,7 @@ dist\LumaForge Browser\LumaForge.exe
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f Dockerfile.cloud \
-  -t iguang9881/lumaforge-cloud:2.0.0 \
+  -t iguang9881/lumaforge-cloud:2.0.1 \
   -t iguang9881/lumaforge-cloud:latest \
   --push .
 ```
@@ -93,7 +93,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
 
-docker pull iguang9881/lumaforge-cloud:2.0.0
+docker pull iguang9881/lumaforge-cloud:2.0.1
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 
@@ -101,10 +101,10 @@ docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.0 \
+  -e CLOUD_APP_VERSION=2.0.1 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.0
+  iguang9881/lumaforge-cloud:2.0.1
 ```
 
 不要删除 `/opt/lumaforge-cloud/cloud-data`，否则云端账户、SMTP、配置同步和备份记录会丢失。
@@ -114,7 +114,7 @@ docker run -d \
 发布前运行：
 
 ```powershell
-.\scripts\check_release.ps1 -Version 2.0.0
+.\scripts\check_release.ps1 -Version 2.0.1
 ```
 
 发布流程和人工回归项见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。

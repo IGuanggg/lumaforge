@@ -1,6 +1,6 @@
 # LumaForge API Contract
 
-Version: 2.0.0
+Version: 2.0.1
 
 This file is the stable contract for the browser app, desktop EXE, and cloud backend. When a feature changes an API shape, update this file in the same PR.
 
@@ -123,4 +123,3 @@ Cloud backup is encrypted SQLite backup storage for the cloud backend itself. It
 - Default prefix: `lumaforge/backups`
 - Default host data directory: `/opt/lumaforge-cloud`
 - Restore must create a local safety snapshot before replacing the current database.
-
