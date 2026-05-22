@@ -1,6 +1,6 @@
 # LumaForge API Contract
 
-Version: 2.0.1
+Version: 2.0.2
 
 This file is the stable contract for the browser app, desktop EXE, and cloud backend. When a feature changes an API shape, update this file in the same PR.
 
