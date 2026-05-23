@@ -964,7 +964,7 @@
         }
         function backToCanvasList(){
             savePromptDraftForCurrent();
-            const target = `/static/canvas.html?v=20260523-transparent-bg1`;
+            const target = `/static/canvas.html?v=20260523-api-settings-polish1`;
             try {
                 if(window.parent && window.parent !== window){
                     window.parent.localStorage?.setItem('studio_active_page', 'canvas');
@@ -2550,7 +2550,7 @@
             try { localStorage.setItem(SMART_CANVAS_ID_KEY, id); } catch(e) {}
             const url = new URL(window.location.href);
             url.searchParams.set('id', id);
-            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260523-transparent-bg1');
+            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260523-api-settings-polish1');
             history.replaceState(null, '', url.toString());
         }
         async function ensureSmartCanvasId(){

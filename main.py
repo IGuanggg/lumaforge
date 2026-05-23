@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.2")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260523-transparent-bg1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.3")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260523-api-settings-polish1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
@@ -653,6 +653,8 @@ def normalize_provider(item):
         raise HTTPException(status_code=400, detail=f"API 平台 ID 不合法：{provider_id or '(empty)'}")
     name = re.sub(r"\s+", " ", str(item.get("name") or provider_id).strip())[:60] or provider_id
     base_url = str(item.get("base_url") or "").strip().rstrip("/")
+    if "dashscope.aliyuncs.com" in base_url.lower() and (not name or name == provider_id or name in {"겟조"} or "�" in name):
+        name = "百炼"
     if base_url and not re.match(r"^https?://", base_url):
         raise HTTPException(status_code=400, detail=f"{name} 的 Base URL 需要以 http:// 或 https:// 开头")
     protocol = str(item.get("protocol") or "openai").strip().lower()
@@ -997,6 +999,60 @@ def update_env_values(updates):
             os.environ[key] = str(value or "")
     with open(API_ENV_FILE, "w", encoding="utf-8") as f:
         f.write("\n".join(next_lines).rstrip() + "\n")
+
+def api_env_key_items():
+    items = []
+    if not os.path.exists(API_ENV_FILE):
+        return items
+    with open(API_ENV_FILE, "r", encoding="utf-8-sig") as f:
+        for raw_line in f.read().splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in raw_line:
+                continue
+            key, value = raw_line.split("=", 1)
+            key = key.strip()
+            if not key.endswith("_KEY"):
+                continue
+            clean_value = value.strip().strip('"').strip("'")
+            items.append({
+                "key": key,
+                "filled": bool(clean_value),
+                "length": len(clean_value),
+            })
+    return items
+
+def api_key_diagnostics():
+    providers = load_api_providers()
+    active_keys = {provider_key_env(provider["id"]) for provider in providers}
+    env_items = api_env_key_items()
+    orphan_keys = [item for item in env_items if item["key"] not in active_keys]
+    return {
+        "active_key_count": len(active_keys),
+        "env_key_count": len(env_items),
+        "orphan_keys": orphan_keys,
+    }
+
+def remove_api_env_keys(keys):
+    wanted = {str(key or "").strip() for key in keys if re.fullmatch(r"[A-Z0-9_]+", str(key or "").strip())}
+    if not wanted or not os.path.exists(API_ENV_FILE):
+        return []
+    removed = []
+    next_lines = []
+    with open(API_ENV_FILE, "r", encoding="utf-8-sig") as f:
+        lines = f.read().splitlines()
+    for line in lines:
+        if "=" not in line or line.lstrip().startswith("#"):
+            next_lines.append(line)
+            continue
+        key = line.split("=", 1)[0].strip()
+        if key in wanted:
+            removed.append(key)
+            os.environ.pop(key, None)
+            continue
+        next_lines.append(line)
+    with open(API_ENV_FILE, "w", encoding="utf-8") as f:
+        f.write("\n".join(next_lines).rstrip() + ("\n" if next_lines else ""))
+    return removed
 
 BACKEND_LOCAL_LOAD = {addr: 0 for addr in COMFYUI_INSTANCES}
 
@@ -1473,6 +1529,11 @@ class ApiProviderPayload(BaseModel):
     ms_loras: List[Dict[str, Any]] = []
     ms_defaults_version: int = 0
     api_key: Optional[str] = None
+    clear_key: bool = False
+
+class KeyDiagnosticsClearPayload(BaseModel):
+    include_filled: bool = False
+    keys: List[str] = []
 
 class CloudAuthRequest(BaseModel):
     base_url: str = Field(default="", max_length=URL_MAX_LENGTH)
@@ -4191,6 +4252,28 @@ async def model_capabilities():
 async def api_providers():
     return {"providers": [public_provider(p) for p in load_api_providers()]}
 
+@app.get("/api/providers/key-diagnostics")
+async def api_providers_key_diagnostics():
+    return api_key_diagnostics()
+
+@app.post("/api/providers/key-diagnostics/clear")
+async def api_providers_key_diagnostics_clear(payload: KeyDiagnosticsClearPayload):
+    diagnostics = api_key_diagnostics()
+    orphan_map = {item["key"]: item for item in diagnostics["orphan_keys"]}
+    requested = {key for key in payload.keys if key in orphan_map} if payload.keys else set(orphan_map.keys())
+    removable = [
+        key for key in requested
+        if key in orphan_map and (payload.include_filled or not orphan_map[key].get("filled"))
+    ]
+    removed = remove_api_env_keys(removable)
+    reload_env_globals()
+    schedule_cloud_config_sync()
+    return {
+        "removed": removed,
+        "removed_count": len(removed),
+        "diagnostics": api_key_diagnostics(),
+    }
+
 @app.put("/api/providers")
 async def save_providers(payload: List[ApiProviderPayload]):
     providers = []
@@ -4198,11 +4281,13 @@ async def save_providers(payload: List[ApiProviderPayload]):
     # 收集每个 item 的 primary 字段
     raw_primary_flags = [bool(getattr(item, "primary", False)) for item in payload]
     for item in payload:
-        provider = normalize_provider(item.dict(exclude={"api_key"}))
+        provider = normalize_provider(item.dict(exclude={"api_key", "clear_key"}))
         if any(existing["id"] == provider["id"] for existing in providers):
             raise HTTPException(status_code=400, detail=f"API 平台 ID 重复：{provider['id']}")
         providers.append(provider)
-        if item.api_key is not None:
+        if item.clear_key:
+            env_updates[provider_key_env(provider["id"])] = ""
+        elif item.api_key is not None and item.api_key.strip():
             env_updates[provider_key_env(provider["id"])] = item.api_key.strip()
         if provider["id"] == "comfly":
             env_updates["COMFLY_BASE_URL"] = provider["base_url"]

@@ -63,6 +63,8 @@
         .provider-meta { margin-top:1px; color:var(--faint); font-size:10px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .add-btn { width:100%; height:40px; border:1px dashed var(--line-strong); border-radius:12px; color:var(--muted); display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:12px; font-weight:800; transition:all .15s ease; }
         .add-btn:hover { color:var(--text); border-color:var(--faint); background:var(--soft); }
+        .add-btn.preset-btn { border-style:solid; background:var(--soft); color:var(--text); }
+        .add-btn.preset-btn:hover { border-color:var(--text); transform:translateY(-1px); }
         .api-link-btn { width:100%; height:40px; border:1px solid var(--line); border-radius:12px; background:var(--soft); color:var(--text); display:inline-flex; align-items:center; justify-content:center; gap:6px; font-size:12px; font-weight:850; text-decoration:none; transition:all .15s ease; }
         .api-link-btn:hover { border-color:var(--text); background:var(--text); color:var(--bg); transform:translateY(-1px); box-shadow:0 8px 18px rgba(15,23,42,.12); }
         body.studio-theme-dark .api-link-btn,
@@ -94,6 +96,10 @@
         body.studio-theme-dark .field-frame { background:var(--soft); border-color:var(--line-strong); }
         body.studio-theme-dark .field-frame:focus-within { border-color:#f5f6f8; }
         .hint { color:var(--faint); font-size:11px; line-height:1.5; font-weight:600; }
+        .id-readonly { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 11px; border:1px solid var(--line); border-radius:11px; background:var(--soft); color:var(--text); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; font-weight:850; overflow:hidden; }
+        .id-readonly span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .id-copy-btn { width:28px; height:28px; flex:0 0 auto; border-radius:8px; border:1px solid var(--line); display:inline-flex; align-items:center; justify-content:center; color:var(--muted); background:var(--panel); }
+        .id-copy-btn:hover { color:var(--text); border-color:var(--text); }
         /* Key row */
         .key-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; align-items:center; }
         .key-row .field-frame { width:100%; }
@@ -104,6 +110,13 @@
         body.studio-theme-dark .key-btn:hover { background:#323540; border-color:#f5f6f8; }
         .key-btn.key-clear:hover { color:#dc2626; border-color:#fca5a5; background:#fff5f5; }
         body.studio-theme-dark .key-btn.key-clear:hover { background:rgba(127,29,29,.18); border-color:rgba(248,113,113,.3); color:#fca5a5; }
+        .key-diag-list { display:flex; flex-direction:column; gap:8px; }
+        .key-diag-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:10px; padding:10px 11px; border:1px solid var(--line); border-radius:12px; background:var(--panel); }
+        body.studio-theme-dark .key-diag-row { background:var(--soft); border-color:var(--line-strong); }
+        .key-diag-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; font-weight:850; }
+        .key-diag-meta { color:var(--muted); font-size:11px; font-weight:800; white-space:nowrap; }
+        .key-diag-empty { border:1px dashed var(--line); border-radius:12px; color:var(--muted); background:var(--soft); padding:14px; text-align:center; font-size:11.5px; font-weight:750; }
+        .key-diag-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
         /* Models */
         .block.models-toolbar { display:flex; flex-direction:row; align-items:center; justify-content:space-between; gap:12px; padding:8px 18px 12px; }
         .models-toolbar > div:first-child { min-width:0; flex:1 1 320px; }
@@ -267,6 +280,7 @@
                 <aside class="sidebar">
                     <div class="side-section-title" data-i18n="api.providersTitle">平台列表</div>
                     <div id="providerList" class="provider-list"></div>
+                    <button class="add-btn preset-btn" type="button" onclick="addBailianProvider()"><i data-lucide="sparkles" class="w-4 h-4"></i><span>新增百炼</span></button>
                     <button class="add-btn" type="button" onclick="addProvider()"><i data-lucide="plus" class="w-4 h-4"></i><span data-i18n="api.addProvider">新增平台</span></button>
                     <a class="api-link-btn" data-api-signup-link href="https://apimart.ai/register?aff=pUM7Te" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault();event.stopPropagation();var u=this.href;var w=null;try{w=window.open(u,'_blank','noopener,noreferrer');}catch(e){}if(!w){try{window.parent&&window.parent.postMessage({type:'open-external-url',url:u},'*');}catch(e){}setTimeout(function(){try{window.top.location.href=u;}catch(e){window.location.href=u;}},80);}return false;"><i data-lucide="key-round" class="w-4 h-4"></i><span data-i18n="api.getApi">获取API</span></a>
                 </aside>
@@ -294,8 +308,15 @@
                             <label class="field full">
                                 <span class="label" data-i18n="api.platformName">平台名称</span>
                                 <div class="field-frame"><input id="nameInput" type="text" placeholder="Comfly"></div>
-                                <span class="hint"><span data-i18n="api.platformIdShown">平台 ID</span>: <span id="idPreview" style="font-family:ui-monospace,Menlo,monospace;color:var(--text)">—</span></span>
                                 <input id="idInput" type="hidden">
+                            </label>
+                            <label class="field full">
+                                <span class="label">平台 ID</span>
+                                <div class="id-readonly">
+                                    <span id="idPreview">—</span>
+                                    <button class="id-copy-btn" type="button" onclick="copyProviderId()" title="复制平台 ID"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+                                </div>
+                                <span class="hint">平台 ID 会绑定 API Key，创建后保持稳定，避免 Key 丢失。</span>
                             </label>
                             <label class="field full">
                                 <span class="label" data-i18n="api.baseUrl">请求地址</span>
@@ -334,6 +355,23 @@
                                 </div>
                             </div>
                             <div id="verifyResult" style="display:none;padding:2px 0;grid-column:1/-1"></div>
+                        </div>
+                    </section>
+
+                    <section class="block">
+                        <div class="block-head">
+                            <div>
+                                <div class="block-title">Key 诊断</div>
+                                <div class="block-desc">只显示变量名和状态，不显示真实 Key。孤儿 Key 是没有对应平台的旧变量。</div>
+                            </div>
+                            <div class="key-diag-actions">
+                                <button class="action-btn" type="button" onclick="refreshKeyDiagnostics()"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i><span>刷新</span></button>
+                                <button class="action-btn danger-btn" type="button" onclick="clearOrphanKeys(false)"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i><span>清理空项</span></button>
+                                <button class="action-btn danger-btn" type="button" onclick="clearOrphanKeys(true)"><i data-lucide="shield-alert" class="w-3.5 h-3.5"></i><span>清理全部孤儿</span></button>
+                            </div>
+                        </div>
+                        <div id="keyDiagnosticsList" class="key-diag-list">
+                            <div class="key-diag-empty">正在读取 Key 诊断...</div>
                         </div>
                     </section>
 
@@ -455,6 +493,7 @@
         const protocolInput = document.getElementById('protocolInput');
         const keyInput = document.getElementById('keyInput');
         const keyHint = document.getElementById('keyHint');
+        const keyDiagnosticsList = document.getElementById('keyDiagnosticsList');
         const imageModelList = document.getElementById('imageModelList');
         const chatModelList = document.getElementById('chatModelList');
         const videoModelList = document.getElementById('videoModelList');
@@ -466,6 +505,7 @@
             'Qwen/Qwen-Image-Edit-2511',
             'black-forest-labs/FLUX.2-klein-9B'
         ];
+        const BAILIAN_BASE_URL = 'https://dashscope.aliyuncs.com/compatible-mode';
 
         function refreshIcons(){ if(window.lucide) lucide.createIcons(); }
         function tr(key){ return window.StudioI18n ? window.StudioI18n.t(key) : key; }
@@ -478,13 +518,14 @@
         function normalizeId(value){
             return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/^-+|-+$/g, '').replace(/-+/g, '-').slice(0, 40);
         }
-        // 从平台名生成稳定的 ID；含中文等非 ASCII 会被去掉，剩下为空时自动追加随机后缀
         function deriveIdFromName(name, existingId){
-            // 内置 / 已保存过的 ID 不变
-            if(existingId === 'comfly' || existingId === 'modelscope') return existingId;
+            // 平台 Key 按 ID 保存到 API/.env；自定义平台创建后必须保持 ID 稳定，
+            // 否则中文名称（如“百炼”）会被重新派生成随机 ID，导致已保存 Key 看起来丢失。
+            const stableId = normalizeId(existingId);
+            if(stableId) return stableId;
             let id = normalizeId(name);
             if(!id){
-                // 全是 Unicode 字符，给个随机短串
+                // 全是 Unicode 字符时只在新建平台首次生成一次，之后沿用 existingId。
                 id = 'api-' + Math.random().toString(36).slice(2, 8);
             }
             // 避免和其他 provider 冲突（除自己外）
@@ -505,6 +546,20 @@
                 return;
             }
             idPreview.textContent = deriveIdFromName(nameInput.value, item.id);
+        }
+        function requestedProviderId(){
+            try {
+                return normalizeId(new URL(window.location.href).searchParams.get('provider') || '');
+            } catch(e) {
+                return '';
+            }
+        }
+        function pickSelectedProviderId(list, fallbackId = ''){
+            const ids = new Set((list || []).map(item => item.id));
+            const requested = requestedProviderId();
+            if(requested && ids.has(requested)) return requested;
+            if(fallbackId && ids.has(fallbackId)) return fallbackId;
+            return sortedProviders()[0]?.id || list?.[0]?.id || '';
         }
         function provider(){
             return providers.find(item => item.id === selectedId) || providers[0];
@@ -587,6 +642,16 @@
             if(isModelScope) renderMsLoras();
             else if(msLoraList) msLoraList.innerHTML = '';
             renderProviderList();
+        }
+        async function copyProviderId(){
+            const item = provider();
+            if(!item) return;
+            try {
+                await navigator.clipboard.writeText(item.id);
+                setStatus(`已复制平台 ID：${item.id}`);
+            } catch(e) {
+                setStatus(`平台 ID：${item.id}`);
+            }
         }
         function showVerifyResult(html){ const el = document.getElementById('verifyResult'); if(el){ el.style.display = 'block'; el.innerHTML = html; } }
         function clearVerifyResult(){ const el = document.getElementById('verifyResult'); if(el){ el.style.display = 'none'; el.innerHTML = ''; } }
@@ -810,11 +875,16 @@
         async function saveKeyOnly(){
             const item = provider();
             if(!item) return;
+            const currentId = item.id;
             const key = keyInput.value.trim();
             if(!key){ alert(tr('api.enterKeyAlert') || '请输入 Key'); return; }
             item.api_key = key;
-            await saveProviders();
+            const ok = await saveProviders({ quietStatus:true });
             keyInput.value = '';
+            if(!ok) return;
+            const fresh = providers.find(p => p.id === currentId);
+            if(fresh?.has_key) setStatus(`Key 已保存并生效：${fresh.name || fresh.id}`);
+            else setStatus('Key 保存后未检测到生效，请检查数据目录写入权限。');
         }
         async function clearKeyOnly(){
             const item = provider();
@@ -822,8 +892,9 @@
             if(!item.has_key && !keyInput.value){ return; }
             if(!confirm(tr('api.confirmClearKey') || '确认清除当前 Key？')) return;
             item._clearKey = true;
-            await saveProviders();
+            await saveProviders({ quietStatus:true });
             keyInput.value = '';
+            setStatus('Key 已清除');
         }
         function renderModels(kind){
             const item = provider();
@@ -962,15 +1033,17 @@
             try {
                 const data = await fetch('/api/providers').then(r => r.json());
                 providers = data.providers || [];
-                selectedId = sortedProviders()[0]?.id || '';
+                selectedId = pickSelectedProviderId(providers, selectedId);
                 renderEditor();
+                refreshKeyDiagnostics();
                 setStatus('');
             } catch(err) {
                 setStatus(tr('api.loadFailed'));
             }
         }
-        async function saveProviders(){
+        async function saveProviders(options = {}){
             syncEditor();
+            const previousSelectedId = selectedId;
             providers.forEach(item => {
                 item.id = normalizeId(item.id);
                 item.protocol = ['openai', 'apimart'].includes(String(item.protocol || '').toLowerCase()) ? String(item.protocol).toLowerCase() : 'openai';
@@ -1007,21 +1080,102 @@
                         video_models:item.video_models || [],
                         ms_loras:item.id === 'modelscope' ? (item.ms_loras || []) : [],
                         ms_defaults_version:item.id === 'modelscope' ? (item.ms_defaults_version || 1) : 0,
-                        api_key:item._clearKey ? '' : (item.api_key || undefined)
+                        clear_key:Boolean(item._clearKey),
+                        api_key:item._clearKey ? undefined : (item.api_key || undefined)
                     })))
                 });
                 if(!res.ok) throw new Error((await res.json()).detail || tr('api.saveFailed'));
                 const data = await res.json();
                 providers = data.providers || providers;
-                selectedId = provider()?.id || providers[0]?.id || '';
+                selectedId = pickSelectedProviderId(providers, previousSelectedId);
+                providers.forEach(item => {
+                    delete item.api_key;
+                    delete item._clearKey;
+                });
                 renderEditor();
-                setStatus(tr('api.saved'));
+                if(!options.quietStatus) setStatus(tr('api.saved'));
+                refreshKeyDiagnostics();
                 // 广播变更，画布等其他 iframe 立即重新拉取最新平台/模型列表
                 try { new BroadcastChannel('studio-api').postMessage({ type:'providers-changed' }); } catch(e) {}
                 return true;
             } catch(err) {
                 setStatus(err.message || tr('api.saveFailed'));
                 return false;
+            }
+        }
+        function addBailianProvider(){
+            syncEditor();
+            const existing = providers.find(item => /dashscope\.aliyuncs\.com/i.test(item.base_url || '') || item.id === 'bailian');
+            if(existing) {
+                selectedId = existing.id;
+                existing.name = existing.name || '百炼';
+                existing.base_url = existing.base_url || BAILIAN_BASE_URL;
+                existing.protocol = 'openai';
+                renderEditor();
+                setStatus('已选中现有百炼 / DashScope 平台');
+                return;
+            }
+            let id = 'bailian';
+            let index = 2;
+            while(providers.some(item => item.id === id)) id = `bailian-${index++}`;
+            providers.push({
+                id,
+                name:'百炼',
+                base_url:BAILIAN_BASE_URL,
+                protocol:'openai',
+                enabled:true,
+                primary:false,
+                image_models:[],
+                chat_models:[],
+                video_models:[],
+                has_key:false,
+                key_preview:''
+            });
+            selectedId = id;
+            renderEditor();
+            setStatus('已添加百炼预设，填写 Key 后保存。');
+        }
+        async function refreshKeyDiagnostics(){
+            if(!keyDiagnosticsList) return;
+            keyDiagnosticsList.innerHTML = '<div class="key-diag-empty">正在读取 Key 诊断...</div>';
+            try {
+                const data = await fetch('/api/providers/key-diagnostics', { cache:'no-store' }).then(r => jsonOrError(r, 'Key 诊断失败'));
+                renderKeyDiagnostics(data);
+            } catch(err) {
+                keyDiagnosticsList.innerHTML = `<div class="key-diag-empty">${escapeHtml(err.message || 'Key 诊断失败')}</div>`;
+            }
+        }
+        function renderKeyDiagnostics(data){
+            if(!keyDiagnosticsList) return;
+            const orphans = Array.isArray(data.orphan_keys) ? data.orphan_keys : [];
+            const activeTotal = Number(data.active_key_count || 0);
+            if(!orphans.length){
+                keyDiagnosticsList.innerHTML = `<div class="key-diag-empty">Key 映射正常：${activeTotal} 个平台 Key 变量，暂无孤儿 Key。</div>`;
+                return;
+            }
+            keyDiagnosticsList.innerHTML = orphans.map(item => `
+                <div class="key-diag-row">
+                    <div class="key-diag-name" title="${escapeAttr(item.key)}">${escapeHtml(item.key)}</div>
+                    <div class="key-diag-meta">${item.filled ? `已填写 · ${Number(item.length || 0)} 位` : '空值'}</div>
+                    <div class="key-diag-meta">孤儿</div>
+                </div>
+            `).join('');
+            refreshIcons();
+        }
+        async function clearOrphanKeys(includeFilled){
+            if(includeFilled && !confirm('清理全部孤儿 Key 会删除旧平台残留的已填写 Key。确认继续吗？')) return;
+            if(!includeFilled && !confirm('只清理空值孤儿 Key，不会删除已填写 Key。确认继续吗？')) return;
+            setStatus(includeFilled ? '正在清理全部孤儿 Key...' : '正在清理空值孤儿 Key...');
+            try {
+                const data = await fetch('/api/providers/key-diagnostics/clear', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({ include_filled:Boolean(includeFilled) })
+                }).then(r => jsonOrError(r, '清理失败'));
+                setStatus(`已清理 ${Number(data.removed_count || 0)} 个孤儿 Key`);
+                await refreshKeyDiagnostics();
+            } catch(err) {
+                setStatus(err.message || '清理失败');
             }
         }
         function escapeHtml(str){

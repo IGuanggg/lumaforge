@@ -492,6 +492,61 @@
             font-weight: 900;
         }
 
+        .api-status-popover {
+            position: fixed;
+            left: 92px;
+            bottom: 24px;
+            z-index: 120;
+            width: min(380px, calc(100vw - 116px));
+            max-height: min(520px, calc(100vh - 48px));
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            padding: 14px;
+            border-radius: 18px;
+            border: 1px solid var(--border);
+            background: var(--sidebar-bg);
+            color: var(--text);
+            box-shadow: 0 24px 70px rgba(15,23,42,.18);
+            backdrop-filter: blur(18px);
+            overflow: hidden;
+        }
+
+        .api-status-popover.open { display: flex; }
+        .api-status-popover[data-state="ok"] .api-status-title .pulse-dot { background:#10b981; box-shadow:0 0 0 4px rgba(16,185,129,.12); }
+        .api-status-popover[data-state="warn"] .api-status-title .pulse-dot { background:#f59e0b; box-shadow:0 0 0 4px rgba(245,158,11,.13); }
+        .api-status-popover[data-state="fail"] .api-status-title .pulse-dot { background:#ef4444; box-shadow:0 0 0 4px rgba(239,68,68,.13); }
+        .api-status-popover[data-state="none"] .api-status-title .pulse-dot { background:#94a3b8; box-shadow:0 0 0 4px rgba(148,163,184,.12); }
+        .api-status-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+        .api-status-title { display:flex; align-items:center; gap:8px; min-width:0; font-size:13px; font-weight:950; }
+        .api-status-title .pulse-dot { width:8px; height:8px; flex:0 0 auto; }
+        .api-status-actions { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+        .api-status-btn { height:28px; padding:0 10px; border-radius:999px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:11px; font-weight:850; display:inline-flex; align-items:center; gap:6px; }
+        .api-status-btn:hover { border-color:var(--text); }
+        .api-status-btn:disabled { opacity:.55; cursor:wait; }
+        .api-status-summary { border:1px solid var(--border); background:var(--bg); border-radius:14px; padding:10px 11px; color:var(--muted); font-size:11.5px; font-weight:800; line-height:1.45; }
+        .api-status-list { min-height:0; overflow:auto; display:flex; flex-direction:column; gap:7px; padding-right:2px; }
+        .api-status-row { display:grid; grid-template-columns:10px minmax(0, 1fr) auto; gap:9px; align-items:center; border:1px solid var(--border); background:var(--bg); border-radius:13px; padding:9px 10px; }
+        .api-status-row[data-provider-id] { cursor:pointer; }
+        .api-status-row[data-provider-id]:hover { border-color:var(--text); }
+        .api-status-dot { width:8px; height:8px; border-radius:999px; background:#94a3b8; }
+        .api-status-row.ok .api-status-dot { background:#10b981; box-shadow:0 0 0 4px rgba(16,185,129,.12); }
+        .api-status-row.fail .api-status-dot { background:#ef4444; box-shadow:0 0 0 4px rgba(239,68,68,.12); }
+        .api-status-row.none .api-status-dot { background:#94a3b8; box-shadow:0 0 0 4px rgba(148,163,184,.12); }
+        .api-status-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:900; color:var(--text); }
+        .api-status-msg { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px; color:var(--muted); font-size:10.5px; font-weight:700; }
+        .api-status-meta { color:var(--muted); font-size:10.5px; font-weight:850; white-space:nowrap; }
+        .api-status-empty { border:1px dashed var(--border); border-radius:14px; background:var(--bg); color:var(--muted); text-align:center; padding:18px 12px; font-size:12px; font-weight:800; line-height:1.5; }
+
+        @media (max-width:760px) {
+            .api-status-popover {
+                left: 12px;
+                right: 12px;
+                bottom: 18px;
+                width: auto;
+            }
+        }
+
         .side-actions {
             margin-top:auto;
             margin-bottom:12px;
@@ -1227,6 +1282,20 @@
             </div>
 
         </aside>
+        <div id="api-status-popover" class="api-status-popover" data-state="none" aria-hidden="true">
+            <div class="api-status-head">
+                <div class="api-status-title">
+                    <span class="pulse-dot"></span>
+                    <span id="api-status-title">API 状态</span>
+                </div>
+                <div class="api-status-actions">
+                    <button id="api-status-refresh" class="api-status-btn" type="button">重测</button>
+                    <button id="api-status-close" class="api-status-btn" type="button">关闭</button>
+                </div>
+            </div>
+            <div id="api-status-summary" class="api-status-summary">API 状态检测中</div>
+            <div id="api-status-list" class="api-status-list"></div>
+        </div>
         <script>
             /* 在侧栏 DOM 解析完后立即把 active 类移到当前页对应的入口，避免首屏先在文生图上闪一下 */
             (function(){
@@ -1477,9 +1546,11 @@
         const ACCOUNT_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
         const DEFAULT_PAGE_ID = 'smart-canvas';
         const PAGE_IDS = ['zimage','enhance','klein','angle','gpt-chat','smart-canvas','canvas','assets','api-settings','comfyui-settings','app-settings'];
-        const APP_BUILD_ID = '20260523-transparent-bg1';
+        const APP_BUILD_ID = '20260523-api-settings-polish1';
         let appStatus = { online_count: 0, api_ok_count: 0, api_total: 0, api_failed_count: 0, api_state: 'none', api_message: 'API 状态检测中', queue_text: '0', busy: false };
         let accountState = { logged_in:false, email:'', email_verified:false, display_name:'', avatar_url:'', base_url:'', custom_cloud:false };
+        let apiLivenessState = null;
+        let apiLivenessLoading = false;
 
         function isCanvasWorkspace(id) {
             return id === 'smart-canvas' || id === 'canvas';
@@ -2241,9 +2312,37 @@
         document.addEventListener('DOMContentLoaded', () => {
             applyRememberedAccount();
             loadAccountState();
+            document.getElementById('nano-monitor')?.addEventListener('click', event => {
+                event.stopPropagation();
+                toggleApiStatusPopover();
+                if(!apiLivenessState) syncApiLiveness(true);
+            });
+            document.getElementById('api-status-refresh')?.addEventListener('click', event => {
+                event.stopPropagation();
+                syncApiLiveness(true);
+            });
+            document.getElementById('api-status-close')?.addEventListener('click', event => {
+                event.stopPropagation();
+                toggleApiStatusPopover(false);
+            });
+            document.getElementById('api-status-list')?.addEventListener('click', event => {
+                const row = event.target?.closest?.('.api-status-row[data-provider-id]');
+                const providerId = row?.dataset?.providerId || '';
+                if(providerId) openApiSettingsForProvider(providerId);
+            });
         }, { once:true });
         document.addEventListener('keydown', event => {
-            if(event.key === 'Escape') closeAccountCenter();
+            if(event.key === 'Escape') {
+                closeAccountCenter();
+                toggleApiStatusPopover(false);
+            }
+        });
+        document.addEventListener('click', event => {
+            const popover = document.getElementById('api-status-popover');
+            const monitor = document.getElementById('nano-monitor');
+            if(!popover?.classList.contains('open')) return;
+            if(popover.contains(event.target) || monitor?.contains(event.target)) return;
+            toggleApiStatusPopover(false);
         });
         document.getElementById('account-overlay')?.addEventListener('click', event => {
             if(event.target?.id === 'account-overlay') closeAccountCenter();
@@ -2259,6 +2358,90 @@
             document.querySelectorAll('iframe').forEach(sendAppStatusToFrame);
         }
 
+        function escapeApiHtml(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({
+                '&':'&amp;',
+                '<':'&lt;',
+                '>':'&gt;',
+                '"':'&quot;',
+                "'":'&#39;'
+            }[ch]));
+        }
+
+        function apiRowState(item) {
+            if(item?.enabled === false) return 'none';
+            if(item?.ok === true) return 'ok';
+            if(item?.ok === null || item?.ok === undefined) return 'none';
+            return 'fail';
+        }
+
+        function apiRowMeta(item) {
+            if(item?.enabled === false) return '禁用';
+            if(item?.ok === true) {
+                if(Number(item.latency_ms) > 0) return `${Number(item.latency_ms)}ms`;
+                if(Number(item.model_count) > 0) return `${Number(item.model_count)} 模型`;
+                return '可用';
+            }
+            if(Number(item?.status) > 0) return `HTTP ${Number(item.status)}`;
+            return '异常';
+        }
+
+        function openApiSettingsForProvider(providerId) {
+            const cleanId = String(providerId || '').trim();
+            if(!cleanId) return;
+            toggleApiStatusPopover(false);
+            const frame = document.getElementById('frame-api-settings');
+            const query = `/static/api-settings.html?provider=${encodeURIComponent(cleanId)}`;
+            if(frame) frame.src = withBuildId(query);
+            switchUI(pageTrigger('api-settings'), 'api-settings');
+        }
+
+        function renderApiStatusPopover() {
+            const popover = document.getElementById('api-status-popover');
+            const title = document.getElementById('api-status-title');
+            const summary = document.getElementById('api-status-summary');
+            const list = document.getElementById('api-status-list');
+            if(!popover || !summary || !list) return;
+            const data = apiLivenessState || {};
+            const state = ['ok','warn','fail','none'].includes(data.state) ? data.state : 'none';
+            const providers = Array.isArray(data.providers) ? data.providers : [];
+            popover.dataset.state = state;
+            if(title) title.textContent = `API 状态 ${Number(data.ok_count || 0)}/${Number(data.total || 0)}`;
+            summary.textContent = apiLivenessLoading ? 'API 状态检测中' : (data.message || 'API 状态检测中');
+            if(apiLivenessLoading && !providers.length) {
+                list.innerHTML = '<div class="api-status-empty">正在检测 API 平台，请稍等。</div>';
+                return;
+            }
+            if(!providers.length) {
+                list.innerHTML = '<div class="api-status-empty">暂无 API 平台，去 API 设置添加后再检测。</div>';
+                return;
+            }
+            list.innerHTML = providers.map(item => {
+                const rowState = apiRowState(item);
+                const name = item.name || item.id || '未命名平台';
+                const message = item.message || (item.enabled === false ? '已禁用' : '未返回检测信息');
+                return `
+                    <div class="api-status-row ${rowState}" data-provider-id="${escapeApiHtml(item.id || '')}" title="打开 API 设置：${escapeApiHtml(name)}">
+                        <span class="api-status-dot"></span>
+                        <div>
+                            <div class="api-status-name">${escapeApiHtml(name)}</div>
+                            <div class="api-status-msg">${escapeApiHtml(message)}</div>
+                        </div>
+                        <div class="api-status-meta">${escapeApiHtml(apiRowMeta(item))}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleApiStatusPopover(force) {
+            const popover = document.getElementById('api-status-popover');
+            if(!popover) return;
+            const next = typeof force === 'boolean' ? force : !popover.classList.contains('open');
+            if(next) renderApiStatusPopover();
+            popover.classList.toggle('open', next);
+            popover.setAttribute('aria-hidden', next ? 'false' : 'true');
+        }
+
         function applyApiLiveness(data) {
             const monitor = document.getElementById('nano-monitor');
             const apiVal = document.getElementById('online-val');
@@ -2266,6 +2449,7 @@
             const okCount = Number(data?.ok_count || 0);
             const total = Number(data?.total || 0);
             const failedCount = Number(data?.failed_count || 0);
+            apiLivenessState = data || null;
             appStatus.api_ok_count = okCount;
             appStatus.api_total = total;
             appStatus.api_failed_count = failedCount;
@@ -2282,17 +2466,26 @@
                     .join(' | ');
                 monitor.title = details ? `${appStatus.api_message} · ${details}` : appStatus.api_message;
             }
+            renderApiStatusPopover();
             broadcastAppStatus();
         }
 
-        async function syncApiLiveness() {
+        async function syncApiLiveness(force = false) {
+            const refreshBtn = document.getElementById('api-status-refresh');
+            if(force && refreshBtn) refreshBtn.disabled = true;
+            apiLivenessLoading = true;
+            renderApiStatusPopover();
             try {
                 const res = await fetch('/api/providers/liveness', { cache:'no-store' });
                 const data = await res.json();
                 if(!res.ok) throw new Error(data.detail || 'API 状态检测失败');
+                apiLivenessLoading = false;
                 applyApiLiveness(data);
             } catch(e) {
+                apiLivenessLoading = false;
                 applyApiLiveness({ state:'fail', ok_count:0, total:appStatus.api_total || 0, failed_count:appStatus.api_total || 0, message:e.message || 'API 状态检测失败', providers:[] });
+            } finally {
+                if(force && refreshBtn) refreshBtn.disabled = false;
             }
         }
 
