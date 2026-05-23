@@ -156,6 +156,14 @@
             transition-delay: 0s;
         }
 
+        .logo-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+            flex: 0 0 auto;
+        }
+
         /* 首次加载时与 iframe 的 0.5s 淡入同步播放，避免侧栏"焊死"在原地造成视觉断层 */
         @keyframes sidebar-enter {
             from { opacity: 0; transform: translateX(-6px); }
@@ -168,18 +176,23 @@
         .logo-ring {
             width: 36px;
             height: 36px;
-            border: 2px solid var(--text);
-            border-radius: 12px;
+            min-width: 36px;
+            min-height: 36px;
+            flex: 0 0 36px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow: hidden;
+            background: #000;
             /* 仅保留 hover 真正会用到的属性过渡，避免 transition: all 因首屏属性补齐被意外触发 */
-            transition: transform 0.6s var(--fluid-ease) 0.5s, border-radius 0.6s var(--fluid-ease) 0.5s, border-color 0.3s;
+            transition: box-shadow 0.3s, transform 0.3s;
         }
 
         .sidebar:hover .logo-ring {
-            transform: rotate(90deg);
-            border-radius: 50%;
+            transform: none;
+            border-radius: 10px;
+            box-shadow: 0 10px 24px rgba(15,23,42,.12);
             transition-delay: 0s;
         }
 
@@ -320,7 +333,8 @@
         body.canvas-compact-nav .sidebar:hover .side-pill-text,
         body.canvas-compact-nav .sidebar:hover .nano-monitor .divider,
         body.canvas-compact-nav .sidebar:hover .nano-monitor .stat-group:last-child,
-        body.canvas-compact-nav .sidebar:hover .nano-monitor .label-nano {
+        body.canvas-compact-nav .sidebar:hover .nano-monitor .label-nano,
+        body.canvas-compact-nav .sidebar:hover .nano-monitor #online-val {
             max-width: 0;
             opacity: 0;
         }
@@ -380,6 +394,11 @@
             box-shadow: 0 6px 24px var(--monitor-shadow);
         }
 
+        .nano-monitor.api-ok .pulse-dot { background:#10b981; box-shadow:0 0 0 4px rgba(16,185,129,.12); }
+        .nano-monitor.api-warn .pulse-dot { background:#f59e0b; box-shadow:0 0 0 4px rgba(245,158,11,.13); }
+        .nano-monitor.api-fail .pulse-dot { background:#ef4444; box-shadow:0 0 0 4px rgba(239,68,68,.13); }
+        .nano-monitor.api-none .pulse-dot { background:#94a3b8; box-shadow:0 0 0 4px rgba(148,163,184,.12); }
+
         .stat-group {
             display: flex;
             align-items: center;
@@ -405,7 +424,8 @@
 
         .nano-monitor .divider,
         .nano-monitor .stat-group:last-child,
-        .nano-monitor .label-nano {
+        .nano-monitor .label-nano,
+        .nano-monitor #online-val {
             max-width:0;
             opacity:0;
             overflow:hidden;
@@ -427,6 +447,12 @@
         .sidebar:hover .nano-monitor .label-nano {
             max-width:48px;
             opacity:0.5;
+            transition-delay:0.1s;
+        }
+
+        .sidebar:hover .nano-monitor #online-val {
+            max-width:52px;
+            opacity:1;
             transition-delay:0.1s;
         }
 
@@ -1049,11 +1075,12 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="logo-ring mb-12">
-                <div class="w-1.5 h-1.5 rounded-full transition-colors" id="logo-dot" style="background:var(--text)"></div>
+                <img class="logo-img" src="/static/logo.png" alt="LumaForge">
+                <div class="w-1.5 h-1.5 rounded-full transition-colors" id="logo-dot" style="background:var(--text);display:none"></div>
             </div>
 
             <nav>
-                <div class="nav-item active" onclick="switchUI(this, 'smart-canvas')">
+                <div class="nav-item" onclick="switchUI(this, 'zimage')">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.587-1.587a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
                     </svg>
@@ -1184,12 +1211,12 @@
                     </svg>
                     <span class="side-pill-text" data-i18n="common.appSettings">应用设置</span>
                 </button>
-                <div class="nano-monitor" id="nano-monitor" title="服务状态">
+                <div class="nano-monitor api-none" id="nano-monitor" title="API 状态检测中">
                     <div class="stat-group">
                         <div class="pulse-dot"></div>
                         <div class="spinner-nano"></div>
-                        <span class="label-nano">ONLINE</span>
-                        <span id="online-val">1</span>
+                        <span class="label-nano">API</span>
+                        <span id="online-val">0/0</span>
                     </div>
                     <div class="divider"></div>
                     <div class="stat-group">
@@ -1204,7 +1231,7 @@
             /* 在侧栏 DOM 解析完后立即把 active 类移到当前页对应的入口，避免首屏先在文生图上闪一下 */
             (function(){
                 try {
-                    var pageId = localStorage.getItem('studio_active_page');
+                    var pageId = localStorage.getItem('studio_active_page') || 'smart-canvas';
                     if(pageId === 'online') pageId = 'zimage';
                     if(pageId && pageId !== 'zimage') {
                         document.querySelectorAll('.nav-item.active, .side-pill.active').forEach(function(n){
@@ -1218,12 +1245,12 @@
         </script>
 
         <main class="stage">
-            <iframe id="frame-zimage" data-src="/static/online.html" class="active" scrolling="yes"></iframe>
+            <iframe id="frame-zimage" data-src="/static/online.html" scrolling="yes"></iframe>
             <iframe id="frame-enhance" data-src="/static/enhance.html" scrolling="yes"></iframe>
             <iframe id="frame-klein" data-src="/static/klein.html" scrolling="yes"></iframe>
             <iframe id="frame-angle" data-src="/static/angle.html" scrolling="yes"></iframe>
             <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html" scrolling="yes"></iframe>
-            <iframe id="frame-smart-canvas" data-src="/static/smart-canvas.html" scrolling="yes"></iframe>
+            <iframe id="frame-smart-canvas" data-src="/static/smart-canvas.html" class="active" scrolling="yes"></iframe>
             <iframe id="frame-canvas" data-src="/static/canvas.html" scrolling="yes"></iframe>
             <iframe id="frame-assets" data-src="/static/assets.html" scrolling="yes"></iframe>
             <iframe id="frame-api-settings" data-src="/static/api-settings.html" scrolling="yes"></iframe>
@@ -1450,8 +1477,8 @@
         const ACCOUNT_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
         const DEFAULT_PAGE_ID = 'smart-canvas';
         const PAGE_IDS = ['zimage','enhance','klein','angle','gpt-chat','smart-canvas','canvas','assets','api-settings','comfyui-settings','app-settings'];
-        const APP_BUILD_ID = '20260522-202-goals1';
-        let appStatus = { online_count: 1, queue_text: '0', busy: false };
+        const APP_BUILD_ID = '20260523-transparent-bg1';
+        let appStatus = { online_count: 0, api_ok_count: 0, api_total: 0, api_failed_count: 0, api_state: 'none', api_message: 'API 状态检测中', queue_text: '0', busy: false };
         let accountState = { logged_in:false, email:'', email_verified:false, display_name:'', avatar_url:'', base_url:'', custom_cloud:false };
 
         function isCanvasWorkspace(id) {
@@ -1471,7 +1498,8 @@
         function activePromptPageId() {
             const remembered = localStorage.getItem(ACTIVE_PAGE_KEY);
             if (remembered === 'zimage' || remembered === 'online') return 'zimage';
-            return document.getElementById('frame-smart-canvas') ? 'smart-canvas' : 'zimage';
+            if (remembered === 'smart-canvas') return 'smart-canvas';
+            return 'zimage';
         }
 
         function withBuildId(src) {
@@ -1765,6 +1793,7 @@
             const overlay = document.getElementById('account-overlay');
             if(overlay) {
                 overlay.classList.add('open');
+                overlay.classList.toggle('is-logged-in', !!accountState.logged_in);
                 overlay.setAttribute('aria-hidden', 'false');
             }
             const includeSecrets = document.getElementById('account-include-secrets');
@@ -1805,7 +1834,8 @@
                 const pwd = document.getElementById('account-cloud-password');
                 saveRememberedAccount(email, password);
                 if(pwd && !document.getElementById('account-remember-password')?.checked) pwd.value = '';
-                renderAccountState(data);
+                renderAccountState({ logged_in:true, email, ...data });
+                selectAccountTab('sync');
                 await accountRefreshProfile({ quiet:true });
                 notifyConfigChanged();
                 // After registration, if email not verified, start polling
@@ -1969,7 +1999,15 @@
             document.querySelectorAll('iframe').forEach(frame => {
                 try { frame.contentWindow?.postMessage({ type:'providers-changed' }, '*'); } catch(e) {}
             });
+            syncApiLiveness();
         }
+
+        try {
+            const apiChannel = new BroadcastChannel('studio-api');
+            apiChannel.onmessage = event => {
+                if(event.data?.type === 'providers-changed') syncApiLiveness();
+            };
+        } catch(e) {}
 
         async function accountUploadConfig() {
             const include = true;
@@ -2132,6 +2170,19 @@
                 sendAppStatusToFrame(iframe);
                 return;
             }
+            if(event.data?.type === 'smart-send-to-chat') {
+                switchUI(pageTrigger('gpt-chat'), 'gpt-chat');
+                const target = document.getElementById('frame-gpt-chat');
+                const payload = {
+                    type:'chat-add-reference',
+                    refs:Array.isArray(event.data.refs) ? event.data.refs : [],
+                    message:event.data.message || ''
+                };
+                const send = () => target?.contentWindow?.postMessage(payload, '*');
+                if(target?.src) setTimeout(send, 120);
+                else target?.addEventListener('load', send, { once:true });
+                return;
+            }
             if(event.data?.type === 'asset-add-to-canvas') {
                 const pageId = activeCanvasPageId();
                 switchUI(pageTrigger(pageId), pageId);
@@ -2167,7 +2218,11 @@
             };
             try {
                 const doc = target.contentDocument;
-                const ready = target.src && target.src.includes('/static/canvas.html') && doc && doc.readyState !== 'loading' && doc.location.href.includes('/static/canvas.html');
+                const ready = target.src
+                    && (target.src.includes('/static/canvas.html') || target.src.includes('/static/smart-canvas.html'))
+                    && doc
+                    && doc.readyState !== 'loading'
+                    && (doc.location.href.includes('/static/canvas.html') || doc.location.href.includes('/static/smart-canvas.html'));
                 if(ready) setTimeout(send, 90);
                 else waitForLoad();
             } catch(e) {
@@ -2204,6 +2259,43 @@
             document.querySelectorAll('iframe').forEach(sendAppStatusToFrame);
         }
 
+        function applyApiLiveness(data) {
+            const monitor = document.getElementById('nano-monitor');
+            const apiVal = document.getElementById('online-val');
+            const state = data?.state || 'none';
+            const okCount = Number(data?.ok_count || 0);
+            const total = Number(data?.total || 0);
+            const failedCount = Number(data?.failed_count || 0);
+            appStatus.api_ok_count = okCount;
+            appStatus.api_total = total;
+            appStatus.api_failed_count = failedCount;
+            appStatus.api_state = state;
+            appStatus.api_message = data?.message || 'API 状态未知';
+            if(apiVal) apiVal.innerText = total ? `${okCount}/${total}` : '0/0';
+            if(monitor) {
+                monitor.classList.remove('api-ok', 'api-warn', 'api-fail', 'api-none');
+                monitor.classList.add(`api-${state}`);
+                const details = (data?.providers || [])
+                    .filter(item => item.enabled !== false)
+                    .map(item => `${item.name || item.id}: ${item.ok ? '成功' : item.message || '失败'}`)
+                    .slice(0, 5)
+                    .join(' | ');
+                monitor.title = details ? `${appStatus.api_message} · ${details}` : appStatus.api_message;
+            }
+            broadcastAppStatus();
+        }
+
+        async function syncApiLiveness() {
+            try {
+                const res = await fetch('/api/providers/liveness', { cache:'no-store' });
+                const data = await res.json();
+                if(!res.ok) throw new Error(data.detail || 'API 状态检测失败');
+                applyApiLiveness(data);
+            } catch(e) {
+                applyApiLiveness({ state:'fail', ok_count:0, total:appStatus.api_total || 0, failed_count:appStatus.api_total || 0, message:e.message || 'API 状态检测失败', providers:[] });
+            }
+        }
+
         async function syncStatus() {
             try {
                 const res = await fetch(`/api/queue_status?client_id=${CID}`);
@@ -2236,8 +2328,6 @@
                 const data = JSON.parse(event.data);
                 if (data.type === 'stats') {
                     appStatus.online_count = data.online_count;
-                    const onlineVal = document.getElementById('online-val');
-                    if(onlineVal) onlineVal.innerText = data.online_count;
                     broadcastAppStatus();
                 } else if (data.type === 'cloud_status') {
                     const iframe = document.querySelector('iframe.active');
@@ -2252,6 +2342,9 @@
                 }
             };
             setInterval(syncStatus, 2000);
+            syncStatus();
+            syncApiLiveness();
+            setInterval(syncApiLiveness, 30000);
         }
 
         // --- 夜间模式 ---

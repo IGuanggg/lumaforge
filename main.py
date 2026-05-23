@@ -33,7 +33,7 @@ APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
 APP_VERSION = os.getenv("APP_VERSION", "2.0.2")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260522-202-goals1")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260523-transparent-bg1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
@@ -349,6 +349,7 @@ UPDATE_STATE_FILE = os.path.join(DATA_DIR, "update_state.json")
 ASSET_DB_FILE = os.path.join(DATA_DIR, "assets.db")
 CONVERSATION_DIR = os.path.join(DATA_DIR, "conversations")
 CANVAS_DIR = os.path.join(DATA_DIR, "canvases")
+CANVAS_BACKUP_DIR = os.path.join(DATA_DIR, "canvas_backups")
 API_PROVIDERS_FILE = os.path.join(DATA_DIR, "api_providers.json")
 GLOBAL_CONFIG_FILE = os.path.join(RUNTIME_DIR, "global_config.json")
 CLOUD_SESSION_FILE = os.path.join(DATA_DIR, "cloud_session.json")
@@ -1432,6 +1433,7 @@ class OnlineImageRequest(BaseModel):
     model: str = Field(default="", max_length=MODEL_NAME_MAX_LENGTH)
     size: str = "1024x1024"
     quality: str = "auto"
+    n: int = Field(default=1, ge=1, le=8)
     reference_images: List[AIReference] = []
 
 class AIEnhanceRequest(OnlineImageRequest):
@@ -1796,7 +1798,23 @@ def canvas_path(canvas_id):
 def save_canvas(canvas):
     canvas["updated_at"] = now_ms()
     with CANVAS_LOCK:
-        with open(canvas_path(canvas["id"]), 'w', encoding='utf-8') as f:
+        path = canvas_path(canvas["id"])
+        if os.path.exists(path):
+            try:
+                os.makedirs(CANVAS_BACKUP_DIR, exist_ok=True)
+                backup_name = f"{canvas['id']}.{int(time.time() * 1000)}.json"
+                shutil.copy2(path, os.path.join(CANVAS_BACKUP_DIR, backup_name))
+                backups = sorted(
+                    [p for p in os.listdir(CANVAS_BACKUP_DIR) if p.startswith(f"{canvas['id']}.") and p.endswith(".json")]
+                )
+                for old in backups[:-30]:
+                    try:
+                        os.remove(os.path.join(CANVAS_BACKUP_DIR, old))
+                    except Exception:
+                        pass
+            except Exception as exc:
+                logger.warning("Canvas backup failed for %s: %s", canvas.get("id"), exc)
+        with open(path, 'w', encoding='utf-8') as f:
             json.dump(canvas, f, ensure_ascii=False, indent=2)
     schedule_cloud_config_sync()
 
@@ -1930,17 +1948,32 @@ def import_cloud_canvases(items):
             data["icon"] = str(data.get("icon") or "layers")[:16]
             data["nodes"] = data.get("nodes") if isinstance(data.get("nodes"), list) else []
             data["connections"] = data.get("connections") if isinstance(data.get("connections"), list) else []
+            node_ids = {str(node.get("id") or "") for node in data["nodes"] if isinstance(node, dict)}
+            data["connections"] = [
+                conn for conn in data["connections"]
+                if isinstance(conn, dict)
+                and str(conn.get("from") or "") in node_ids
+                and str(conn.get("to") or "") in node_ids
+            ]
             data["viewport"] = data.get("viewport") if isinstance(data.get("viewport"), dict) else {"x": 0, "y": 0, "scale": 1}
             data["created_at"] = int(data.get("created_at") or data.get("updated_at") or now_ms())
             data["updated_at"] = int(data.get("updated_at") or data["created_at"])
             path = canvas_path(cid)
             local_updated = 0
+            local_node_count = 0
             if os.path.exists(path):
                 try:
                     with open(path, 'r', encoding='utf-8') as f:
-                        local_updated = int((json.load(f) or {}).get("updated_at") or 0)
+                        local_data = json.load(f) or {}
+                    local_updated = int(local_data.get("updated_at") or 0)
+                    local_nodes = local_data.get("nodes") if isinstance(local_data.get("nodes"), list) else []
+                    local_node_count = len(local_nodes)
                 except Exception:
                     local_updated = 0
+                    local_node_count = 0
+            if local_node_count and not data["nodes"]:
+                skipped += 1
+                continue
             if local_updated and local_updated > int(data.get("updated_at") or 0):
                 skipped += 1
                 continue
@@ -5033,6 +5066,88 @@ async def test_provider_connection(payload: TestConnectionPayload):
     except httpx.HTTPError as e:
         return {"ok": False, "status": 0, "message": str(e)[:300]}
 
+async def probe_provider_liveness(provider: dict):
+    started = time.time()
+    provider_id = provider.get("id", "")
+    name = provider.get("name") or provider_id
+    base_url = (provider.get("base_url") or "").strip().rstrip("/")
+    result = {
+        "id": provider_id,
+        "name": name,
+        "enabled": bool(provider.get("enabled", True)),
+        "base_url": base_url,
+        "ok": False,
+        "status": 0,
+        "message": "",
+        "model_count": 0,
+        "latency_ms": 0,
+    }
+    if not result["enabled"]:
+        result.update({"ok": None, "message": "已禁用"})
+        return result
+    if not base_url:
+        result["message"] = "未配置请求地址"
+        return result
+    api_key = os.getenv(provider_key_env(provider_id), "")
+    if not api_key:
+        result["message"] = "未配置 API Key"
+        return result
+    url = f"{base_url}/models" if base_url.endswith("/v1") else f"{base_url}/v1/models"
+    try:
+        async with httpx.AsyncClient(timeout=6) as client:
+            resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"})
+        result["status"] = resp.status_code
+        result["latency_ms"] = int((time.time() - started) * 1000)
+        if resp.status_code >= 400:
+            if resp.status_code in (401, 403):
+                result["message"] = "API Key 无效或无权限"
+            else:
+                result["message"] = f"连接失败 HTTP {resp.status_code}"
+            return result
+        data = resp.json() if resp.text else {}
+        items = (data.get("data") if isinstance(data, dict) else None) or []
+        result.update({
+            "ok": True,
+            "message": "连接成功",
+            "model_count": len(items) if isinstance(items, list) else 0,
+        })
+        return result
+    except Exception as exc:
+        result["latency_ms"] = int((time.time() - started) * 1000)
+        result["message"] = f"连接失败：{str(exc)[:160]}"
+        return result
+
+@app.get("/api/providers/liveness")
+async def api_providers_liveness():
+    providers = load_api_providers()
+    enabled = [p for p in providers if p.get("enabled", True)]
+    details = await asyncio.gather(*[probe_provider_liveness(p) for p in providers]) if providers else []
+    ok_count = sum(1 for item in details if item.get("enabled") and item.get("ok") is True)
+    failed_count = sum(1 for item in details if item.get("enabled") and item.get("ok") is False)
+    total = len(enabled)
+    if total <= 0:
+        state = "none"
+        message = "未启用 API 平台"
+    elif ok_count == total:
+        state = "ok"
+        message = f"API {ok_count}/{total} 可用"
+    elif ok_count > 0:
+        state = "warn"
+        message = f"API {ok_count}/{total} 可用，{failed_count} 个异常"
+    else:
+        state = "fail"
+        message = f"API 0/{total} 可用"
+    return {
+        "ok": state in {"ok", "warn"},
+        "state": state,
+        "message": message,
+        "ok_count": ok_count,
+        "failed_count": failed_count,
+        "total": total,
+        "checked_at": time.time(),
+        "providers": details,
+    }
+
 @app.post("/api/providers/probe-async")
 async def probe_async_endpoint(payload: TestConnectionPayload):
     """验证异步协议：用假 task_id 请求 GET /v1/tasks/{fake_id}。
@@ -5128,14 +5243,32 @@ async def build_online_image_result(payload: OnlineImageRequest, history_type: s
     model = selected_model(payload.model, default_model)
     refs = [ref.dict() for ref in payload.reference_images if ref.url]
     try:
-        image_data, raw = await generate_ai_image(payload.prompt, payload.size, payload.quality, model, refs, provider["id"])
-        local_url = await save_ai_image_to_output(image_data, prefix=prefix)
+        count = max(1, min(8, int(getattr(payload, "n", 1) or 1)))
+        if count <= 1:
+            image_data, raw = await generate_ai_image(payload.prompt, payload.size, payload.quality, model, refs, provider["id"])
+            local_urls = [await save_ai_image_to_output(image_data, prefix=prefix)]
+            raw_items = [raw]
+        else:
+            parallel_results = await asyncio.gather(*[
+                generate_ai_image(payload.prompt, payload.size, payload.quality, model, refs, provider["id"])
+                for _ in range(count)
+            ])
+            raw_items = [raw for _, raw in parallel_results]
+            local_urls = []
+            for idx, (image_data, _) in enumerate(parallel_results):
+                local_url = await save_ai_image_to_output(image_data, prefix=f"{prefix}{idx + 1}_")
+                local_urls.append(local_url)
     except httpx.HTTPStatusError as exc:
         text = exc.response.text or ''
         # 把上游英文错误转成中文友好提示
         friendly = None
+        lower_text = text.lower()
+        if any(token in lower_text for token in ("credits not enough", "credit not enough", "insufficient credit", "insufficient balance", "balance not enough", "quota exceeded")) or "余额不足" in text or "额度不足" in text:
+            friendly = "API 额度不足：上游返回 credits not enough。请充值或更换 API Key 后再试。"
         m = re.search(r"longest edge must be less than or equal to (\d+)", text)
-        if m:
+        if friendly:
+            pass
+        elif m:
             limit = m.group(1)
             friendly = f"该模型不支持当前分辨率：最长边超过 {limit}px。请把图片分辨率调低（例如换到 2K 或更小），或更换支持高分辨率的模型。"
         elif "Invalid size" in text or "invalid_value" in text:
@@ -5153,16 +5286,16 @@ async def build_online_image_result(payload: OnlineImageRequest, history_type: s
 
     result = {
         "prompt": payload.prompt,
-        "images": [local_url],
+        "images": [url for url in local_urls if url],
         "timestamp": time.time(),
         "type": history_type,
         "model": model,
         "provider_id": provider["id"],
         "provider_name": provider.get("name") or provider["id"],
-        "task_id": extract_task_id(raw) if isinstance(raw, dict) else None,
-        "request_id": raw.get("id") if isinstance(raw, dict) else None,
-        "params": {"provider_id": provider["id"], "model": model, "size": payload.size, "quality": payload.quality, "reference_images": refs},
-        "raw_usage": raw.get("usage") if isinstance(raw, dict) else None,
+        "task_id": extract_task_id(raw_items[0]) if raw_items and isinstance(raw_items[0], dict) else None,
+        "request_id": raw_items[0].get("id") if raw_items and isinstance(raw_items[0], dict) else None,
+        "params": {"provider_id": provider["id"], "model": model, "size": payload.size, "quality": payload.quality, "n": count, "reference_images": refs},
+        "raw_usage": raw_items[0].get("usage") if raw_items and isinstance(raw_items[0], dict) else None,
     }
     save_to_history(result)
     await manager.broadcast_new_image(result)
@@ -5602,6 +5735,20 @@ async def get_canvas(canvas_id: str):
 async def update_canvas(canvas_id: str, payload: CanvasSaveRequest):
     canvas = load_canvas(canvas_id)
     current_updated_at = int(canvas.get("updated_at") or 0)
+    current_nodes = canvas.get("nodes") if isinstance(canvas.get("nodes"), list) else []
+    if current_nodes and not payload.nodes:
+        raise HTTPException(status_code=409, detail={
+            "message": "已拒绝空画布覆盖：当前画布仍有节点，请刷新后再操作。",
+            "canvas": canvas,
+            "updated_at": current_updated_at,
+        })
+    payload_node_ids = {str(node.get("id") or "") for node in payload.nodes if isinstance(node, dict)}
+    cleaned_connections = [
+        conn for conn in payload.connections
+        if isinstance(conn, dict)
+        and str(conn.get("from") or "") in payload_node_ids
+        and str(conn.get("to") or "") in payload_node_ids
+    ]
     if payload.base_updated_at and current_updated_at and int(payload.base_updated_at) < current_updated_at:
         raise HTTPException(status_code=409, detail={
             "message": "画布已被其他页面更新，已拒绝旧版本覆盖。",
@@ -5612,7 +5759,7 @@ async def update_canvas(canvas_id: str, payload: CanvasSaveRequest):
     canvas["icon"] = (payload.icon or canvas.get("icon") or "layers")[:32]
     canvas["kind"] = normalize_canvas_kind(canvas.get("kind"))
     canvas["nodes"] = payload.nodes
-    canvas["connections"] = payload.connections
+    canvas["connections"] = cleaned_connections
     canvas["viewport"] = payload.viewport
     canvas["logs"] = payload.logs[-500:]
     canvas["settings"] = payload.settings or {}

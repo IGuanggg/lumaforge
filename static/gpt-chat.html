@@ -962,6 +962,23 @@
         }
 
         function removeRef(i){ refs.splice(i,1); renderRefs(); }
+        window.addEventListener('message', event => {
+            if(event.data?.type !== 'chat-add-reference') return;
+            const incoming = (Array.isArray(event.data.refs) ? event.data.refs : [])
+                .filter(ref => ref?.url)
+                .slice(0, Math.max(0, 4 - refs.length))
+                .map(ref => ({url:ref.url, name:ref.name || 'canvas-reference.png'}));
+            if(incoming.length){
+                refs.push(...incoming);
+                renderRefs();
+            }
+            const input = document.getElementById('messageInput');
+            if(event.data.message && input){
+                input.value = event.data.message;
+                autoGrow(input);
+            }
+            setMode('chat');
+        });
 
         window.addEventListener('paste', e => {
             const files = [...(e.clipboardData?.items || [])].filter(x => x.kind === 'file' && x.type.startsWith('image/')).map(x => x.getAsFile());
