@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.3")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260523-api-settings-polish1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.4")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260523-ui-polish3")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 
 QUIET_ACCESS_PATHS = {
