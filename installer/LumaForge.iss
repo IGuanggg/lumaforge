@@ -1,4 +1,4 @@
-; LumaForge Installer - Inno Setup Script
+﻿; LumaForge Installer - Inno Setup Script
 ; Build with: ISCC.exe LumaForge.iss
 ;
 ; Code signing: set WINDOWS_SIGN_CERT_PATH and WINDOWS_SIGN_CERT_PASSWORD
@@ -6,7 +6,7 @@
 
 #define MyAppName "LumaForge"
 #define MyAppNameCN "光绘工坊"
-#define MyAppVersion "2.0.8"
+#define MyAppVersion "2.0.9"
 #define MyAppPublisher "IGuanggg"
 #define MyAppURL "https://github.com/IGuanggg/lumaforge"
 #define MyAppExeName "LumaForge.exe"

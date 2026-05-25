@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.8")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260525-desktop-actions1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.9")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260526-asset-reliability1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -348,6 +348,7 @@ HISTORY_FILE = os.path.join(RUNTIME_DIR, "history.json")
 DATA_DIR = os.path.join(RUNTIME_DIR, "data")
 UPDATE_STATE_FILE = os.path.join(DATA_DIR, "update_state.json")
 ASSET_DB_FILE = os.path.join(DATA_DIR, "assets.db")
+DATA_BACKUPS_DIR = os.path.join(DATA_DIR, "backups")
 CONVERSATION_DIR = os.path.join(DATA_DIR, "conversations")
 CANVAS_DIR = os.path.join(DATA_DIR, "canvases")
 CANVAS_BACKUP_DIR = os.path.join(DATA_DIR, "canvas_backups")
@@ -1115,6 +1116,7 @@ def init_asset_library():
                     source_type TEXT DEFAULT '',
                     prompt TEXT DEFAULT '',
                     model TEXT DEFAULT '',
+                    metadata_json TEXT DEFAULT '{}',
                     width INTEGER DEFAULT 0,
                     height INTEGER DEFAULT 0,
                     duration REAL DEFAULT 0,
@@ -1164,6 +1166,7 @@ def init_asset_library():
                 "cloud_synced_at": "ALTER TABLE assets ADD COLUMN cloud_synced_at REAL DEFAULT 0",
                 "cloud_error": "ALTER TABLE assets ADD COLUMN cloud_error TEXT DEFAULT ''",
                 "category_id": "ALTER TABLE assets ADD COLUMN category_id TEXT DEFAULT 'inbox'",
+                "metadata_json": "ALTER TABLE assets ADD COLUMN metadata_json TEXT DEFAULT '{}'",
             }.items():
                 if column not in existing:
                     conn.execute(ddl)
@@ -1317,13 +1320,65 @@ def make_asset_thumbnail(asset_id, path):
         logger.warning("Asset thumbnail failed for %s: %s", path, e)
         return ""
 
+def json_object(value):
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            data = json.loads(value)
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+def generation_metadata_from_record(record):
+    if not isinstance(record, dict):
+        return {}
+    metadata = {}
+    for key in (
+        "seed",
+        "provider_id",
+        "provider_name",
+        "task_id",
+        "prompt_id",
+        "request_id",
+        "backend",
+        "quality",
+        "size",
+        "raw_usage",
+    ):
+        value = record.get(key)
+        if value not in (None, ""):
+            metadata[key] = value
+    params = record.get("params")
+    if isinstance(params, dict) and params:
+        metadata["params"] = params
+    workflow_json = record.get("workflow_json")
+    if workflow_json:
+        metadata["workflow_json"] = workflow_json
+    refs = record.get("refs") or record.get("references") or record.get("image_refs")
+    if isinstance(refs, list) and refs:
+        metadata["references"] = refs[:12]
+    return metadata
+
 def asset_row_to_dict(row):
     data = dict(row)
     data["tags"] = json_list(data.get("tags"))
     data["favorite"] = bool(data.get("favorite"))
+    metadata = json_object(data.get("metadata_json"))
+    data["metadata"] = metadata
+    data["generation"] = {
+        "prompt": data.get("prompt") or "",
+        "model": data.get("model") or "",
+        "source_type": data.get("source_type") or "",
+        "width": int(data.get("width") or 0),
+        "height": int(data.get("height") or 0),
+        "created_at": data.get("created_at") or 0,
+        **metadata,
+    }
     return data
 
-def index_local_asset(local_url, *, source_type="", prompt="", model="", source_url="", tags=None, favorite=False, created_at=None, category_id=""):
+def index_local_asset(local_url, *, source_type="", prompt="", model="", source_url="", tags=None, favorite=False, created_at=None, category_id="", metadata=None):
     path = output_file_from_url(local_url)
     if not path or not os.path.isfile(path):
         return None
@@ -1338,6 +1393,7 @@ def index_local_asset(local_url, *, source_type="", prompt="", model="", source_
         title = os.path.basename(path)
         size_bytes = os.path.getsize(path)
         tag_json = json.dumps(json_list(tags), ensure_ascii=False)
+        metadata_json = json.dumps(json_object(metadata), ensure_ascii=False)
         category_value = str(category_id or "inbox").strip() or "inbox"
         with ASSET_LOCK:
             with asset_db() as conn:
@@ -1345,8 +1401,8 @@ def index_local_asset(local_url, *, source_type="", prompt="", model="", source_
                     """
                     INSERT INTO assets (
                         id, title, type, category_id, local_url, local_path, thumb_url, source_url, source_type,
-                        prompt, model, width, height, tags, favorite, sha256, size_bytes, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        prompt, model, metadata_json, width, height, tags, favorite, sha256, size_bytes, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(local_url) DO UPDATE SET
                         title=excluded.title,
                         type=excluded.type,
@@ -1357,6 +1413,7 @@ def index_local_asset(local_url, *, source_type="", prompt="", model="", source_
                         source_type=COALESCE(NULLIF(excluded.source_type, ''), assets.source_type),
                         prompt=COALESCE(NULLIF(excluded.prompt, ''), assets.prompt),
                         model=COALESCE(NULLIF(excluded.model, ''), assets.model),
+                        metadata_json=CASE WHEN excluded.metadata_json != '{}' THEN excluded.metadata_json ELSE assets.metadata_json END,
                         width=excluded.width,
                         height=excluded.height,
                         tags=CASE WHEN excluded.tags != '[]' THEN excluded.tags ELSE assets.tags END,
@@ -1367,7 +1424,7 @@ def index_local_asset(local_url, *, source_type="", prompt="", model="", source_
                     """,
                     (
                         asset_id, title, kind, category_value, local_url, path, thumb_url, source_url, source_type,
-                        prompt or "", model or "", width, height, tag_json, 1 if favorite else 0,
+                        prompt or "", model or "", metadata_json, width, height, tag_json, 1 if favorite else 0,
                         digest, size_bytes, created, now,
                     ),
                 )
@@ -1406,6 +1463,7 @@ def index_history_record_assets(record):
             prompt=str(record.get("prompt") or ""),
             model=str(record.get("model") or record.get("workflow_json") or ""),
             created_at=record.get("timestamp"),
+            metadata=generation_metadata_from_record(record),
         )
         if item:
             indexed.append(item)
@@ -1436,6 +1494,14 @@ class AssetUpdateRequest(BaseModel):
 class AssetBulkDeleteRequest(BaseModel):
     ids: List[str] = []
     delete_file: bool = False
+
+class AssetThumbnailRebuildRequest(BaseModel):
+    mode: str = Field(default="missing", max_length=20)
+    ids: List[str] = []
+
+class AppBackupRestoreRequest(BaseModel):
+    filename: str = Field(default="", max_length=240)
+    confirm: bool = False
 
 class DownloadUrlRequest(BaseModel):
     url: str = Field(min_length=1, max_length=5000)
@@ -3123,6 +3189,209 @@ def local_data_health():
         },
     }
 
+def asset_library_health(limit: int = 120):
+    missing = []
+    thumb_missing = []
+    checked = 0
+    missing_count = 0
+    thumb_missing_count = 0
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            rows = conn.execute("SELECT * FROM assets ORDER BY created_at DESC").fetchall()
+    for row in rows:
+        checked += 1
+        item = asset_row_to_dict(row)
+        local_path = item.get("local_path") or ""
+        exists = bool(local_path and os.path.isfile(local_path))
+        if not exists:
+            missing_count += 1
+            if len(missing) < limit:
+                missing.append({
+                    "id": item.get("id"),
+                    "title": item.get("title") or os.path.basename(local_path or item.get("local_url") or ""),
+                    "local_path": local_path,
+                    "local_url": item.get("local_url") or "",
+                    "type": item.get("type") or "",
+                })
+            continue
+        if item.get("type") == "image":
+            thumb_path = output_file_from_url(item.get("thumb_url") or "")
+            if not item.get("thumb_url") or not thumb_path or not os.path.isfile(thumb_path):
+                thumb_missing_count += 1
+                if len(thumb_missing) < limit:
+                    thumb_missing.append({
+                        "id": item.get("id"),
+                        "title": item.get("title") or os.path.basename(local_path),
+                        "local_path": local_path,
+                        "thumb_url": item.get("thumb_url") or "",
+                    })
+    return {
+        "ok": not missing,
+        "checked": checked,
+        "missing_count": missing_count,
+        "thumb_missing_count": thumb_missing_count,
+        "missing": missing,
+        "thumb_missing": thumb_missing,
+    }
+
+def rebuild_asset_thumbnails(mode: str = "missing", ids: Optional[List[str]] = None):
+    mode = (mode or "missing").strip().lower()
+    wanted = {str(x).strip() for x in (ids or []) if str(x).strip()}
+    rebuilt = 0
+    skipped = 0
+    failed = []
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            if wanted:
+                placeholders = ",".join(["?"] * len(wanted))
+                rows = conn.execute(f"SELECT * FROM assets WHERE id IN ({placeholders})", list(wanted)).fetchall()
+            else:
+                rows = conn.execute("SELECT * FROM assets WHERE type = 'image' ORDER BY created_at DESC").fetchall()
+            for row in rows:
+                asset_id = row["id"]
+                path = row["local_path"] or ""
+                if row["type"] != "image" or not os.path.isfile(path):
+                    skipped += 1
+                    continue
+                thumb_path = output_file_from_url(row["thumb_url"] or "")
+                if mode == "missing" and row["thumb_url"] and thumb_path and os.path.isfile(thumb_path):
+                    skipped += 1
+                    continue
+                thumb_url = make_asset_thumbnail(asset_id, path)
+                if not thumb_url:
+                    failed.append({"id": asset_id, "title": row["title"] or os.path.basename(path)})
+                    continue
+                width, height = image_dimensions(path)
+                conn.execute(
+                    "UPDATE assets SET thumb_url = ?, width = ?, height = ?, updated_at = ? WHERE id = ?",
+                    (thumb_url, width, height, time.time(), asset_id),
+                )
+                rebuilt += 1
+    return {"ok": not failed, "rebuilt": rebuilt, "skipped": skipped, "failed": failed, "failed_count": len(failed)}
+
+def backup_manifest_files():
+    files = [
+        ("global_config.json", GLOBAL_CONFIG_FILE),
+        ("history.json", HISTORY_FILE),
+        ("data/assets.db", ASSET_DB_FILE),
+        ("data/api_providers.json", API_PROVIDERS_FILE),
+        ("data/cloud_session.json", CLOUD_SESSION_FILE),
+        ("API/.env", API_ENV_FILE),
+    ]
+    dirs = [
+        ("data/canvases", CANVAS_DIR),
+        ("data/conversations", CONVERSATION_DIR),
+    ]
+    return files, dirs
+
+def list_app_backups():
+    os.makedirs(DATA_BACKUPS_DIR, exist_ok=True)
+    items = []
+    for name in os.listdir(DATA_BACKUPS_DIR):
+        if not name.lower().endswith(".zip"):
+            continue
+        path = os.path.abspath(os.path.join(DATA_BACKUPS_DIR, name))
+        if not is_safe_child_path(path, DATA_BACKUPS_DIR) or not os.path.isfile(path):
+            continue
+        stat = os.stat(path)
+        items.append({"filename": name, "path": path, "size_bytes": stat.st_size, "created_at": stat.st_mtime})
+    items.sort(key=lambda item: item["created_at"], reverse=True)
+    return items
+
+def create_app_backup():
+    os.makedirs(DATA_BACKUPS_DIR, exist_ok=True)
+    filename = f"lumaforge-backup-{time.strftime('%Y%m%d-%H%M%S')}.zip"
+    backup_path = os.path.abspath(os.path.join(DATA_BACKUPS_DIR, filename))
+    included = []
+    files, dirs = backup_manifest_files()
+    with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps({
+            "app": APP_BRAND_NAME,
+            "version": APP_VERSION,
+            "build_id": APP_BUILD_ID,
+            "created_at": time.time(),
+            "runtime_dir": RUNTIME_DIR,
+        }, ensure_ascii=False, indent=2))
+        for arcname, path in files:
+            if os.path.isfile(path):
+                zf.write(path, arcname)
+                included.append(arcname)
+        for arcdir, folder in dirs:
+            if not os.path.isdir(folder):
+                continue
+            for root, _, names in os.walk(folder):
+                if os.path.abspath(root).startswith(os.path.abspath(DATA_BACKUPS_DIR)):
+                    continue
+                for name in names:
+                    source = os.path.join(root, name)
+                    if os.path.isfile(source):
+                        rel = os.path.relpath(source, folder).replace("\\", "/")
+                        arcname = f"{arcdir}/{rel}"
+                        zf.write(source, arcname)
+                        included.append(arcname)
+    stat = os.stat(backup_path)
+    return {"ok": True, "filename": filename, "path": backup_path, "size_bytes": stat.st_size, "included": included, "items": list_app_backups()}
+
+def restore_app_backup(filename: str, confirm: bool):
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Restore requires confirm=true")
+    safe_name = safe_download_filename(filename, "backup.zip")
+    backup_path = os.path.abspath(os.path.join(DATA_BACKUPS_DIR, safe_name))
+    if not is_safe_child_path(backup_path, DATA_BACKUPS_DIR) or not os.path.isfile(backup_path):
+        raise HTTPException(status_code=404, detail="Backup not found")
+    restored = []
+    allowed_files, allowed_dirs = backup_manifest_files()
+    targets = {arc: path for arc, path in allowed_files}
+    allowed_prefixes = {prefix.rstrip("/") + "/": folder for prefix, folder in allowed_dirs}
+    with ASSET_LOCK:
+        with CANVAS_LOCK:
+            with HISTORY_LOCK:
+                with zipfile.ZipFile(backup_path, "r") as zf:
+                    for info in zf.infolist():
+                        arc = info.filename.replace("\\", "/").lstrip("/")
+                        if not arc or arc.endswith("/") or arc == "manifest.json" or ".." in arc.split("/"):
+                            continue
+                        target = targets.get(arc)
+                        if not target:
+                            for prefix, folder in allowed_prefixes.items():
+                                if arc.startswith(prefix):
+                                    rel = arc[len(prefix):]
+                                    target = os.path.abspath(os.path.join(folder, rel))
+                                    if not is_safe_child_path(target, folder):
+                                        target = None
+                                    break
+                        if not target:
+                            continue
+                        os.makedirs(os.path.dirname(target), exist_ok=True)
+                        with zf.open(info, "r") as src, open(target, "wb") as dst:
+                            shutil.copyfileobj(src, dst)
+                        restored.append(arc)
+    return {"ok": True, "filename": safe_name, "restored": restored, "restored_count": len(restored)}
+
+def app_diagnostics_payload():
+    static_health = static_runtime_health()
+    data_health = local_data_health()
+    asset_health = asset_library_health(limit=20)
+    capability = desktop_update_capability()
+    checks = [
+        {"id": "static", "label": "Frontend runtime files", "ok": static_health.get("ok"), "detail": f"{static_health.get('checked_count', 0)} checked, {static_health.get('missing_count', 0)} missing"},
+        {"id": "assets", "label": "Asset library files", "ok": asset_health.get("missing_count", 0) == 0, "detail": f"{asset_health.get('checked', 0)} checked, {asset_health.get('missing_count', 0)} missing, {asset_health.get('thumb_missing_count', 0)} thumbnails need rebuild"},
+        {"id": "data", "label": "Local data directory", "ok": data_health.get("dirs", {}).get("data", {}).get("exists", False), "detail": DATA_DIR},
+        {"id": "updates", "label": "Update capability", "ok": capability.get("supported", False), "detail": capability.get("mode") or capability.get("reason") or ""},
+        {"id": "app_actions", "label": "Desktop actions", "ok": app_action_capability().get("restart_supported", False), "detail": app_action_capability().get("restart_mode") or app_action_capability().get("reason") or ""},
+    ]
+    return {
+        "ok": all(bool(item.get("ok")) for item in checks if item["id"] != "updates"),
+        "version": APP_VERSION,
+        "build_id": APP_BUILD_ID,
+        "paths": app_paths_payload(),
+        "checks": checks,
+        "static_health": static_health,
+        "local_data_health": data_health,
+        "asset_health": asset_health,
+        "update_capability": capability,
+    }
+
 APP_PATH_TARGETS = {
     "save": {
         "env": "APP_ASSETS_DIR",
@@ -3486,6 +3755,22 @@ async def app_static_health():
 @app.get("/api/app/local-data-health")
 async def app_local_data_health():
     return local_data_health()
+
+@app.get("/api/app/backups")
+async def app_backups():
+    return {"ok": True, "items": list_app_backups(), "backup_dir": DATA_BACKUPS_DIR}
+
+@app.post("/api/app/backup-create")
+async def app_backup_create():
+    return create_app_backup()
+
+@app.post("/api/app/backup-restore")
+async def app_backup_restore(payload: AppBackupRestoreRequest):
+    return restore_app_backup(payload.filename, payload.confirm)
+
+@app.get("/api/app/diagnostics")
+async def app_diagnostics():
+    return app_diagnostics_payload()
 
 @app.get("/api/app/cleanup-preview")
 async def app_cleanup_preview(backup_days: int = 14, keep_backups_per_canvas: int = 20):
@@ -4284,6 +4569,14 @@ def rescan_assets_from_history():
             indexed.extend(index_history_record_assets(record))
     return {"ok": True, "indexed": len(indexed)}
 
+@app.get("/api/assets/health")
+def assets_health():
+    return asset_library_health()
+
+@app.post("/api/assets/rebuild-thumbnails")
+def assets_rebuild_thumbnails(payload: AssetThumbnailRebuildRequest):
+    return rebuild_asset_thumbnails(payload.mode, payload.ids)
+
 @app.put("/api/assets/{asset_id}")
 def update_asset(asset_id: str, payload: AssetUpdateRequest):
     updates = []
@@ -4309,6 +4602,15 @@ def update_asset(asset_id: str, payload: AssetUpdateRequest):
                 raise HTTPException(status_code=404, detail="Asset not found")
             row = conn.execute("SELECT * FROM assets WHERE id = ?", (asset_id,)).fetchone()
             return asset_row_to_dict(row)
+
+@app.get("/api/assets/{asset_id}")
+def get_asset(asset_id: str):
+    with ASSET_LOCK:
+        with asset_db() as conn:
+            row = conn.execute("SELECT * FROM assets WHERE id = ?", (asset_id,)).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return asset_row_to_dict(row)
 
 @app.get("/api/assets/{asset_id}/download")
 def download_asset(asset_id: str):

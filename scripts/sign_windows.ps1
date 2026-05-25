@@ -1,4 +1,4 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # LumaForge Windows Code Signing Script
 # Usage: .\scripts\sign_windows.ps1
 #
@@ -68,7 +68,7 @@ Write-Host "[sign] Timestamp: $TimestampUrl"
 $files = @(
     "dist\LumaForge\LumaForge.exe",
     "dist\LumaForge\LumaForgeUpdater.exe",
-    "releases\LumaForge-Setup-2.0.8.exe"
+    "releases\LumaForge-Setup-2.0.9.exe"
 )
 
 $signed = 0

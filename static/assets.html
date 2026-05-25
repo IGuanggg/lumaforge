@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -13,7 +13,7 @@
         })();
     </script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260525-updater-installer1"></script>
+    <script src="/static/theme.js?v=20260526-asset-reliability1"></script>
     <style>
         :root {
             --bg:#f7f8fb;
@@ -115,8 +115,15 @@
         .toast.show { opacity:1; transform:translateY(0); }
         .preview { position:fixed; inset:0; z-index:65; background:rgba(15,23,42,.45); display:none; align-items:center; justify-content:center; padding:32px; }
         .preview.open { display:flex; }
-        .preview-shell { position:relative; max-width:min(1200px, 94vw); max-height:88vh; background:var(--panel); border-radius:22px; box-shadow:0 28px 90px rgba(15,23,42,.24); overflow:hidden; }
-        .preview-media { max-width:100%; max-height:78vh; display:block; background:var(--soft); }
+        .preview-shell { position:relative; width:min(1280px, 94vw); max-height:88vh; background:var(--panel); border-radius:22px; box-shadow:0 28px 90px rgba(15,23,42,.24); overflow:hidden; display:grid; grid-template-columns:minmax(0, 1fr) minmax(320px, 380px); }
+        .preview-media-wrap { min-width:0; display:flex; align-items:center; justify-content:center; background:var(--soft); }
+        .preview-media { max-width:100%; max-height:88vh; display:block; background:var(--soft); }
+        .preview-detail { min-width:0; padding:18px; overflow:auto; max-height:88vh; border-left:1px solid var(--line); }
+        .preview-detail h3 { margin:0 0 10px; font-size:16px; }
+        .detail-grid { display:grid; grid-template-columns:86px minmax(0, 1fr); gap:9px 12px; font-size:12px; line-height:1.45; }
+        .detail-grid dt { color:var(--muted); font-weight:950; }
+        .detail-grid dd { margin:0; min-width:0; color:var(--text); font-weight:800; word-break:break-word; white-space:pre-wrap; }
+        .param-box { margin-top:12px; border:1px solid var(--line); border-radius:12px; padding:10px; background:var(--bg); color:var(--muted); font-size:11.5px; line-height:1.5; max-height:180px; overflow:auto; white-space:pre-wrap; word-break:break-word; }
         .preview-actions { position:absolute; right:16px; bottom:16px; display:flex; gap:10px; }
         .preview-close { position:absolute; right:16px; top:16px; }
         @media (max-width:1000px) {
@@ -125,6 +132,9 @@
             .toolbar { grid-template-columns:1fr; }
             .layout { grid-template-columns:1fr; }
             .side { position:static; }
+            .preview-shell { grid-template-columns:1fr; overflow:auto; }
+            .preview-detail { border-left:0; border-top:1px solid var(--line); max-height:none; padding-bottom:76px; }
+            .preview-media { max-height:52vh; }
         }
     </style>
 </head>
@@ -228,6 +238,7 @@
         <button type="button" data-action="download"><i data-lucide="download" size="15"></i><span>下载</span></button>
         <button type="button" data-action="favorite"><i data-lucide="star" size="15"></i><span>收藏</span></button>
         <button type="button" data-action="prompt"><i data-lucide="send" size="15"></i><span>提示词到文生图</span></button>
+        <button type="button" data-action="reuse"><i data-lucide="repeat-2" size="15"></i><span>复用参数生成</span></button>
         <button class="danger" type="button" data-action="delete"><i data-lucide="trash-2" size="15"></i><span>删除素材</span></button>
     </div>
 
@@ -235,7 +246,9 @@
         <div class="preview-shell" onclick="event.stopPropagation()">
             <button class="btn icon-btn preview-close" type="button" onclick="closePreview()" title="关闭"><i data-lucide="x" size="18"></i></button>
             <div id="previewMedia"></div>
+            <div id="previewDetail" class="preview-detail"></div>
             <div class="preview-actions">
+                <button class="btn" id="previewReuseBtn" type="button"><i data-lucide="repeat-2" size="16"></i><span>复用参数</span></button>
                 <button class="btn" id="previewCanvasBtn" type="button"><i data-lucide="send-to-back" size="16"></i><span>加入画布</span></button>
                 <button class="btn primary" id="previewDownloadBtn" type="button"><i data-lucide="download" size="16"></i><span>下载</span></button>
             </div>
@@ -284,6 +297,43 @@
             if(asset.cloud_synced_at) return '<span class="badge cloud-ok">已同步</span>';
             return '<span class="badge">未同步</span>';
         }
+        function generationFor(asset){
+            return asset?.generation || asset?.metadata || {};
+        }
+        function prettyJson(value){
+            if(!value) return '';
+            try { return JSON.stringify(value, null, 2); } catch(e) { return String(value); }
+        }
+        function formatFullTime(value){
+            const n = Number(value || 0);
+            if(!n) return '-';
+            const ms = n > 100000000000 ? n : n * 1000;
+            const d = new Date(ms);
+            return Number.isNaN(d.getTime()) ? '-' : d.toLocaleString();
+        }
+        function renderGenerationDetail(asset){
+            const gen = generationFor(asset);
+            const params = gen.params || asset.metadata?.params || {};
+            const extra = {};
+            if(params && Object.keys(params).length) extra.params = params;
+            if(gen.workflow_json) extra.workflow_json = gen.workflow_json;
+            if(gen.raw_usage) extra.raw_usage = gen.raw_usage;
+            const rows = [
+                ['提示词', asset.prompt || gen.prompt || '-'],
+                ['模型', asset.model || gen.model || '-'],
+                ['来源', asset.source_type || gen.source_type || '-'],
+                ['尺寸', dimsFor(asset)],
+                ['Seed', gen.seed || '-'],
+                ['Provider', gen.provider_name || gen.provider_id || '-'],
+                ['任务 ID', gen.task_id || gen.prompt_id || gen.request_id || '-'],
+                ['生成时间', formatFullTime(asset.created_at || gen.created_at)]
+            ];
+            return `
+                <h3>生成参数</h3>
+                <dl class="detail-grid">${rows.map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+                <div class="param-box">${esc(prettyJson(extra) || '没有额外参数')}</div>
+            `;
+        }
 
         async function loadAssets(){
             const params = new URLSearchParams({ limit:'160' });
@@ -329,6 +379,7 @@
                             <button class="fav" data-action="favorite" type="button" title="收藏">${asset.favorite ? '<i data-lucide="star" size="16" fill="currentColor"></i>' : '<i data-lucide="star" size="16"></i>'}</button>
                             <div class="asset-quick">
                                 <button class="quick-btn" data-action="canvas" type="button" title="加入无限画布"><i data-lucide="send-to-back" size="15"></i></button>
+                                <button class="quick-btn" data-action="reuse" type="button" title="复用参数生成"><i data-lucide="repeat-2" size="15"></i></button>
                                 <button class="quick-btn" data-action="preview" type="button" title="打开预览"><i data-lucide="scan-eye" size="15"></i></button>
                                 <button class="quick-btn" data-action="download" type="button" title="下载"><i data-lucide="download" size="15"></i></button>
                             </div>
@@ -479,6 +530,25 @@
             showToast('已发送到文生图');
         }
 
+        function reuseAssetGeneration(asset){
+            if(!asset?.prompt) return showToast('这个素材没有可复用的提示词');
+            const gen = generationFor(asset);
+            window.parent?.postMessage({
+                type:'asset-reuse-generate',
+                prompt: asset.prompt || gen.prompt || '',
+                model: asset.model || gen.model || '',
+                width: asset.width || gen.width || 0,
+                height: asset.height || gen.height || 0,
+                source_type: asset.source_type || gen.source_type || '',
+                params: gen.params || {},
+                workflow_json: gen.workflow_json || '',
+                provider_id: gen.provider_id || '',
+                provider_name: gen.provider_name || '',
+                seed: gen.seed || ''
+            }, '*');
+            showToast('已复用参数到生成页');
+        }
+
         function sendAssetToCanvas(asset){
             if(!asset) return;
             window.parent?.postMessage({
@@ -504,14 +574,16 @@
             state.previewAsset = asset;
             const media = $('previewMedia');
             media.innerHTML = asset.type === 'video'
-                ? `<video class="preview-media" src="${esc(asset.local_url)}" controls autoplay playsinline></video>`
-                : `<img class="preview-media" src="${esc(asset.local_url)}" alt="">`;
+                ? `<div class="preview-media-wrap"><video class="preview-media" src="${esc(asset.local_url)}" controls autoplay playsinline></video></div>`
+                : `<div class="preview-media-wrap"><img class="preview-media" src="${esc(asset.local_url)}" alt=""></div>`;
+            $('previewDetail').innerHTML = renderGenerationDetail(asset);
             $('preview').classList.add('open');
             lucide.createIcons();
         }
         function closePreview(){
             $('preview').classList.remove('open');
             $('previewMedia').innerHTML = '';
+            $('previewDetail').innerHTML = '';
             state.previewAsset = null;
         }
         async function handleAssetAction(action, asset){
@@ -522,6 +594,7 @@
             if(action === 'download') await downloadAsset(asset).catch(err => showToast(err.message));
             if(action === 'favorite') await toggleFavorite(asset).catch(err => showToast(err.message));
             if(action === 'prompt') sendPromptToTextImage(asset?.prompt || '');
+            if(action === 'reuse') reuseAssetGeneration(asset);
             if(action === 'delete') await deleteAsset(asset).catch(err => showToast(err.message));
         }
 
@@ -744,6 +817,7 @@
         });
         $('previewDownloadBtn').addEventListener('click', () => downloadAsset(state.previewAsset).catch(err => showToast(err.message)));
         $('previewCanvasBtn').addEventListener('click', () => sendAssetToCanvas(state.previewAsset));
+        $('previewReuseBtn').addEventListener('click', () => reuseAssetGeneration(state.previewAsset));
         document.addEventListener('click', closeContext);
         window.addEventListener('keydown', event => { if(event.key === 'Escape') closePreview(); });
         window.addEventListener('message', event => {

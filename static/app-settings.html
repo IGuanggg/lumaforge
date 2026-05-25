@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -17,9 +17,9 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260525-desktop-actions1"></script>
-    <script src="/static/i18n.js?v=20260525-desktop-actions1"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260525-desktop-actions1">
+    <script src="/static/theme.js?v=20260526-asset-reliability1"></script>
+    <script src="/static/i18n.js?v=20260526-asset-reliability1"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260526-asset-reliability1">
     <style>
         :root {
             --bg:#f7f8fa;
@@ -374,6 +374,31 @@
                             </button>
                         </div>
                         <div class="update-result" id="cleanup-result"></div>
+                        <div class="path-actions">
+                            <button class="action-btn" id="check-assets-health-btn" type="button">
+                                <i data-lucide="file-search" class="w-4 h-4"></i><span>检查素材缺失</span>
+                            </button>
+                            <button class="action-btn" id="rebuild-thumbs-btn" type="button">
+                                <i data-lucide="image-plus" class="w-4 h-4"></i><span>重建缩略图</span>
+                            </button>
+                        </div>
+                        <div class="update-result" id="asset-health-result"></div>
+                        <label class="setting-field">
+                            <span class="setting-label">轻量备份</span>
+                            <select id="backup-select" class="setting-input"></select>
+                        </label>
+                        <div class="path-actions">
+                            <button class="action-btn primary" id="create-backup-btn" type="button">
+                                <i data-lucide="archive" class="w-4 h-4"></i><span>创建备份</span>
+                            </button>
+                            <button class="action-btn" id="refresh-backups-btn" type="button">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i><span>刷新备份</span>
+                            </button>
+                            <button class="action-btn danger" id="restore-backup-btn" type="button">
+                                <i data-lucide="history" class="w-4 h-4"></i><span>恢复备份</span>
+                            </button>
+                        </div>
+                        <div class="update-result" id="backup-result"></div>
                         <div class="status" id="local-data-status">正在读取本地数据...</div>
                     </section>
                 </div>
@@ -427,6 +452,7 @@
                             </div>
                             <div class="update-failure" id="update-failure"></div>
                         </div>
+                        <div class="pending-box" id="update-post-state"></div>
                         <div class="path-actions" id="update-actions" style="display:none">
                             <button class="action-btn primary" id="download-update-btn" type="button" style="display:none">
                                 <i data-lucide="download" class="w-4 h-4"></i><span>下载更新</span>
@@ -439,6 +465,20 @@
                             </button>
                         </div>
                         <div class="status" id="update-status">等待检查。</div>
+                    </section>
+
+                    <section class="block">
+                        <div class="block-head">
+                            <div>
+                                <div class="block-title">启动诊断</div>
+                                <div class="block-desc">检查前端依赖、本地数据、素材文件、缩略图、更新能力和桌面动作是否处于可用状态。</div>
+                            </div>
+                            <button class="action-btn primary" id="run-diagnostics-btn" type="button">
+                                <i data-lucide="stethoscope" class="w-4 h-4"></i><span>运行诊断</span>
+                            </button>
+                        </div>
+                        <div class="update-result" id="diagnostics-result"></div>
+                        <div class="status" id="diagnostics-status">等待诊断。</div>
                     </section>
 
                     <section class="block">
@@ -575,6 +615,25 @@
             return 0;
         }
 
+        function renderUpdatePostState(state) {
+            const box = document.getElementById('update-post-state');
+            if(!box) return;
+            const phase = state?.phase || '';
+            const target = state?.target_version || state?.version || '';
+            const backup = state?.backup_dir || '';
+            const installedAt = state?.installed_at ? formatTime(state.installed_at) : '';
+            let text = '';
+            if(phase === 'done') {
+                text = `更新已完成${target ? `：${target}` : ''}${installedAt ? ` · ${installedAt}` : ''}${backup ? ` · 旧版本备份：${backup}` : ''}`;
+            } else if(phase === 'downloaded') {
+                text = `更新包已下载${target ? `：${target}` : ''}，可以继续安装。`;
+            } else if(phase === 'failed' || phase === 'rollback') {
+                text = `上次更新未完成：${state?.error || '未知错误'}${backup ? ` · 可检查备份：${backup}` : ''}`;
+            }
+            box.textContent = text;
+            box.classList.toggle('show', !!text);
+        }
+
         function renderUpdateState(payload) {
             const state = payload?.state || payload || {};
             const phase = state.phase || '';
@@ -582,6 +641,7 @@
             if(!card) return;
             if(!phase && !state.target_version && !state.filename) {
                 card.classList.remove('show');
+                renderUpdatePostState(state);
                 return;
             }
             card.classList.add('show');
@@ -612,6 +672,7 @@
                     ? `错误：${state.error || '-'}${state.backup_dir ? `。备份目录：${state.backup_dir}` : ''}${state.rollback_error ? `。回滚错误：${state.rollback_error}` : ''}`
                     : '';
             }
+            renderUpdatePostState(state);
             if(phase === 'failed' || phase === 'rollback') {
                 setStatus('update-status', phase === 'rollback' ? '更新失败，正在尝试回滚。' : (state.error || '更新失败。'), 'error');
             }
@@ -746,6 +807,130 @@
                 setStatus('local-data-status', data.failed_count ? `清理完成，但 ${data.failed_count} 个文件失败。` : '清理完成。', data.failed_count ? 'warn' : 'ok');
             } catch(e) {
                 setStatus('local-data-status', e.message || String(e), 'error');
+            } finally {
+                if(btn) btn.disabled = false;
+            }
+        }
+
+        function renderAssetHealth(data) {
+            const box = document.getElementById('asset-health-result');
+            if(!box) return;
+            const missing = data?.missing || [];
+            const thumbs = data?.thumb_missing || [];
+            box.classList.add('show');
+            box.innerHTML = `
+                <div class="update-result-title">素材检查：${Number(data?.checked || 0)} 项</div>
+                <div class="update-result-meta">丢失文件 ${Number(data?.missing_count || 0)} 个；待重建缩略图 ${Number(data?.thumb_missing_count || 0)} 个。</div>
+                ${missing.length ? `<div class="update-result-notes">丢失示例：${missing.map(item => escapeHtml(item.title || item.local_path || item.id)).join('、')}</div>` : '<div class="update-result-notes">没有发现丢失的本地素材文件。</div>'}
+                ${thumbs.length ? `<div class="update-result-notes">缩略图待处理：${thumbs.map(item => escapeHtml(item.title || item.id)).join('、')}</div>` : ''}
+            `;
+        }
+
+        async function checkAssetHealth() {
+            setStatus('local-data-status', '正在检查素材库文件...');
+            try {
+                const data = await fetch('/api/assets/health').then(jsonOrThrow);
+                renderAssetHealth(data);
+                setStatus('local-data-status', data.missing_count ? `发现 ${data.missing_count} 个素材文件缺失。` : '素材库文件检查完成。', data.missing_count ? 'warn' : 'ok');
+            } catch(e) {
+                setStatus('local-data-status', e.message || String(e), 'error');
+            }
+        }
+
+        async function rebuildThumbnails() {
+            const btn = document.getElementById('rebuild-thumbs-btn');
+            if(btn) btn.disabled = true;
+            setStatus('local-data-status', '正在重建缺失缩略图...');
+            try {
+                const data = await fetch('/api/assets/rebuild-thumbnails', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({mode:'missing'})
+                }).then(jsonOrThrow);
+                await checkAssetHealth();
+                setStatus('local-data-status', `缩略图重建完成：${Number(data.rebuilt || 0)} 个，跳过 ${Number(data.skipped || 0)} 个。`, data.failed_count ? 'warn' : 'ok');
+            } catch(e) {
+                setStatus('local-data-status', e.message || String(e), 'error');
+            } finally {
+                if(btn) btn.disabled = false;
+            }
+        }
+
+        function renderBackups(data) {
+            const select = document.getElementById('backup-select');
+            const box = document.getElementById('backup-result');
+            if(!select) return;
+            const items = data?.items || [];
+            select.innerHTML = items.length
+                ? items.map(item => `<option value="${escapeHtml(item.filename)}">${escapeHtml(item.filename)} · ${formatBytes(item.size_bytes || 0)}</option>`).join('')
+                : '<option value="">暂无备份</option>';
+            if(box) {
+                box.classList.add('show');
+                box.innerHTML = `
+                    <div class="update-result-title">本地轻量备份</div>
+                    <div class="update-result-meta">备份目录：${escapeHtml(data?.backup_dir || '')}</div>
+                    <div class="update-result-notes">包含配置、历史、素材数据库、画布和对话索引；不包含素材原图，适合升级前快速兜底。</div>
+                `;
+            }
+        }
+
+        async function loadBackups() {
+            const data = await fetch('/api/app/backups').then(jsonOrThrow);
+            renderBackups(data);
+            return data;
+        }
+
+        async function createBackup() {
+            setStatus('local-data-status', '正在创建轻量备份...');
+            try {
+                const data = await fetch('/api/app/backup-create', { method:'POST' }).then(jsonOrThrow);
+                renderBackups(data);
+                setStatus('local-data-status', `备份已创建：${data.filename}`, 'ok');
+            } catch(e) {
+                setStatus('local-data-status', e.message || String(e), 'error');
+            }
+        }
+
+        async function restoreBackup() {
+            const filename = document.getElementById('backup-select')?.value || '';
+            if(!filename) return setStatus('local-data-status', '请先选择一个备份。', 'warn');
+            if(!confirm(`恢复 ${filename} 会覆盖当前配置、历史、素材数据库和画布索引。确定继续吗？`)) return;
+            setStatus('local-data-status', '正在恢复轻量备份...');
+            try {
+                const data = await fetch('/api/app/backup-restore', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({filename, confirm:true})
+                }).then(jsonOrThrow);
+                await loadInfo();
+                await loadBackups();
+                setStatus('local-data-status', `备份已恢复：${Number(data.restored_count || 0)} 项。建议重启应用。`, 'ok');
+            } catch(e) {
+                setStatus('local-data-status', e.message || String(e), 'error');
+            }
+        }
+
+        function renderDiagnostics(data) {
+            const box = document.getElementById('diagnostics-result');
+            if(!box) return;
+            const checks = data?.checks || [];
+            box.classList.add('show');
+            box.innerHTML = `
+                <div class="update-result-title">诊断结果：${data?.ok ? '通过' : '需要处理'}</div>
+                ${checks.map(item => `<div class="update-result-meta">${item.ok ? 'OK' : 'WARN'} · ${escapeHtml(item.label)}：${escapeHtml(item.detail || '')}</div>`).join('')}
+            `;
+        }
+
+        async function runDiagnostics() {
+            const btn = document.getElementById('run-diagnostics-btn');
+            if(btn) btn.disabled = true;
+            setStatus('diagnostics-status', '正在运行诊断...');
+            try {
+                const data = await fetch('/api/app/diagnostics').then(jsonOrThrow);
+                renderDiagnostics(data);
+                setStatus('diagnostics-status', data.ok ? '诊断完成，核心项目正常。' : '诊断完成，有项目需要处理。', data.ok ? 'ok' : 'warn');
+            } catch(e) {
+                setStatus('diagnostics-status', e.message || String(e), 'error');
             } finally {
                 if(btn) btn.disabled = false;
             }
@@ -1136,9 +1321,17 @@
         document.getElementById('refresh-local-data-btn')?.addEventListener('click', loadLocalDataHealth);
         document.getElementById('preview-cleanup-btn')?.addEventListener('click', previewCleanup);
         document.getElementById('run-cleanup-btn')?.addEventListener('click', runCleanup);
+        document.getElementById('check-assets-health-btn')?.addEventListener('click', checkAssetHealth);
+        document.getElementById('rebuild-thumbs-btn')?.addEventListener('click', rebuildThumbnails);
+        document.getElementById('create-backup-btn')?.addEventListener('click', createBackup);
+        document.getElementById('refresh-backups-btn')?.addEventListener('click', () => loadBackups().catch(e => setStatus('local-data-status', e.message || String(e), 'error')));
+        document.getElementById('restore-backup-btn')?.addEventListener('click', restoreBackup);
+        document.getElementById('run-diagnostics-btn')?.addEventListener('click', runDiagnostics);
         window.addEventListener('DOMContentLoaded', () => {
             loadInfo();
             loadLocalDataHealth();
+            loadBackups().catch(() => {});
+            checkAssetHealth().catch(() => {});
             refreshUpdateState();
             if(window.lucide) lucide.createIcons();
         });

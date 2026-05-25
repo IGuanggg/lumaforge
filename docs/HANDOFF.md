@@ -1,6 +1,6 @@
 # LumaForge Project Handoff
 
-Last updated: 2026-05-25
+Last updated: 2026-05-26
 
 ## Project Identity
 
@@ -17,8 +17,8 @@ Last updated: 2026-05-25
 
 ## Current State
 
-- Current local app version in code: 2.0.6
-- Current build id: 20260525-desktop-updater1
+- Current local app version in code: 2.0.9
+- Current build id: 20260526-asset-reliability1
 - Main local URL: http://localhost:3010/
 - Main app file: main.py
 - Desktop launcher: desktop_launcher.py
@@ -114,22 +114,22 @@ The update process must replace program files only. It must not overwrite user d
 
 ## Current User Request / Next Target
 
-Next planned version: 2.0.7
+Current planned version: 2.0.9
 
 Goal:
 
-Automatic update experience polish plus installer and code-signing preparation.
+Version hardening around asset reuse, local recovery, diagnostics, and update status clarity.
 
 The user specifically asked for:
 
-- Update progress bar
-- Better update phases
-- Failure rollback prompt
-- Update changelog / Release Notes popup
-- Installer
-- Code signing preparation
-
-Do not treat certificate signing as solved unless a real certificate is provided. Prepare scripts and environment variables only.
+- Material detail page displays generation parameters.
+- Reuse parameters to regenerate.
+- Local lightweight backup/restore.
+- Post-update status prompt.
+- Startup diagnostics page.
+- Asset library missing-file check.
+- Thumbnail rebuild.
+- Final interface/UI/API check and hardening.
 
 ## v2.0.7 Recommended Scope
 
@@ -362,4 +362,3 @@ Then verify:
 - Do not move data directories again unless explicitly planned.
 - Do not promise SmartScreen is solved without a real code-signing certificate.
 - Do not claim EXE auto-update works until a release zip containing `LumaForgeUpdater.exe` is tested.
-

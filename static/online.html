@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -18,10 +18,10 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260525-updater-installer1"></script>
-    <script src="/static/i18n.js?v=20260525-updater-installer1"></script>
-    <script src="/static/image-preview.js?v=20260525-updater-installer1"></script>
-    <script src="/static/history-bulk-manager.js?v=20260525-updater-installer1"></script>
+    <script src="/static/theme.js?v=20260526-asset-reliability1"></script>
+    <script src="/static/i18n.js?v=20260526-asset-reliability1"></script>
+    <script src="/static/image-preview.js?v=20260526-asset-reliability1"></script>
+    <script src="/static/history-bulk-manager.js?v=20260526-asset-reliability1"></script>
     <style>
 :root { --accent:#111827; --bg:#f9fafb; --card:#fff; --easing:cubic-bezier(0.4,0,0.2,1); }
         body { background:var(--bg); font-family:'Inter',-apple-system,sans-serif; color:var(--accent); -webkit-font-smoothing:antialiased; }
@@ -62,7 +62,7 @@
         .lightbox-close-btn:hover { transform:translateY(-1px); background:#000; }
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
     </style>
-    <link rel="stylesheet" href="/static/theme.css?v=20260525-updater-installer1">
+    <link rel="stylesheet" href="/static/theme.css?v=20260526-asset-reliability1">
     <style>
         html:not(.studio-theme-dark) body:not(.studio-theme-dark) #lightbox.gallery-lightbox {
             background: rgba(255,255,255,.99) !important;
@@ -234,6 +234,9 @@
                     window.scrollTo({top:0, behavior:'smooth'});
                 }
             }
+            if(event.data?.type === 'asset-reuse-generate') {
+                applyAssetReuse(event.data);
+            }
         });
         window.addEventListener('studio-lang-change', () => {
             document.title = tr('online.title');
@@ -336,6 +339,26 @@
         }
         function setModel(next){
             selectedModel = next;
+        }
+        function applyAssetReuse(data){
+            const input = document.getElementById('promptInput');
+            if(input) input.value = data.prompt || '';
+            if(data.provider_id && imageProviders().some(p => p.id === data.provider_id)) {
+                provider = data.provider_id;
+            }
+            if(data.model) selectedModel = data.model;
+            const w = Number(data.width || data.params?.width || 0);
+            const h = Number(data.height || data.params?.height || 0);
+            if(w > 0 && h > 0) {
+                resolution = 'custom';
+                ratio = '';
+                customWidth = Math.round(w);
+                customHeight = Math.round(h);
+            }
+            renderProviderControls();
+            updateSizeUI();
+            input?.focus();
+            window.scrollTo({top:0, behavior:'smooth'});
         }
         function escapeHtml(str){ return String(str || '').replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s])); }
 

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 
 <head>
@@ -19,10 +19,10 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260525-updater-installer1"></script>
-    <script src="/static/i18n.js?v=20260525-updater-installer1"></script>
-    <script src="/static/image-preview.js?v=20260525-updater-installer1"></script>
-    <script src="/static/history-bulk-manager.js?v=20260525-updater-installer1"></script>
+    <script src="/static/theme.js?v=20260526-asset-reliability1"></script>
+    <script src="/static/i18n.js?v=20260526-asset-reliability1"></script>
+    <script src="/static/image-preview.js?v=20260526-asset-reliability1"></script>
+    <script src="/static/history-bulk-manager.js?v=20260526-asset-reliability1"></script>
     <style>
         :root {
             --bg-base: #f8f8f8;
@@ -175,7 +175,7 @@
             display: none;
         }
     </style>
-    <link rel="stylesheet" href="/static/theme.css?v=20260525-updater-installer1">
+    <link rel="stylesheet" href="/static/theme.css?v=20260526-asset-reliability1">
 </head>
 
 <body class="antialiased">
@@ -305,6 +305,20 @@
                     input.focus();
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 }
+            }
+            if(event.data?.type === 'asset-reuse-generate') {
+                const input = document.getElementById('prompt');
+                if(input) input.value = event.data.prompt || '';
+                const width = Number(event.data.width || event.data.params?.width || 0);
+                const height = Number(event.data.height || event.data.params?.height || 0);
+                if(width > 0 && height > 0) {
+                    const widthInput = document.getElementById('width');
+                    const heightInput = document.getElementById('height');
+                    if(widthInput) widthInput.value = Math.round(width);
+                    if(heightInput) heightInput.value = Math.round(height);
+                }
+                input?.focus();
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             }
         });
         window.addEventListener('studio-lang-change', () => { document.title = tr('nav.textToImage'); });

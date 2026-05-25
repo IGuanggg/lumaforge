@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -17,8 +17,8 @@
         })();
     </script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260525-updater-installer1"></script>
-    <script src="/static/i18n.js?v=20260525-updater-installer1"></script>
+    <script src="/static/theme.js?v=20260526-asset-reliability1"></script>
+    <script src="/static/i18n.js?v=20260526-asset-reliability1"></script>
     <style>
 :root {
             --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.9); --card:#fff;
@@ -1046,7 +1046,7 @@
         }
         function backToCanvasList(){
             savePromptDraftForCurrent();
-            const target = `/static/canvas.html?v=20260525-updater-installer1`;
+            const target = `/static/canvas.html?v=20260526-asset-reliability1`;
             try {
                 if(window.parent && window.parent !== window){
                     window.parent.localStorage?.setItem('studio_active_page', 'canvas');
@@ -2632,7 +2632,7 @@
             try { localStorage.setItem(SMART_CANVAS_ID_KEY, id); } catch(e) {}
             const url = new URL(window.location.href);
             url.searchParams.set('id', id);
-            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260525-desktop-updater1');
+            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260526-asset-reliability1');
             history.replaceState(null, '', url.toString());
         }
         async function ensureSmartCanvasId(){
