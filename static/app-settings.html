@@ -17,9 +17,9 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260525-updater-installer1"></script>
-    <script src="/static/i18n.js?v=20260525-updater-installer1"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260525-updater-installer1">
+    <script src="/static/theme.js?v=20260525-desktop-actions1"></script>
+    <script src="/static/i18n.js?v=20260525-desktop-actions1"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260525-desktop-actions1">
     <style>
         :root {
             --bg:#f7f8fa;
@@ -445,14 +445,18 @@
                         <div class="block-head">
                             <div>
                                 <div class="block-title">桌面端动作</div>
-                                <div class="block-desc">这些动作留给 EXE 容器接入。浏览器端暂不直接退出或重启系统进程。</div>
+                                <div class="block-desc" id="desktop-action-desc">桌面 EXE 可直接重启或退出；浏览器/源码模式会作用于当前本地服务进程。</div>
                             </div>
                         </div>
                         <div class="path-actions">
-                            <button class="action-btn" type="button" disabled><i data-lucide="rotate-cw" class="w-4 h-4"></i><span>重启应用</span></button>
-                            <button class="action-btn danger" type="button" disabled><i data-lucide="power" class="w-4 h-4"></i><span>退出应用</span></button>
+                            <button class="action-btn" id="desktop-restart-btn" type="button">
+                                <i data-lucide="rotate-cw" class="w-4 h-4"></i><span>重启应用</span>
+                            </button>
+                            <button class="action-btn danger" id="desktop-exit-btn" type="button">
+                                <i data-lucide="power" class="w-4 h-4"></i><span>退出应用</span>
+                            </button>
                         </div>
-                        <div class="status">浏览器版先通过终端或启动脚本重启；EXE 阶段再接入原生窗口命令。</div>
+                        <div class="status" id="desktop-action-status">正在读取动作能力...</div>
                     </section>
                 </aside>
             </section>
@@ -753,6 +757,7 @@
             document.getElementById('version-pill').textContent = `Version ${appInfo.version || '-'}`;
             document.getElementById('version-text').textContent = appInfo.version || '-';
             document.getElementById('mode-text').textContent = appInfo.desktop ? '桌面端' : '浏览器端';
+            renderAppActions(appInfo);
             const capability = appInfo.update_capability || {};
             const capText = document.getElementById('update-capability-text');
             if(capText) {
@@ -858,6 +863,68 @@
                 box.textContent = '目录已写入本地配置。后续桌面端启动会沿用该路径。';
             }
             box.classList.add('show');
+        }
+
+        function renderAppActions(info) {
+            const actions = info?.app_actions || {};
+            const restartBtn = document.getElementById('desktop-restart-btn');
+            const exitBtn = document.getElementById('desktop-exit-btn');
+            const desc = document.getElementById('desktop-action-desc');
+            if(restartBtn) restartBtn.disabled = !actions.restart_supported;
+            if(exitBtn) exitBtn.disabled = !actions.exit_supported;
+            if(desc) {
+                desc.textContent = info?.desktop
+                    ? '桌面 EXE 会通过本地服务执行重启和退出，升级后可直接在这里收口应用生命周期。'
+                    : '当前是浏览器/源码模式；重启和退出会作用于本地 FastAPI 服务进程。';
+            }
+            const modeText = actions.restart_mode === 'desktop-relaunch'
+                ? '桌面重启'
+                : actions.restart_mode === 'source-execv'
+                    ? '源码服务重启'
+                    : '待接入';
+            setStatus(
+                'desktop-action-status',
+                actions.restart_supported
+                    ? `动作能力已就绪：${modeText}，退出当前进程。`
+                    : (actions.reason || '当前环境暂不支持自动重启。'),
+                actions.restart_supported ? 'ok' : 'warn'
+            );
+        }
+
+        async function requestAppRestart(statusId = 'desktop-action-status', btn = null) {
+            const desktop = !!appInfo?.desktop;
+            const message = desktop
+                ? '应用会关闭并自动重新打开，当前未保存的页面状态可能丢失。确定重启吗？'
+                : '本地服务会重启，页面会短暂断开连接。确定重启吗？';
+            if(!confirm(message)) return;
+            if(btn) btn.disabled = true;
+            setStatus(statusId, '正在重启应用...');
+            try {
+                const data = await fetch('/api/app/restart', { method:'POST' }).then(jsonOrThrow);
+                setStatus(statusId, data.message || '应用正在重启，请稍后刷新页面。', 'ok');
+                setTimeout(() => { try { location.reload(); } catch(e) {} }, desktop ? 7000 : 5000);
+            } catch(e) {
+                setStatus(statusId, e.message || String(e), 'error');
+                if(btn) btn.disabled = false;
+            }
+        }
+
+        async function requestAppExit() {
+            const desktop = !!appInfo?.desktop;
+            const message = desktop
+                ? '应用窗口和本地服务都会退出。确定退出 LumaForge 吗？'
+                : '这会停止当前本地服务，浏览器页面之后将无法继续连接。确定退出吗？';
+            if(!confirm(message)) return;
+            const btn = document.getElementById('desktop-exit-btn');
+            if(btn) btn.disabled = true;
+            setStatus('desktop-action-status', '正在退出应用...');
+            try {
+                const data = await fetch('/api/app/exit', { method:'POST' }).then(jsonOrThrow);
+                setStatus('desktop-action-status', data.message || '应用正在退出。', 'ok');
+            } catch(e) {
+                setStatus('desktop-action-status', e.message || String(e), 'error');
+                if(btn) btn.disabled = false;
+            }
         }
 
         function renderUpdateResult(data) {
@@ -974,21 +1041,7 @@
 
         async function restartApp() {
             const restartBtn = document.getElementById('restart-app-btn');
-            if(restartBtn) restartBtn.disabled = true;
-            setStatus('update-status', '正在重启...');
-            try {
-                const data = await fetch('/api/app/restart', { method:'POST' }).then(jsonOrThrow);
-                if(data.restarting) {
-                    setStatus('update-status', '服务正在重启，请稍后刷新页面...', 'ok');
-                    setTimeout(() => { try { location.reload(); } catch(e) {} }, 5000);
-                } else {
-                    setStatus('update-status', data.message || '需要手动重启。', 'warn');
-                }
-            } catch(e) {
-                setStatus('update-status', e.message || String(e), 'error');
-            } finally {
-                if(restartBtn) restartBtn.disabled = false;
-            }
+            await requestAppRestart('update-status', restartBtn);
         }
 
         async function autoUpdate() {
@@ -1074,6 +1127,8 @@
         document.getElementById('download-update-btn').addEventListener('click', downloadUpdate);
         document.getElementById('install-update-btn').addEventListener('click', installUpdate);
         document.getElementById('restart-app-btn').addEventListener('click', restartApp);
+        document.getElementById('desktop-restart-btn')?.addEventListener('click', event => requestAppRestart('desktop-action-status', event.currentTarget));
+        document.getElementById('desktop-exit-btn')?.addEventListener('click', requestAppExit);
         document.getElementById('close-release-notes-btn')?.addEventListener('click', closeReleaseNotes);
         document.getElementById('release-notes-modal')?.addEventListener('click', event => {
             if(event.target?.id === 'release-notes-modal') closeReleaseNotes();

@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.7")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260525-updater-installer1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.8")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260525-desktop-actions1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -3279,6 +3279,44 @@ def desktop_update_capability():
         "reason": "桌面版需要随安装包一起发布 LumaForgeUpdater.exe，才能自动替换正在运行的程序。",
     }
 
+def is_desktop_runtime():
+    return bool(
+        getattr(sys, "frozen", False)
+        or os.getenv("LUMAFORGE_DESKTOP") == "1"
+        or os.getenv("INFINITE_CANVAS_DESKTOP") == "1"
+    )
+
+def app_action_capability():
+    is_frozen = getattr(sys, "frozen", False)
+    restart_supported = bool(is_frozen or os.path.isfile(os.path.join(BASE_DIR, "main.py")))
+    return {
+        "restart_supported": restart_supported,
+        "exit_supported": True,
+        "restart_mode": "desktop-relaunch" if is_frozen else "source-execv",
+        "exit_mode": "process-exit",
+        "desktop": is_desktop_runtime(),
+        "reason": "" if restart_supported else "未找到 main.py，当前源码模式无法自动重启。",
+    }
+
+def spawn_delayed_relaunch(exe_path: str):
+    exe_path = os.path.abspath(exe_path or "")
+    if not exe_path or not os.path.isfile(exe_path):
+        raise RuntimeError("重启目标不存在")
+    if sys.platform.startswith("win"):
+        command = f'ping 127.0.0.1 -n 3 > nul & start "" "{exe_path}"'
+        subprocess.Popen(
+            ["cmd.exe", "/c", command],
+            cwd=os.path.dirname(exe_path),
+            close_fds=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    else:
+        subprocess.Popen(
+            ["sh", "-c", f'sleep 1; exec "{exe_path}"'],
+            cwd=os.path.dirname(exe_path),
+            close_fds=True,
+        )
+
 def version_tuple(value: str):
     parts = []
     for piece in re.split(r"[^0-9]+", value or ""):
@@ -3425,8 +3463,9 @@ async def app_info():
         "repository": APP_REPOSITORY_NAME,
         "version": APP_VERSION,
         "build_id": APP_BUILD_ID,
-        "desktop": os.getenv("LUMAFORGE_DESKTOP") == "1" or os.getenv("INFINITE_CANVAS_DESKTOP") == "1",
+        "desktop": is_desktop_runtime(),
         "update_capability": desktop_update_capability(),
+        "app_actions": app_action_capability(),
         "cloud_url": CLOUD_SYNC_BASE_URL,
         "update_check_configured": bool(APP_UPDATE_CHECK_URL),
         "update_check_url": APP_UPDATE_CHECK_URL,
@@ -4084,17 +4123,39 @@ async def app_update_auto():
 @app.post("/api/app/restart")
 async def app_restart():
     is_frozen = getattr(sys, "frozen", False)
-    if is_frozen:
-        return {"ok": False, "restart_required": True, "message": "EXE 环境不支持自动重启，请手动关闭并重新打开。"}
-    # Schedule restart after response is sent
     async def _delayed_restart():
-        await asyncio.sleep(1)
-        python_exe = sys.executable
-        script = os.path.join(BASE_DIR, "main.py")
-        if os.path.isfile(script):
-            os.execv(python_exe, [python_exe, script])
+        await asyncio.sleep(0.8)
+        if is_frozen:
+            try:
+                spawn_delayed_relaunch(sys.executable)
+            finally:
+                os._exit(0)
+        else:
+            python_exe = sys.executable
+            script = os.path.join(BASE_DIR, "main.py")
+            if os.path.isfile(script):
+                os.execv(python_exe, [python_exe, script])
+            os._exit(0)
     asyncio.create_task(_delayed_restart())
-    return {"ok": True, "restarting": True}
+    return {
+        "ok": True,
+        "restarting": True,
+        "mode": "desktop-relaunch" if is_frozen else "source-execv",
+        "message": "应用正在重启，请稍后刷新页面。",
+    }
+
+@app.post("/api/app/exit")
+async def app_exit():
+    async def _delayed_exit():
+        await asyncio.sleep(0.6)
+        os._exit(0)
+    asyncio.create_task(_delayed_exit())
+    return {
+        "ok": True,
+        "exiting": True,
+        "mode": "process-exit",
+        "message": "应用正在退出。",
+    }
 
 @app.get("/api/view")
 async def view_image(filename: str, type: str = "input", subfolder: str = ""):
