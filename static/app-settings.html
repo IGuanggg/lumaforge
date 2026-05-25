@@ -222,6 +222,71 @@
         .update-result-meta { color:var(--muted); word-break:break-word; }
         .update-result-notes { margin-top:8px; max-height:120px; overflow:auto; color:var(--muted); white-space:pre-wrap; }
         .update-result a { color:#2563eb; font-weight:900; text-decoration:underline; text-underline-offset:3px; }
+        .update-progress-card {
+            display:none;
+            padding:12px 14px;
+            border-radius:12px;
+            border:1px solid var(--line);
+            background:var(--panel);
+            color:var(--text);
+        }
+        .update-progress-card.show { display:block; }
+        .update-phase-line { display:flex; justify-content:space-between; gap:12px; align-items:center; font-size:12px; font-weight:950; }
+        .update-phase-line span:last-child { color:var(--muted); white-space:nowrap; }
+        .progress-track {
+            height:8px;
+            margin:10px 0 12px;
+            border-radius:999px;
+            overflow:hidden;
+            background:var(--soft);
+            border:1px solid var(--line);
+        }
+        .progress-fill { width:0%; height:100%; background:linear-gradient(90deg,#111827,#2563eb); transition:width .22s ease; }
+        body.studio-theme-dark .progress-fill,
+        html.studio-theme-dark body .progress-fill { background:linear-gradient(90deg,#f5f6f8,#60a5fa); }
+        .update-state-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px 12px; }
+        .update-state-item { min-width:0; }
+        .update-state-label { color:var(--muted); font-size:10.5px; font-weight:900; margin-bottom:2px; }
+        .update-state-value { color:var(--text); font-size:11.5px; font-weight:850; word-break:break-word; }
+        .update-failure {
+            display:none;
+            margin-top:10px;
+            padding:10px 12px;
+            border-radius:10px;
+            border:1px solid rgba(239,68,68,.28);
+            background:rgba(239,68,68,.07);
+            color:var(--danger);
+            font-size:11.5px;
+            font-weight:850;
+            line-height:1.5;
+            word-break:break-word;
+        }
+        .update-failure.show { display:block; }
+        .modal-mask {
+            position:fixed;
+            inset:0;
+            display:none;
+            align-items:center;
+            justify-content:center;
+            padding:24px;
+            background:rgba(15,23,42,.38);
+            z-index:50;
+        }
+        .modal-mask.show { display:flex; }
+        .modal-panel {
+            width:min(680px, 100%);
+            max-height:min(720px, 86vh);
+            overflow:hidden;
+            border-radius:14px;
+            border:1px solid var(--line);
+            background:var(--panel);
+            box-shadow:var(--shadow);
+            display:flex;
+            flex-direction:column;
+        }
+        .modal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-bottom:1px solid var(--line); }
+        .modal-title { font-size:14px; font-weight:950; }
+        .modal-body { padding:16px; color:var(--text); font-size:12.5px; font-weight:750; line-height:1.65; white-space:pre-wrap; overflow:auto; }
         .status {
             min-height:20px;
             color:var(--muted);
@@ -252,6 +317,7 @@
             .path-row { grid-template-columns:1fr; align-items:stretch; }
             .path-actions { justify-content:flex-start; }
             .kv span:last-child { text-align:left; }
+            .update-state-grid { grid-template-columns:1fr; }
         }
     </style>
 </head>
@@ -345,6 +411,22 @@
                             </button>
                         </div>
                         <div class="update-result" id="update-result"></div>
+                        <div class="update-progress-card" id="update-progress-card">
+                            <div class="update-phase-line">
+                                <span id="update-phase-text">等待检查</span>
+                                <span id="update-percent-text">-</span>
+                            </div>
+                            <div class="progress-track"><div class="progress-fill" id="update-progress-fill"></div></div>
+                            <div class="update-state-grid">
+                                <div class="update-state-item"><div class="update-state-label">最新版本</div><div class="update-state-value" id="update-state-version">-</div></div>
+                                <div class="update-state-item"><div class="update-state-label">更新方式</div><div class="update-state-value" id="update-state-mode">-</div></div>
+                                <div class="update-state-item"><div class="update-state-label">更新包</div><div class="update-state-value" id="update-state-asset">-</div></div>
+                                <div class="update-state-item"><div class="update-state-label">大小</div><div class="update-state-value" id="update-state-size">-</div></div>
+                                <div class="update-state-item"><div class="update-state-label">SHA256</div><div class="update-state-value" id="update-state-sha">-</div></div>
+                                <div class="update-state-item"><div class="update-state-label">备份目录</div><div class="update-state-value" id="update-state-backup">-</div></div>
+                            </div>
+                            <div class="update-failure" id="update-failure"></div>
+                        </div>
                         <div class="path-actions" id="update-actions" style="display:none">
                             <button class="action-btn primary" id="download-update-btn" type="button" style="display:none">
                                 <i data-lucide="download" class="w-4 h-4"></i><span>下载更新</span>
@@ -376,6 +458,15 @@
             </section>
         </div>
     </main>
+    <div class="modal-mask" id="release-notes-modal" aria-hidden="true">
+        <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="release-notes-title">
+            <div class="modal-head">
+                <div class="modal-title" id="release-notes-title">Release Notes</div>
+                <button class="action-btn" id="close-release-notes-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>关闭</span></button>
+            </div>
+            <div class="modal-body" id="release-notes-body"></div>
+        </div>
+    </div>
 
     <script>
         const PATH_ROWS = [
@@ -388,6 +479,8 @@
             {key:'data', label:'\u6570\u636e\u76ee\u5f55', note:'\u753b\u5e03\u3001\u4f1a\u8bdd\u3001\u914d\u7f6e\u6570\u636e\u5e93\uff1b\u5f53\u524d\u7248\u672c\u53ea\u652f\u6301\u6253\u5f00\uff0c\u4e0d\u5efa\u8bae\u8fd0\u884c\u4e2d\u8fc1\u79fb', icon:'hard-drive', selectable:false},
         ];
         let appInfo = null;
+        let latestReleaseNotes = '';
+        let updatePollTimer = null;
 
         async function jsonOrThrow(res) {
             const data = await res.json().catch(() => ({}));
@@ -432,6 +525,138 @@
                 unit += 1;
             }
             return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+        }
+
+        const UPDATE_PHASE_LABELS = {
+            checking: '检查版本',
+            found: '发现新版本',
+            downloading: '下载更新包',
+            verifying: '校验更新包',
+            downloaded: '下载完成',
+            waiting_for_exit: '等待应用退出',
+            extracting: '解压更新包',
+            replacing: '替换程序文件',
+            restarting: '重启应用',
+            done: '完成',
+            failed: '失败',
+            rollback: '回滚中'
+        };
+
+        function updateModeText(mode) {
+            return mode === 'desktop-updater'
+                ? '桌面更新器'
+                : mode === 'source'
+                    ? '源码目录'
+                    : mode === 'desktop-updater-missing'
+                        ? '缺少桌面更新器'
+                        : '-';
+        }
+
+        function phasePercent(state) {
+            const phase = state?.phase || '';
+            const downloaded = Number(state?.downloaded_bytes || 0);
+            const total = Number(state?.total_bytes || state?.package_size || state?.size || 0);
+            if(phase === 'downloading' && total > 0) return Math.max(2, Math.min(96, Math.round(downloaded * 100 / total)));
+            if(phase === 'checking') return 8;
+            if(phase === 'found') return 12;
+            if(phase === 'verifying') return 98;
+            if(phase === 'downloaded') return 100;
+            if(phase === 'waiting_for_exit') return 8;
+            if(phase === 'extracting') return 38;
+            if(phase === 'replacing') return 72;
+            if(phase === 'restarting') return 92;
+            if(phase === 'done') return 100;
+            if(phase === 'rollback') return 50;
+            if(phase === 'failed') return downloaded && total ? Math.min(100, Math.round(downloaded * 100 / total)) : 100;
+            return 0;
+        }
+
+        function renderUpdateState(payload) {
+            const state = payload?.state || payload || {};
+            const phase = state.phase || '';
+            const card = document.getElementById('update-progress-card');
+            if(!card) return;
+            if(!phase && !state.target_version && !state.filename) {
+                card.classList.remove('show');
+                return;
+            }
+            card.classList.add('show');
+            const capability = payload?.update_capability || appInfo?.update_capability || {};
+            const selectedAsset = state.selected_asset || state.download?.selected_asset || {};
+            const filename = state.filename || selectedAsset.name || (state.path ? String(state.path).split(/[\\/]/).pop() : '');
+            const total = Number(state.total_bytes || state.package_size || state.size || selectedAsset.size || 0);
+            const downloaded = Number(state.downloaded_bytes || 0);
+            const pct = phasePercent(state);
+            setText('update-phase-text', UPDATE_PHASE_LABELS[phase] || phase || '等待检查');
+            setText('update-percent-text', phase === 'downloading' && total > 0 ? `${pct}% · ${formatBytes(downloaded)} / ${formatBytes(total)}` : (pct ? `${pct}%` : '-'));
+            const fill = document.getElementById('update-progress-fill');
+            if(fill) fill.style.width = `${pct}%`;
+            setText('update-state-version', state.target_version || state.latest_version || state.version || '-');
+            setText('update-state-mode', updateModeText(capability.mode));
+            setText('update-state-asset', filename || '-');
+            setText('update-state-size', total ? formatBytes(total) : '-');
+            const sha = state.sha256 || state.download?.sha256 || '';
+            const expected = state.sha256_expected || state.download?.sha256_expected || selectedAsset.sha256 || '';
+            const verified = state.sha256_verified || state.download?.sha256_verified;
+            setText('update-state-sha', sha ? `${verified ? '已校验' : expected ? '待校验' : '未提供期望值'} · ${String(sha).slice(0, 12)}...` : (expected ? `等待校验 · ${String(expected).slice(0, 12)}...` : '-'));
+            setText('update-state-backup', state.backup_dir || '-');
+            const failure = document.getElementById('update-failure');
+            if(failure) {
+                const shouldShow = phase === 'failed' || phase === 'rollback' || !!state.error || !!state.rollback_error;
+                failure.classList.toggle('show', shouldShow);
+                failure.textContent = shouldShow
+                    ? `错误：${state.error || '-'}${state.backup_dir ? `。备份目录：${state.backup_dir}` : ''}${state.rollback_error ? `。回滚错误：${state.rollback_error}` : ''}`
+                    : '';
+            }
+            if(phase === 'failed' || phase === 'rollback') {
+                setStatus('update-status', phase === 'rollback' ? '更新失败，正在尝试回滚。' : (state.error || '更新失败。'), 'error');
+            }
+        }
+
+        async function refreshUpdateState() {
+            try {
+                const data = await fetch('/api/app/update-state').then(jsonOrThrow);
+                renderUpdateState(data);
+                const phase = data.phase || data.state?.phase || '';
+                if(['done','failed','downloaded'].includes(phase)) {
+                    if(phase === 'done') await loadInfo();
+                    stopUpdatePolling();
+                }
+                return data;
+            } catch(e) {
+                return null;
+            }
+        }
+
+        function beginUpdatePolling() {
+            stopUpdatePolling();
+            refreshUpdateState();
+            updatePollTimer = setInterval(refreshUpdateState, 800);
+        }
+
+        function stopUpdatePolling() {
+            if(updatePollTimer) {
+                clearInterval(updatePollTimer);
+                updatePollTimer = null;
+            }
+        }
+
+        function openReleaseNotes() {
+            const modal = document.getElementById('release-notes-modal');
+            const body = document.getElementById('release-notes-body');
+            if(body) body.textContent = latestReleaseNotes || '这个版本没有提供 Release Notes。';
+            if(modal) {
+                modal.classList.add('show');
+                modal.setAttribute('aria-hidden', 'false');
+            }
+        }
+
+        function closeReleaseNotes() {
+            const modal = document.getElementById('release-notes-modal');
+            if(modal) {
+                modal.classList.remove('show');
+                modal.setAttribute('aria-hidden', 'true');
+            }
         }
 
         function setText(id, value) {
@@ -554,6 +779,7 @@
             const backupText = document.getElementById('update-backup-text');
             if(lastUpdate) lastUpdate.textContent = updateState.installed_at ? `${formatTime(updateState.installed_at)} → ${updateState.target_version || '-'}` : '暂无记录';
             if(backupText) backupText.textContent = updateState.backup_dir || '-';
+            renderUpdateState({...updateState, update_capability: appInfo.update_capability});
             const updateInput = document.getElementById('update-url-input');
             if(updateInput) updateInput.value = appInfo.update_check_url || '';
             document.getElementById('path-list').innerHTML = PATH_ROWS.map(row => {
@@ -653,6 +879,9 @@
             }
             const latest = data.latest_version || '-';
             const current = data.current_version || appInfo?.version || '-';
+            const selected = data.selected_asset || {};
+            const selectedSize = Number(selected.size || 0);
+            latestReleaseNotes = data.notes || '';
             const title = data.is_newer ? `发现新版本 ${latest}` : `当前已是最新版本 ${current}`;
             const modeText = data.update_mode === 'desktop-updater'
                 ? '更新方式：桌面更新器会在应用关闭后替换程序，并自动重启。'
@@ -663,11 +892,13 @@
             box.innerHTML = `
                 <div class="update-result-title">${escapeHtml(title)}</div>
                 <div class="update-result-meta">当前：${escapeHtml(current)} · 最新：${escapeHtml(latest)}</div>
+                ${selected.name ? `<div class="update-result-meta">更新包：${escapeHtml(selected.name)}${selectedSize ? ` · ${formatBytes(selectedSize)}` : ''}</div>` : ''}
+                ${selected.sha256 ? `<div class="update-result-meta">SHA256：等待下载后校验 · ${escapeHtml(String(selected.sha256).slice(0, 16))}...</div>` : '<div class="update-result-meta">SHA256：发布元数据未提供校验值</div>'}
                 ${modeText ? `<div class="update-result-meta">${escapeHtml(modeText)}</div>` : ''}
                 <div class="update-result-meta">来源：${linkify(data.source_url || appInfo?.update_check_url || '')}</div>
                 ${data.download_url ? `<div class="update-result-meta">下载：${linkify(data.download_url)}</div>` : ''}
                 ${autoNote}
-                ${data.notes ? `<div class="update-result-notes">${escapeHtml(data.notes)}</div>` : ''}
+                ${data.notes ? `<div class="path-actions" style="margin-top:8px"><button class="action-btn" type="button" onclick="openReleaseNotes()"><i data-lucide="scroll-text" class="w-4 h-4"></i><span>查看 Release Notes</span></button></div>` : ''}
             `;
             box.classList.add('show');
             // Show appropriate action buttons
@@ -679,21 +910,35 @@
                     box.innerHTML += `<div class="update-result-meta"><a href="${escapeHtml(data.download_url)}" target="_blank" style="color:var(--accent)">点击下载更新包</a></div>`;
                 }
             }
+            renderUpdateState({
+                phase: data.is_newer ? 'found' : 'done',
+                current_version: current,
+                target_version: latest,
+                selected_asset: selected,
+                package_size: selectedSize,
+                notes: data.notes || '',
+                update_capability: {mode: data.update_mode}
+            });
+            if(window.lucide) lucide.createIcons();
         }
 
         async function downloadUpdate() {
             const dlBtn = document.getElementById('download-update-btn');
             if(dlBtn) dlBtn.disabled = true;
             setStatus('update-status', '正在下载更新包...');
+            beginUpdatePolling();
             try {
                 const data = await fetch('/api/app/update-download', { method:'POST' }).then(jsonOrThrow);
+                renderUpdateState(data.update_state || data);
                 setStatus('update-status', `下载完成：${data.filename} (${(data.size/1024/1024).toFixed(1)} MB)`, 'ok');
                 const instBtn = document.getElementById('install-update-btn');
                 if(instBtn) instBtn.style.display = '';
                 if(dlBtn) dlBtn.style.display = 'none';
             } catch(e) {
                 setStatus('update-status', e.message || String(e), 'error');
+                await refreshUpdateState();
             } finally {
+                stopUpdatePolling();
                 if(dlBtn) dlBtn.disabled = false;
             }
         }
@@ -702,12 +947,17 @@
             const instBtn = document.getElementById('install-update-btn');
             if(instBtn) instBtn.disabled = true;
             setStatus('update-status', '正在安装更新（备份旧版本、替换文件）...');
+            beginUpdatePolling();
+            let externalStarted = false;
             try {
                 const data = await fetch('/api/app/update-install', { method:'POST' }).then(jsonOrThrow);
                 if(data.external_updater_started) {
+                    externalStarted = true;
+                    renderUpdateState(data.update_state || data);
                     setStatus('update-status', data.message || '已启动桌面更新器，应用即将关闭并自动重启。', 'ok');
                     return;
                 }
+                renderUpdateState(data.update_state || data);
                 setStatus('update-status', `安装完成，已替换 ${data.replaced?.length || 0} 项。备份：${data.backup_dir || '-'}`, 'ok');
                 await loadInfo();
                 const restartBtn = document.getElementById('restart-app-btn');
@@ -715,7 +965,9 @@
                 if(instBtn) instBtn.style.display = 'none';
             } catch(e) {
                 setStatus('update-status', e.message || String(e), 'error');
+                await refreshUpdateState();
             } finally {
+                if(!externalStarted) stopUpdatePolling();
                 if(instBtn) instBtn.disabled = false;
             }
         }
@@ -744,10 +996,14 @@
             const btn = document.getElementById('auto-update-btn');
             if(btn) btn.disabled = true;
             setStatus('update-status', '正在自动升级：检查版本、下载更新包、安装替换...');
+            beginUpdatePolling();
+            let externalStarted = false;
             try {
                 const data = await fetch('/api/app/update-auto', { method:'POST' }).then(jsonOrThrow);
                 if(data.updated) {
                     if(data.install?.external_updater_started) {
+                        externalStarted = true;
+                        renderUpdateState(data.install.update_state || data.install);
                         setStatus('update-status', data.message || '已启动桌面更新器，应用即将关闭并自动重启。', 'ok');
                         return;
                     }
@@ -763,7 +1019,9 @@
                 }
             } catch(e) {
                 setStatus('update-status', e.message || String(e), 'error');
+                await refreshUpdateState();
             } finally {
+                if(!externalStarted) stopUpdatePolling();
                 if(btn) btn.disabled = false;
             }
         }
@@ -787,6 +1045,7 @@
 
         async function checkUpdate() {
             setStatus('update-status', '正在检查更新...');
+            renderUpdateState({phase:'checking', current_version:appInfo?.version || '-'});
             try {
                 const data = await fetch('/api/app/update-check').then(jsonOrThrow);
                 if(!data.configured) {
@@ -815,12 +1074,17 @@
         document.getElementById('download-update-btn').addEventListener('click', downloadUpdate);
         document.getElementById('install-update-btn').addEventListener('click', installUpdate);
         document.getElementById('restart-app-btn').addEventListener('click', restartApp);
+        document.getElementById('close-release-notes-btn')?.addEventListener('click', closeReleaseNotes);
+        document.getElementById('release-notes-modal')?.addEventListener('click', event => {
+            if(event.target?.id === 'release-notes-modal') closeReleaseNotes();
+        });
         document.getElementById('refresh-local-data-btn')?.addEventListener('click', loadLocalDataHealth);
         document.getElementById('preview-cleanup-btn')?.addEventListener('click', previewCleanup);
         document.getElementById('run-cleanup-btn')?.addEventListener('click', runCleanup);
         window.addEventListener('DOMContentLoaded', () => {
             loadInfo();
             loadLocalDataHealth();
+            refreshUpdateState();
             if(window.lucide) lucide.createIcons();
         });
     </script>

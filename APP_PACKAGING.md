@@ -14,6 +14,24 @@
 dist\LumaForge\LumaForge.exe
 ```
 
+完整发布包（桌面 zip、可选安装器、可选代码签名）：
+
+```powershell
+.\scripts\build_desktop_release.ps1
+```
+
+发布给自动更新使用的 zip 必须包含 `LumaForge/` 根目录：
+
+```text
+LumaForge-2.0.7-desktop.zip
+  LumaForge\
+    LumaForge.exe
+    LumaForgeUpdater.exe
+    _internal\
+    static\
+    workflows\
+```
+
 默认目录：
 
 - Runtime: `%APPDATA%\LumaForge`
@@ -68,5 +86,5 @@ docker run -d \
 ## 注意事项
 
 - 不要把 `assets/`、`output/`、`data/`、`userdata/`、`cloud-data/` 打进源码发布包。
-- EXE 原地热更新仍不作为 2.0.7 保证能力，浏览器/源码版支持源码级更新。
-- Windows 未签名 EXE 仍可能触发 SmartScreen，这是签名问题，不是代码问题。
+- EXE 自动更新依赖发布包内同时包含 `LumaForge.exe` 和 `LumaForgeUpdater.exe`，不要只上传单个 EXE。
+- 代码签名脚本只做预留；未配置真实证书时会跳过签名。未签名 EXE 仍可能触发 SmartScreen，这是签名问题，不是代码问题。

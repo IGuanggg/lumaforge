@@ -65,9 +65,13 @@ Compress-Archive -Path main.py,cloud_config_server.py,launcher.py,desktop_launch
 Desktop EXE:
 
 ```powershell
-.\build_desktop.bat
-Compress-Archive -Path "dist\LumaForge\*" -DestinationPath releases\LumaForge-desktop-v2.0.7-windows.zip -Force
+.\scripts\build_desktop_release.ps1
 ```
+
+- GitHub Release must include `releases\LumaForge-2.0.7-desktop.zip`, not only a single EXE.
+- If Inno Setup is installed, confirm `releases\LumaForge-Setup-2.0.7.exe` exists.
+- If a real signing certificate is available, set `WINDOWS_SIGN_CERT_PATH` and `WINDOWS_SIGN_CERT_PASSWORD`; otherwise signing is skipped by design.
+- Record SHA256 hashes printed by the release script in the release notes.
 
 Cloud Docker:
 

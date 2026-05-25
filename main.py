@@ -3305,6 +3305,22 @@ def save_update_state(state: dict):
         with open(UPDATE_STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
 
+def update_state_payload():
+    state = load_update_state()
+    capability = desktop_update_capability()
+    return {
+        **state,
+        "state": state,
+        "current_version": APP_VERSION,
+        "build_id": APP_BUILD_ID,
+        "update_capability": capability,
+        "app_dir": desktop_program_dir(),
+        "data_dir": RUNTIME_DIR,
+        "assets_dir": ASSETS_DIR,
+        "downloads_dir": UPDATE_DOWNLOADS_DIR,
+        "update_state_file": UPDATE_STATE_FILE,
+    }
+
 def _is_zip_download_url(url: str) -> bool:
     """Check if a URL points to a .zip download (by inspecting the URL path, ignoring query params)."""
     try:
@@ -3526,7 +3542,9 @@ async def app_update_settings(payload: AppUpdateSettingsRequest):
 
 @app.get("/api/app/update-check")
 async def app_update_check():
+    save_update_state({"phase": "checking", "current_version": APP_VERSION, "error": None})
     if not APP_UPDATE_CHECK_URL:
+        save_update_state({"phase": "failed", "current_version": APP_VERSION, "error": "未配置更新检查地址"})
         return {
             "configured": False,
             "current_version": APP_VERSION,
@@ -3546,6 +3564,17 @@ async def app_update_check():
     auto_update_supported = bool(capability.get("supported"))
     reason = str(capability.get("reason") or "")
     selected = normalized.get("selected_asset")
+    save_update_state({
+        "phase": "found" if is_newer else "done",
+        "current_version": APP_VERSION,
+        "target_version": latest,
+        "latest_version": latest,
+        "selected_asset": selected,
+        "package_size": (selected or {}).get("size", 0),
+        "notes": normalized["notes"],
+        "source_url": APP_UPDATE_CHECK_URL,
+        "error": None,
+    })
     return {
         "configured": True,
         "current_version": APP_VERSION,
@@ -3565,16 +3594,7 @@ async def app_update_check():
 
 @app.get("/api/app/update-state")
 async def app_update_state():
-    state = load_update_state()
-    capability = desktop_update_capability()
-    return {
-        **state,
-        "current_version": APP_VERSION,
-        "build_id": APP_BUILD_ID,
-        "update_capability": capability,
-        "data_dir": RUNTIME_DIR,
-        "app_dir": BASE_DIR,
-    }
+    return update_state_payload()
 
 
 def _safe_extract_zip(zip_path: str, dest_dir: str):
@@ -3729,15 +3749,18 @@ def launch_desktop_updater(zip_path: str, target_version: str = "", download_met
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"准备桌面更新器失败：{exc}")
     state = {
+        "ok": False,
+        "phase": "waiting_for_exit",
         "current_version": APP_VERSION,
         "target_version": target_version or "",
-        "installed_at": now_ms(),
         "package": zip_path,
         "download": download_meta or {},
         "desktop_updater": run_updater,
         "app_dir": app_dir,
+        "started_at": now_ms(),
         "restart_required": True,
         "pending_external_updater": True,
+        "error": None,
     }
     save_update_state(state)
     args = [
@@ -3798,20 +3821,73 @@ async def app_update_download():
     os.makedirs(UPDATE_DOWNLOADS_DIR, exist_ok=True)
     filename = _sanitize_update_filename(selected.get("name"), latest)
     local_path = os.path.join(UPDATE_DOWNLOADS_DIR, filename)
-    save_update_state({"phase": "downloading", "version": latest, "filename": filename, "downloaded_bytes": 0, "total_bytes": selected.get("size", 0), "error": None})
+    total_bytes = int(selected.get("size") or 0)
+    save_update_state({
+        "phase": "downloading",
+        "current_version": APP_VERSION,
+        "target_version": latest,
+        "version": latest,
+        "filename": filename,
+        "selected_asset": selected,
+        "package_size": total_bytes,
+        "downloaded_bytes": 0,
+        "total_bytes": total_bytes,
+        "sha256_expected": (selected.get("sha256") or "").strip().lower() or None,
+        "sha256_verified": False,
+        "error": None,
+    })
     try:
         async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
-            dl_resp = await client.get(download_url)
-            dl_resp.raise_for_status()
-            with open(local_path, "wb") as f:
-                f.write(dl_resp.content)
+            async with client.stream("GET", download_url) as dl_resp:
+                dl_resp.raise_for_status()
+                header_total = int(dl_resp.headers.get("content-length") or 0)
+                if header_total:
+                    total_bytes = header_total
+                downloaded = 0
+                last_state_at = 0.0
+                with open(local_path, "wb") as f:
+                    async for chunk in dl_resp.aiter_bytes(1024 * 1024):
+                        if not chunk:
+                            continue
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        now = time.time()
+                        if now - last_state_at >= 0.25:
+                            save_update_state({
+                                "phase": "downloading",
+                                "current_version": APP_VERSION,
+                                "target_version": latest,
+                                "version": latest,
+                                "filename": filename,
+                                "selected_asset": selected,
+                                "package_size": total_bytes,
+                                "downloaded_bytes": downloaded,
+                                "total_bytes": total_bytes,
+                                "sha256_expected": (selected.get("sha256") or "").strip().lower() or None,
+                                "sha256_verified": False,
+                                "error": None,
+                            })
+                            last_state_at = now
     except Exception as exc:
         if os.path.exists(local_path):
             os.remove(local_path)
-        save_update_state({"phase": "failed", "version": latest, "filename": filename, "error": str(exc)})
+        save_update_state({"phase": "failed", "current_version": APP_VERSION, "target_version": latest, "version": latest, "filename": filename, "error": str(exc)})
         raise HTTPException(status_code=502, detail=f"下载更新包失败：{exc}")
     file_size = os.path.getsize(local_path)
-    save_update_state({"phase": "verifying", "version": latest, "filename": filename, "downloaded_bytes": file_size, "total_bytes": file_size, "error": None})
+    save_update_state({
+        "phase": "verifying",
+        "current_version": APP_VERSION,
+        "target_version": latest,
+        "version": latest,
+        "filename": filename,
+        "selected_asset": selected,
+        "package_size": file_size,
+        "downloaded_bytes": file_size,
+        "total_bytes": file_size,
+        "sha256_expected": (selected.get("sha256") or "").strip().lower() or None,
+        "sha256_verified": False,
+        "error": None,
+    })
     actual_sha256 = _sha256_file(local_path)
     expected_sha256 = (selected.get("sha256") or "").strip().lower()
     sha256_verified = False
@@ -3819,14 +3895,31 @@ async def app_update_download():
     if expected_sha256:
         if actual_sha256.lower() != expected_sha256:
             os.remove(local_path)
-            save_update_state({"phase": "failed", "version": latest, "filename": filename, "error": "SHA256 校验失败"})
+            save_update_state({"phase": "failed", "current_version": APP_VERSION, "target_version": latest, "version": latest, "filename": filename, "sha256": actual_sha256, "sha256_expected": expected_sha256, "sha256_verified": False, "error": "SHA256 校验失败"})
             raise HTTPException(status_code=400, detail=f"更新包校验失败：SHA256 不匹配（期望 {expected_sha256[:16]}...，实际 {actual_sha256[:16]}...）")
         sha256_verified = True
     else:
         warning = "未提供 SHA256 校验值，请确认来源可信。"
-    save_update_state({"phase": "downloaded", "version": latest, "filename": filename, "path": local_path, "size": file_size, "sha256": actual_sha256, "error": None})
+    save_update_state({
+        "phase": "downloaded",
+        "current_version": APP_VERSION,
+        "target_version": latest,
+        "version": latest,
+        "filename": filename,
+        "path": local_path,
+        "size": file_size,
+        "package_size": file_size,
+        "downloaded_bytes": file_size,
+        "total_bytes": file_size,
+        "selected_asset": selected,
+        "sha256": actual_sha256,
+        "sha256_expected": expected_sha256 or None,
+        "sha256_verified": sha256_verified,
+        "error": None,
+    })
     return {
         "ok": True,
+        "phase": "downloaded",
         "version": latest,
         "filename": filename,
         "path": local_path,
@@ -3836,6 +3929,7 @@ async def app_update_download():
         "sha256_verified": sha256_verified,
         "warning": warning,
         "asset_type": selected.get("type", "unknown"),
+        "update_state": load_update_state(),
     }
 
 
@@ -3855,22 +3949,26 @@ async def install_latest_update_package(target_version: str = "", download_meta:
     os.makedirs(UPDATE_STAGING_DIR, exist_ok=True)
     # Extract
     try:
+        save_update_state({"phase": "extracting", "current_version": APP_VERSION, "target_version": target_version or "", "package": zip_path, "error": None})
         _safe_extract_zip(zip_path, install_dir)
     except HTTPException:
         raise
     except Exception as exc:
         shutil.rmtree(install_dir, ignore_errors=True)
+        save_update_state({"phase": "failed", "current_version": APP_VERSION, "target_version": target_version or "", "package": zip_path, "error": f"解压更新包失败：{exc}"})
         raise HTTPException(status_code=500, detail=f"解压更新包失败：{exc}")
     # Detect package root
     pkg_root = _detect_package_root(install_dir)
     if not pkg_root:
         shutil.rmtree(install_dir, ignore_errors=True)
+        save_update_state({"phase": "failed", "current_version": APP_VERSION, "target_version": target_version or "", "package": zip_path, "error": "更新包结构不正确，缺少 main.py 或 static/index.html"})
         raise HTTPException(status_code=400, detail="更新包结构不正确，缺少 main.py 或 static/index.html")
     # Backup current files
     backup_ts = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
     backup_dir = os.path.join(UPDATE_BACKUPS_DIR, f"backup-{backup_ts}")
     os.makedirs(backup_dir, exist_ok=True)
     try:
+        save_update_state({"phase": "replacing", "current_version": APP_VERSION, "target_version": target_version or "", "package": zip_path, "backup_dir": backup_dir, "error": None})
         for name in UPDATE_REPLACE_FILES:
             src = os.path.join(BASE_DIR, name)
             if os.path.isfile(src):
@@ -3881,6 +3979,7 @@ async def install_latest_update_package(target_version: str = "", download_meta:
                 shutil.copytree(src, os.path.join(backup_dir, name), dirs_exist_ok=True)
     except Exception as exc:
         shutil.rmtree(install_dir, ignore_errors=True)
+        save_update_state({"phase": "failed", "current_version": APP_VERSION, "target_version": target_version or "", "package": zip_path, "backup_dir": backup_dir, "error": f"备份当前版本失败：{exc}"})
         raise HTTPException(status_code=500, detail=f"备份当前版本失败：{exc}")
     # Replace files (atomic individual files, then atomic directories)
     replaced = []
@@ -3901,6 +4000,7 @@ async def install_latest_update_package(target_version: str = "", download_meta:
     except Exception as exc:
         # Rollback: restore ALL backed-up files and directories, not just 'replaced'
         logger.error("Update install failed, rolling back: %s", exc, exc_info=True)
+        save_update_state({"phase": "rollback", "current_version": APP_VERSION, "target_version": target_version or "", "package": zip_path, "backup_dir": backup_dir, "error": str(exc)})
         for name in UPDATE_REPLACE_FILES:
             try:
                 backup_src = os.path.join(backup_dir, name)
@@ -3918,10 +4018,13 @@ async def install_latest_update_package(target_version: str = "", download_meta:
             except Exception as rb_exc:
                 logger.error("Rollback failed for dir %s: %s", name, rb_exc)
         shutil.rmtree(install_dir, ignore_errors=True)
+        save_update_state({"phase": "failed", "current_version": APP_VERSION, "target_version": target_version or "", "package": zip_path, "backup_dir": backup_dir, "error": f"安装更新失败，已尝试回滚：{exc}"})
         raise HTTPException(status_code=500, detail=f"安装更新失败，已尝试回滚：{exc}")
     # Cleanup staging
     shutil.rmtree(install_dir, ignore_errors=True)
     state = {
+        "ok": True,
+        "phase": "done",
         "current_version": APP_VERSION,
         "target_version": target_version or "",
         "installed_at": now_ms(),

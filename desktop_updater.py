@@ -107,7 +107,7 @@ def copy_entry(src: str, dst: str):
         shutil.copy2(src, dst)
 
 
-def replace_app(package_root: str, app_dir: str):
+def replace_app(package_root: str, app_dir: str, state_path: str = "", state: dict | None = None):
     app_abs = os.path.abspath(app_dir)
     package_abs = os.path.abspath(package_root)
     if app_abs == package_abs or package_abs.startswith(app_abs + os.sep):
@@ -115,6 +115,9 @@ def replace_app(package_root: str, app_dir: str):
 
     backup_dir = os.path.join(os.path.dirname(app_abs), f"LumaForge.backup-{time.strftime('%Y%m%d-%H%M%S')}")
     os.makedirs(backup_dir, exist_ok=True)
+    if state is not None:
+        state["backup_dir"] = backup_dir
+        write_state(state_path, state)
     replaced = []
     try:
         for name in os.listdir(package_root):
@@ -127,6 +130,10 @@ def replace_app(package_root: str, app_dir: str):
             copy_entry(src, dst)
             replaced.append(name)
     except Exception:
+        if state is not None:
+            state["phase"] = "rollback"
+            state["rollback"] = True
+            write_state(state_path, state)
         for name in os.listdir(backup_dir):
             dst = os.path.join(app_dir, name)
             if os.path.exists(dst):
@@ -188,7 +195,7 @@ def main():
                 raise RuntimeError("Update package does not contain a recognizable LumaForge app root.")
             state["phase"] = "replacing"
             write_state(args.state, state)
-            backup_dir, replaced = replace_app(root, args.app_dir)
+            backup_dir, replaced = replace_app(root, args.app_dir, args.state, state)
             state.update({
                 "ok": True,
                 "phase": "done",
@@ -222,9 +229,12 @@ def main():
                 state["rollback"] = True
             except Exception as rb_exc:
                 state["rollback_error"] = str(rb_exc)
-    write_state(args.state, state)
     if state.get("ok") and args.restart:
+        state["phase"] = "restarting"
+        write_state(args.state, state)
         restart_app(args.exe)
+        state["phase"] = "done"
+    write_state(args.state, state)
     return 0 if state.get("ok") else 1
 
 

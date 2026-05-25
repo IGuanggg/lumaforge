@@ -45,8 +45,8 @@ foreach ($sdkPath in $sdkPaths) {
     if ($signtool) { break }
 }
 
-if (-not $CertPath) {
-    Write-Host "[sign] 未配置证书，跳过签名（设置 WINDOWS_SIGN_CERT_PATH 环境变量）"
+if (-not $CertPath -or -not $CertPassword) {
+    Write-Host "[sign] Signing skipped. Set WINDOWS_SIGN_CERT_PATH and WINDOWS_SIGN_CERT_PASSWORD to enable Windows code signing."
     exit 0
 }
 
@@ -72,6 +72,7 @@ $files = @(
 )
 
 $signed = 0
+$failed = 0
 foreach ($file in $files) {
     if (-not (Test-Path $file)) {
         Write-Host "[sign] Skip (not found): $file"
@@ -84,7 +85,11 @@ foreach ($file in $files) {
         $signed++
     } else {
         Write-Host "[sign] FAILED: $file (exit code $LASTEXITCODE)"
+        $failed++
     }
 }
 
 Write-Host "[sign] Done. Signed $signed file(s)."
+if ($failed -gt 0) {
+    exit 1
+}
