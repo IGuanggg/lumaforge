@@ -17,23 +17,21 @@
             } catch(e) {}
         })();
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="/static/theme.js?v=20260522-202-goals1"></script>
-    <script src="/static/i18n.js?v=20260522-202-goals1"></script>
-    <script src="/static/image-preview.js?v=20260522-202-goals1"></script>
-    <script src="/static/history-bulk-manager.js?v=20260522-202-goals1"></script>
+    <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
+    <script src="/static/vendor/lucide/lucide.min.js"></script>
+    <script src="/static/theme.js?v=20260525-download-fix1"></script>
+    <script src="/static/i18n.js?v=20260525-download-fix1"></script>
+    <script src="/static/image-preview.js?v=20260525-download-fix1"></script>
+    <script src="/static/history-bulk-manager.js?v=20260525-download-fix1"></script>
     <script type="importmap">
         {
             "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+                "three": "/static/vendor/three/three.module.js"
             }
         }
     </script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
-
-        :root {
+:root {
             --accent: #111827;
             --bg: #f9fafb;
             --card: #ffffff;
@@ -242,7 +240,7 @@
             border-color: #0f172a;
         }
     </style>
-    <link rel="stylesheet" href="/static/theme.css?v=20260522-202-goals1">
+    <link rel="stylesheet" href="/static/theme.css?v=20260525-download-fix1">
 </head>
 
 <body class="selection:bg-black selection:text-white">
@@ -1432,7 +1430,8 @@
             loadHistory();
             loadAngleModelConfig();
             window.HistoryBulkManager?.attach({masonry:'#masonry'});
-            observer.observe(document.getElementById('loadMoreTrigger'));
+            const loadMoreTrigger = document.getElementById('loadMoreTrigger');
+            if(loadMoreTrigger) observer.observe(loadMoreTrigger);
         };
 
         // WebSocket for real-time updates (optional but good for multi-tab sync)

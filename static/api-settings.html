@@ -15,11 +15,11 @@
             } catch(e) {}
         })();
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="/static/theme.js?v=20260522-202-goals1"></script>
-    <script src="/static/i18n.js?v=20260522-202-goals1"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260522-202-goals1">
+    <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
+    <script src="/static/vendor/lucide/lucide.min.js"></script>
+    <script src="/static/theme.js?v=20260525-download-fix1"></script>
+    <script src="/static/i18n.js?v=20260525-download-fix1"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260525-download-fix1">
     <style>
         :root { --bg:#f7f8fa; --panel:#fff; --soft:#f1f4f8; --line:#e8ecf2; --line-strong:#dbe1ea; --text:#0f172a; --muted:#64748b; --faint:#94a3b8; --accent:#0f172a; }
         body.studio-theme-dark, html.studio-theme-dark body { --bg:#0e1014; --panel:#1c1e26; --soft:#272a33; --line:#323540; --line-strong:#3f424d; --text:#e8e8ea; --muted:#a4adbf; --faint:#7a8497; --accent:#f5f6f8; }
@@ -301,9 +301,8 @@
                 <aside class="sidebar">
                     <div class="side-section-title" data-i18n="api.providersTitle">平台列表</div>
                     <div id="providerList" class="provider-list"></div>
-                    <button class="add-btn preset-btn" type="button" onclick="addBailianProvider()"><i data-lucide="sparkles" class="w-4 h-4"></i><span>新增百炼</span></button>
                     <button class="add-btn" type="button" onclick="addProvider()"><i data-lucide="plus" class="w-4 h-4"></i><span data-i18n="api.addProvider">新增平台</span></button>
-                    <a class="api-link-btn" data-api-signup-link href="https://apimart.ai/register?aff=pUM7Te" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault();event.stopPropagation();var u=this.href;var w=null;try{w=window.open(u,'_blank','noopener,noreferrer');}catch(e){}if(!w){try{window.parent&&window.parent.postMessage({type:'open-external-url',url:u},'*');}catch(e){}setTimeout(function(){try{window.top.location.href=u;}catch(e){window.location.href=u;}},80);}return false;"><i data-lucide="key-round" class="w-4 h-4"></i><span data-i18n="api.getApi">获取API</span></a>
+                    <button class="api-link-btn" data-api-signup-link type="button" onclick="openApiSignup(event)"><i data-lucide="key-round" class="w-4 h-4"></i><span data-i18n="api.getApi">获取API</span></button>
                 </aside>
 
                 <main class="content">
@@ -1237,22 +1236,21 @@
                 event.preventDefault();
                 event.stopPropagation();
             }
-            let opened = null;
-            try {
-                opened = window.open(API_SIGNUP_URL, '_blank', 'noopener,noreferrer');
-            } catch(e) {}
-            if(!opened){
+            fetch('/api/app/open-url', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({url:API_SIGNUP_URL})
+            }).then(async res => {
+                if(!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || '打开失败');
+                setStatus('已在外部浏览器打开 API 页面', 'success', {toast:true});
+            }).catch(() => {
                 try {
                     window.parent?.postMessage({ type:'open-external-url', url:API_SIGNUP_URL }, '*');
-                } catch(e) {}
-                setTimeout(() => {
-                    try {
-                        window.top.location.href = API_SIGNUP_URL;
-                    } catch(e) {
-                        window.location.href = API_SIGNUP_URL;
-                    }
-                }, 80);
-            }
+                    setStatus('已请求外部打开 API 页面', 'success', {toast:true});
+                } catch(e) {
+                    setStatus(`请复制链接打开：${API_SIGNUP_URL}`, 'error', {toast:true});
+                }
+            });
             return false;
         };
         window.addEventListener('message', event => {

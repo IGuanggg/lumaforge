@@ -16,12 +16,11 @@
             } catch(e) {}
         })();
     </script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="/static/theme.js?v=20260522-202-goals1"></script>
-    <script src="/static/i18n.js?v=20260522-202-goals1"></script>
+    <script src="/static/vendor/lucide/lucide.min.js"></script>
+    <script src="/static/theme.js?v=20260525-download-fix1"></script>
+    <script src="/static/i18n.js?v=20260525-download-fix1"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap');
-        :root {
+:root {
             --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.9); --card:#fff;
             --text:#111827; --muted:#64748b; --faint:#94a3b8; --line:#e8edf3; --soft:#f8fafc;
             --shadow:rgba(15,23,42,.08); --strong:#111827; --strong-text:#fff;
@@ -1047,7 +1046,7 @@
         }
         function backToCanvasList(){
             savePromptDraftForCurrent();
-            const target = `/static/canvas.html?v=20260523-ui-polish3`;
+            const target = `/static/canvas.html?v=20260525-download-fix1`;
             try {
                 if(window.parent && window.parent !== window){
                     window.parent.localStorage?.setItem('studio_active_page', 'canvas');
@@ -2633,7 +2632,7 @@
             try { localStorage.setItem(SMART_CANVAS_ID_KEY, id); } catch(e) {}
             const url = new URL(window.location.href);
             url.searchParams.set('id', id);
-            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260523-ui-polish3');
+            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260525-download-fix1');
             history.replaceState(null, '', url.toString());
         }
         async function ensureSmartCanvasId(){

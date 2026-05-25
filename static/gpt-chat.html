@@ -16,13 +16,12 @@
             } catch(e) {}
         })();
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="/static/theme.js?v=20260522-202-goals1"></script>
-    <script src="/static/i18n.js?v=20260522-202-goals1"></script>
+    <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
+    <script src="/static/vendor/lucide/lucide.min.js"></script>
+    <script src="/static/theme.js?v=20260525-download-fix1"></script>
+    <script src="/static/i18n.js?v=20260525-download-fix1"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;800&display=swap');
-        :root { --ease:cubic-bezier(.4,0,.2,1); --content-width:1160px; --composer-safe-bottom:268px; }
+:root { --ease:cubic-bezier(.4,0,.2,1); --content-width:1160px; --composer-safe-bottom:268px; }
         * { box-sizing:border-box; }
         body { margin:0; height:100vh; overflow:hidden; background:#f8fafc; color:#111827; font-family:'Inter',-apple-system,sans-serif; -webkit-font-smoothing:antialiased; }
         .chat-shell { height:100vh; display:flex; flex-direction:column; min-width:0; }
@@ -175,7 +174,7 @@
             .action-btn span { display:none; }
         }
     </style>
-    <link rel="stylesheet" href="/static/theme.css?v=20260522-202-goals1">
+    <link rel="stylesheet" href="/static/theme.css?v=20260525-download-fix1">
 </head>
 <body>
     <div class="chat-shell">
@@ -889,6 +888,11 @@
             event?.preventDefault?.();
             event?.stopPropagation?.();
             if(!url) return;
+            if(window.parent && window.parent !== window){
+                const href = `/api/download-url?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || outputDownloadName(url))}`;
+                window.parent.postMessage({type:'studio-download', href, filename: filename || outputDownloadName(url)}, '*');
+                return;
+            }
             try {
                 const href = `/api/download-url?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || outputDownloadName(url))}`;
                 const a = document.createElement('a');

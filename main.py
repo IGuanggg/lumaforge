@@ -32,9 +32,10 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.4")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260523-ui-polish3")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.5")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260525-download-fix1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
+API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
 QUIET_ACCESS_PATHS = {
     "/api/queue_status",
@@ -745,6 +746,8 @@ async def upload_cloud_config(include_secrets=True):
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Cannot connect to cloud service: {exc}") from exc
     session["updated_at"] = now_ms()
+    session["cloud_config_missing"] = False
+    session["auto_config_sync_paused"] = False
     save_cloud_session(session)
     return {"ok": True, "cloud": data}
 
@@ -754,6 +757,9 @@ async def run_cloud_config_auto_sync(delay: float = 8.0):
         await asyncio.sleep(delay)
         session = load_cloud_session()
         if not session.get("token"):
+            return
+        if session.get("auto_config_sync_paused"):
+            logger.info("Auto cloud config sync paused until manual upload for %s", session.get("email", ""))
             return
         await upload_cloud_config(include_secrets=True)
     except HTTPException as exc:
@@ -1585,6 +1591,16 @@ class AppPathSelectRequest(BaseModel):
 class AppPathUpdateRequest(BaseModel):
     target: str = Field(max_length=40)
     path: str = Field(min_length=1, max_length=1000)
+
+class AppOpenUrlRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=1000)
+
+class AppCleanupRequest(BaseModel):
+    confirm: bool = False
+    clear_cache: bool = True
+    clear_old_canvas_backups: bool = True
+    backup_days: int = Field(default=14, ge=1, le=365)
+    keep_backups_per_canvas: int = Field(default=20, ge=1, le=100)
 
 class AppUpdateSettingsRequest(BaseModel):
     update_check_url: str = Field(default="", max_length=1000)
@@ -2898,6 +2914,215 @@ def app_paths_payload():
         "static": STATIC_DIR,
     }
 
+STATIC_RUNTIME_FILES = [
+    "vendor/tailwind/tailwindcss-cdn.js",
+    "vendor/lucide/lucide.min.js",
+    "vendor/three/three.module.js",
+    "theme.js",
+    "theme.css",
+    "i18n.js",
+    "logo.png",
+]
+
+def static_runtime_health():
+    items = []
+    for rel_path in STATIC_RUNTIME_FILES:
+        path = os.path.join(STATIC_DIR, *rel_path.split("/"))
+        exists = os.path.isfile(path)
+        size = os.path.getsize(path) if exists else 0
+        items.append({
+            "path": f"/static/{rel_path}",
+            "exists": exists,
+            "size": size,
+        })
+    missing = [item for item in items if not item["exists"] or item["size"] <= 0]
+    return {
+        "ok": not missing,
+        "missing_count": len(missing),
+        "checked_count": len(items),
+        "items": items,
+    }
+
+def safe_dir_size(path: str, limit_files: int = 20000):
+    total = 0
+    files = 0
+    exists = os.path.isdir(path)
+    if not exists:
+        return {"exists": False, "files": 0, "size_bytes": 0, "truncated": False}
+    try:
+        for root, _, names in os.walk(path):
+            for name in names:
+                files += 1
+                if files > limit_files:
+                    return {"exists": True, "files": files - 1, "size_bytes": total, "truncated": True}
+                file_path = os.path.join(root, name)
+                try:
+                    total += os.path.getsize(file_path)
+                except OSError:
+                    continue
+    except OSError:
+        return {"exists": exists, "files": files, "size_bytes": total, "truncated": True}
+    return {"exists": True, "files": files, "size_bytes": total, "truncated": False}
+
+def is_safe_child_path(path: str, root: str):
+    try:
+        child = os.path.abspath(path)
+        parent = os.path.abspath(root)
+        return os.path.commonpath([child, parent]) == parent
+    except ValueError:
+        return False
+
+def cleanup_candidate(path: str, kind: str, root: str):
+    if not os.path.isfile(path) or not is_safe_child_path(path, root):
+        return None
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    return {
+        "kind": kind,
+        "path": path,
+        "name": os.path.basename(path),
+        "size_bytes": int(stat.st_size),
+        "modified_at": stat.st_mtime,
+    }
+
+def cleanup_preview_payload(backup_days: int = 14, keep_backups_per_canvas: int = 20):
+    cutoff = time.time() - max(1, int(backup_days or 14)) * 86400
+    keep = max(1, int(keep_backups_per_canvas or 20))
+    cache_items = []
+    if os.path.isdir(APP_CACHE_DIR):
+        for root, _, names in os.walk(APP_CACHE_DIR):
+            for name in names:
+                item = cleanup_candidate(os.path.join(root, name), "cache", APP_CACHE_DIR)
+                if item:
+                    cache_items.append(item)
+
+    backup_items = []
+    grouped = {}
+    if os.path.isdir(CANVAS_BACKUP_DIR):
+        for name in os.listdir(CANVAS_BACKUP_DIR):
+            if not name.endswith(".json") or "." not in name:
+                continue
+            path = os.path.join(CANVAS_BACKUP_DIR, name)
+            item = cleanup_candidate(path, "canvas_backup", CANVAS_BACKUP_DIR)
+            if not item:
+                continue
+            canvas_id = name.split(".", 1)[0]
+            grouped.setdefault(canvas_id, []).append(item)
+    for items in grouped.values():
+        items.sort(key=lambda item: item["modified_at"], reverse=True)
+        for index, item in enumerate(items):
+            if index >= keep or item["modified_at"] < cutoff:
+                backup_items.append(item)
+
+    all_items = cache_items + backup_items
+    return {
+        "ok": True,
+        "policy": {
+            "backup_days": backup_days,
+            "keep_backups_per_canvas": keep,
+            "safe_targets": ["cache", "canvas_backup"],
+        },
+        "cache": {
+            "count": len(cache_items),
+            "size_bytes": sum(item["size_bytes"] for item in cache_items),
+        },
+        "canvas_backups": {
+            "count": len(backup_items),
+            "size_bytes": sum(item["size_bytes"] for item in backup_items),
+        },
+        "total": {
+            "count": len(all_items),
+            "size_bytes": sum(item["size_bytes"] for item in all_items),
+        },
+        "items": sorted(all_items, key=lambda item: item["modified_at"])[:200],
+    }
+
+def local_data_health():
+    session = load_cloud_session()
+    assets = {
+        "count": 0,
+        "size_bytes": 0,
+        "synced": 0,
+        "pending": 0,
+        "failed": 0,
+        "deleted_tombstones": 0,
+    }
+    try:
+        with ASSET_LOCK:
+            with asset_db() as conn:
+                row = conn.execute(
+                    """
+                    SELECT
+                        COUNT(*) AS count,
+                        COALESCE(SUM(size_bytes), 0) AS size_bytes,
+                        SUM(CASE WHEN COALESCE(cloud_key, '') != '' OR COALESCE(cloud_synced_at, 0) > 0 THEN 1 ELSE 0 END) AS synced,
+                        SUM(CASE WHEN COALESCE(cloud_key, '') = '' AND COALESCE(cloud_synced_at, 0) <= 0 THEN 1 ELSE 0 END) AS pending,
+                        SUM(CASE WHEN COALESCE(cloud_error, '') != '' THEN 1 ELSE 0 END) AS failed
+                    FROM assets
+                    """
+                ).fetchone()
+                if row:
+                    assets.update({
+                        "count": int(row["count"] or 0),
+                        "size_bytes": int(row["size_bytes"] or 0),
+                        "synced": int(row["synced"] or 0),
+                        "pending": int(row["pending"] or 0),
+                        "failed": int(row["failed"] or 0),
+                    })
+                tombstone_row = conn.execute("SELECT COUNT(*) AS count FROM asset_deletions").fetchone()
+                assets["deleted_tombstones"] = int(tombstone_row["count"] or 0) if tombstone_row else 0
+    except Exception as exc:
+        assets["error"] = str(exc)[:200]
+
+    canvas_files = []
+    try:
+        if os.path.isdir(CANVAS_DIR):
+            canvas_files = [name for name in os.listdir(CANVAS_DIR) if name.endswith(".json")]
+    except OSError:
+        canvas_files = []
+
+    backup_files = []
+    try:
+        if os.path.isdir(CANVAS_BACKUP_DIR):
+            backup_files = [name for name in os.listdir(CANVAS_BACKUP_DIR) if name.endswith(".json")]
+    except OSError:
+        backup_files = []
+
+    conversation_files = 0
+    try:
+        if os.path.isdir(CONVERSATION_DIR):
+            for _, _, names in os.walk(CONVERSATION_DIR):
+                conversation_files += len([name for name in names if name.endswith(".json")])
+    except OSError:
+        conversation_files = 0
+
+    return {
+        "ok": True,
+        "account": {
+            "logged_in": bool(session.get("token")),
+            "email": session.get("email", ""),
+            "base_url": session.get("base_url", CLOUD_SYNC_BASE_URL),
+            "cloud_config_missing": bool(session.get("cloud_config_missing")),
+            "auto_config_sync_paused": bool(session.get("auto_config_sync_paused")),
+        },
+        "assets": assets,
+        "canvases": {
+            "count": len(canvas_files),
+            "backup_count": len(backup_files),
+        },
+        "conversations": {
+            "count": conversation_files,
+        },
+        "dirs": {
+            "assets": safe_dir_size(ASSETS_DIR),
+            "data": safe_dir_size(DATA_DIR),
+            "cache": safe_dir_size(APP_CACHE_DIR),
+            "logs": safe_dir_size(APP_LOG_DIR),
+        },
+    }
+
 APP_PATH_TARGETS = {
     "save": {
         "env": "APP_ASSETS_DIR",
@@ -3000,6 +3225,59 @@ def open_local_path(path: str):
         subprocess.Popen(["open", path])
     else:
         subprocess.Popen(["xdg-open", path])
+
+def open_external_url(url: str):
+    parsed = urllib.parse.urlparse(str(url or "").strip())
+    if parsed.scheme != "https" or parsed.netloc.lower() not in {"apimart.ai", "www.apimart.ai"}:
+        raise HTTPException(status_code=400, detail="只允许打开 apimart.ai 链接")
+    safe_url = urllib.parse.urlunparse(parsed)
+    if sys.platform.startswith("win"):
+        os.startfile(safe_url)  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", safe_url])
+    else:
+        subprocess.Popen(["xdg-open", safe_url])
+    return safe_url
+
+def desktop_program_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return BASE_DIR
+
+def desktop_updater_path():
+    candidates = [
+        os.path.join(desktop_program_dir(), "LumaForgeUpdater.exe"),
+        os.path.join(BUNDLE_DIR, "LumaForgeUpdater.exe"),
+        os.path.join(BASE_DIR, "LumaForgeUpdater.exe"),
+    ]
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return ""
+
+def desktop_update_capability():
+    is_frozen = getattr(sys, "frozen", False)
+    if not is_frozen:
+        return {
+            "supported": True,
+            "mode": "source",
+            "updater_path": "",
+            "reason": "",
+        }
+    updater = desktop_updater_path()
+    if updater:
+        return {
+            "supported": True,
+            "mode": "desktop-updater",
+            "updater_path": updater,
+            "reason": "",
+        }
+    return {
+        "supported": False,
+        "mode": "desktop-updater-missing",
+        "updater_path": "",
+        "reason": "桌面版需要随安装包一起发布 LumaForgeUpdater.exe，才能自动替换正在运行的程序。",
+    }
 
 def version_tuple(value: str):
     parts = []
@@ -3123,6 +3401,8 @@ async def index():
 
 @app.get("/api/app/info")
 async def app_info():
+    static_health = static_runtime_health()
+    data_health = local_data_health()
     return {
         "name": APP_DISPLAY_NAME,
         "brand": APP_BRAND_NAME,
@@ -3130,11 +3410,65 @@ async def app_info():
         "version": APP_VERSION,
         "build_id": APP_BUILD_ID,
         "desktop": os.getenv("LUMAFORGE_DESKTOP") == "1" or os.getenv("INFINITE_CANVAS_DESKTOP") == "1",
+        "update_capability": desktop_update_capability(),
         "cloud_url": CLOUD_SYNC_BASE_URL,
         "update_check_configured": bool(APP_UPDATE_CHECK_URL),
         "update_check_url": APP_UPDATE_CHECK_URL,
         "update_state": load_update_state(),
         "paths": app_paths_payload(),
+        "static_health": {
+            "ok": static_health["ok"],
+            "missing_count": static_health["missing_count"],
+            "checked_count": static_health["checked_count"],
+        },
+        "local_data_health": data_health,
+    }
+
+@app.get("/api/app/static-health")
+async def app_static_health():
+    return static_runtime_health()
+
+@app.get("/api/app/local-data-health")
+async def app_local_data_health():
+    return local_data_health()
+
+@app.get("/api/app/cleanup-preview")
+async def app_cleanup_preview(backup_days: int = 14, keep_backups_per_canvas: int = 20):
+    return cleanup_preview_payload(backup_days, keep_backups_per_canvas)
+
+@app.post("/api/app/cleanup-run")
+async def app_cleanup_run(payload: AppCleanupRequest):
+    if not payload.confirm:
+        raise HTTPException(status_code=400, detail="请先确认清理操作")
+    preview = cleanup_preview_payload(payload.backup_days, payload.keep_backups_per_canvas)
+    deleted = []
+    failed = []
+    allowed_kinds = set()
+    if payload.clear_cache:
+        allowed_kinds.add("cache")
+    if payload.clear_old_canvas_backups:
+        allowed_kinds.add("canvas_backup")
+    for item in preview.get("items") or []:
+        if item.get("kind") not in allowed_kinds:
+            continue
+        path = item.get("path") or ""
+        root = APP_CACHE_DIR if item.get("kind") == "cache" else CANVAS_BACKUP_DIR
+        if not is_safe_child_path(path, root):
+            failed.append({"path": path, "error": "unsafe path"})
+            continue
+        try:
+            if os.path.isfile(path):
+                os.remove(path)
+                deleted.append(item)
+        except Exception as exc:
+            failed.append({"path": path, "error": str(exc)})
+    return {
+        "ok": True,
+        "deleted": len(deleted),
+        "deleted_size_bytes": sum(int(item.get("size_bytes") or 0) for item in deleted),
+        "failed": failed,
+        "failed_count": len(failed),
+        "remaining_preview": cleanup_preview_payload(payload.backup_days, payload.keep_backups_per_canvas),
     }
 
 @app.post("/api/app/open-path")
@@ -3149,6 +3483,16 @@ async def app_open_path(payload: AppOpenPathRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"打开目录失败：{exc}")
     return {"ok": True, "target": target, "path": path}
+
+@app.post("/api/app/open-url")
+async def app_open_url(payload: AppOpenUrlRequest):
+    try:
+        opened = open_external_url(payload.url)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"打开外部链接失败：{exc}")
+    return {"ok": True, "url": opened}
 
 @app.post("/api/app/select-path")
 async def app_select_path(payload: AppPathSelectRequest):
@@ -3198,12 +3542,9 @@ async def app_update_check():
     normalized = normalize_update_payload(data if isinstance(data, dict) else {})
     latest = normalized["latest_version"]
     is_newer = bool(latest and version_tuple(latest) > version_tuple(APP_VERSION))
-    is_frozen = getattr(sys, "frozen", False)
-    is_desktop = os.getenv("LUMAFORGE_DESKTOP") == "1" or os.getenv("INFINITE_CANVAS_DESKTOP") == "1"
-    auto_update_supported = not is_frozen  # Python source can self-update; EXE cannot
-    reason = ""
-    if is_frozen:
-        reason = "当前环境是打包 EXE，需要独立 updater 或手动替换。"
+    capability = desktop_update_capability()
+    auto_update_supported = bool(capability.get("supported"))
+    reason = str(capability.get("reason") or "")
     selected = normalized.get("selected_asset")
     return {
         "configured": True,
@@ -3217,6 +3558,7 @@ async def app_update_check():
         "selected_asset": selected,
         "auto_update_supported": auto_update_supported,
         "auto_update_reason": reason,
+        "update_mode": capability.get("mode"),
         "raw": data,
     }
 
@@ -3354,8 +3696,58 @@ UPDATE_REPLACE_FILES = {"main.py", "cloud_config_server.py", "launcher.py", "des
                         "infinite_canvas.spec", "desktop_canvas.spec", "Dockerfile", "Dockerfile.cloud",
                         "docker-compose.yml", "docker-compose.cloud.yml", ".env.example", ".env.cloud.example",
                         "docker-entrypoint.sh", "docker-entrypoint-cloud.sh", "README.md", "APP_PACKAGING.md",
+                        "desktop_updater.py", "desktop_updater.spec",
                         "RELEASE_CHECKLIST.md", ".gitignore"}
 UPDATE_REPLACE_DIRS = {"static", "workflows", "docs", "scripts"}
+
+def launch_desktop_updater(zip_path: str, target_version: str = "", download_meta: Optional[dict] = None):
+    capability = desktop_update_capability()
+    updater = capability.get("updater_path") or ""
+    if not updater or not os.path.isfile(updater):
+        raise HTTPException(status_code=400, detail=capability.get("reason") or "缺少 LumaForgeUpdater.exe，无法执行桌面版自动更新。")
+    if not os.path.isfile(zip_path):
+        raise HTTPException(status_code=400, detail="更新包文件不存在")
+    app_dir = desktop_program_dir()
+    state = {
+        "current_version": APP_VERSION,
+        "target_version": target_version or "",
+        "installed_at": now_ms(),
+        "package": zip_path,
+        "download": download_meta or {},
+        "desktop_updater": updater,
+        "app_dir": app_dir,
+        "restart_required": True,
+        "pending_external_updater": True,
+    }
+    save_update_state(state)
+    args = [
+        updater,
+        "--pid", str(os.getpid()),
+        "--package", zip_path,
+        "--app-dir", app_dir,
+        "--exe", sys.executable,
+        "--state", UPDATE_STATE_FILE,
+        "--version", target_version or "",
+        "--restart",
+    ]
+    try:
+        subprocess.Popen(args, cwd=os.path.dirname(updater), close_fds=True)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"启动桌面更新器失败：{exc}")
+    async def _exit_for_update():
+        await asyncio.sleep(1.2)
+        os._exit(0)
+    asyncio.create_task(_exit_for_update())
+    return {
+        "ok": True,
+        "installed": False,
+        "external_updater_started": True,
+        "restart_required": True,
+        "updater_path": updater,
+        "app_dir": app_dir,
+        "update_state": state,
+        "message": "已启动桌面更新器，应用即将关闭；更新器会替换程序并自动重启。",
+    }
 
 
 @app.post("/api/app/update-download")
@@ -3424,14 +3816,14 @@ async def app_update_download():
 
 async def install_latest_update_package(target_version: str = "", download_meta: Optional[dict] = None):
     is_frozen = getattr(sys, "frozen", False)
-    if is_frozen:
-        raise HTTPException(status_code=400, detail="当前环境是打包 EXE，不支持原地更新，需要独立 updater。")
     # Find downloaded zip
     os.makedirs(UPDATE_DOWNLOADS_DIR, exist_ok=True)
     zip_files = sorted([f for f in os.listdir(UPDATE_DOWNLOADS_DIR) if f.endswith(".zip")], key=lambda f: os.path.getmtime(os.path.join(UPDATE_DOWNLOADS_DIR, f)), reverse=True)
     if not zip_files:
         raise HTTPException(status_code=400, detail="未找到已下载的更新包，请先执行「下载更新」")
     zip_path = os.path.join(UPDATE_DOWNLOADS_DIR, zip_files[0])
+    if is_frozen:
+        return launch_desktop_updater(zip_path, target_version, download_meta)
     # Create unique staging directory
     install_ts = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
     install_dir = os.path.join(UPDATE_STAGING_DIR, f"install-{install_ts}")
@@ -3532,9 +3924,6 @@ async def app_update_install():
 
 @app.post("/api/app/update-auto")
 async def app_update_auto():
-    is_frozen = getattr(sys, "frozen", False)
-    if is_frozen:
-        raise HTTPException(status_code=400, detail="当前环境是打包 EXE，需要独立 updater；浏览器/源码版支持一键自动升级。")
     check = await app_update_check()
     if not check.get("configured"):
         raise HTTPException(status_code=400, detail=check.get("message") or "未配置更新检查地址")
@@ -4341,6 +4730,8 @@ async def cloud_status(refresh: int = 0):
         "base_url": session.get("base_url", CLOUD_SYNC_BASE_URL),
         "custom_cloud": bool(session.get("custom_cloud")),
         "updated_at": session.get("updated_at", 0),
+        "cloud_config_missing": bool(session.get("cloud_config_missing")),
+        "auto_config_sync_paused": bool(session.get("auto_config_sync_paused")),
     }
 
 def cloud_requested_base_url(base_url: str = ""):
@@ -4353,6 +4744,8 @@ def cloud_requested_base_url(base_url: str = ""):
 
 async def cloud_auth(action: str, payload: CloudAuthRequest):
     base_url, custom_cloud = cloud_requested_base_url(payload.base_url)
+    previous_session = load_cloud_session()
+    previous_email = str(previous_session.get("email") or "").strip().lower()
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             response = await client.post(
@@ -4386,9 +4779,17 @@ async def cloud_auth(action: str, payload: CloudAuthRequest):
     config_sync = await try_apply_cloud_config_from_account(session)
     if config_sync.get("downloaded") and config_sync.get("cloud_updated_at"):
         session["updated_at"] = config_sync.get("cloud_updated_at")
+        session["cloud_config_missing"] = False
+        session["auto_config_sync_paused"] = False
         save_cloud_session(session)
     elif config_sync.get("missing"):
         reset_local_cloud_synced_config()
+        current_email = str(session.get("email") or "").strip().lower()
+        account_changed = bool(previous_email and previous_email != current_email)
+        session["cloud_config_missing"] = True
+        session["auto_config_sync_paused"] = True
+        session["account_changed"] = account_changed
+        save_cloud_session(session)
     return {
         "logged_in": True,
         "email": session["email"],
@@ -4398,6 +4799,8 @@ async def cloud_auth(action: str, payload: CloudAuthRequest):
         "base_url": base_url,
         "custom_cloud": custom_cloud,
         "updated_at": session.get("updated_at", 0),
+        "cloud_config_missing": bool(session.get("cloud_config_missing")),
+        "auto_config_sync_paused": bool(session.get("auto_config_sync_paused")),
         "config_sync": config_sync,
     }
 
@@ -4649,6 +5052,8 @@ async def cloud_upload(payload: CloudUploadRequest):
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"无法连接云端服务：{exc}") from exc
     session["updated_at"] = now_ms()
+    session["cloud_config_missing"] = False
+    session["auto_config_sync_paused"] = False
     save_cloud_session(session)
     return {"ok": True, "cloud": data}
 
@@ -4676,6 +5081,10 @@ async def cloud_download():
     if not config:
         raise HTTPException(status_code=404, detail="云端还没有保存配置")
     applied = apply_cloud_config(config)
+    session["cloud_config_missing"] = False
+    session["auto_config_sync_paused"] = False
+    session["updated_at"] = data.get("updated_at", session.get("updated_at", 0))
+    save_cloud_session(session)
     return {"ok": True, "cloud_updated_at": data.get("updated_at", 0), "applied": applied}
 
 
@@ -5012,6 +5421,8 @@ async def cloud_media_sync(payload: CloudMediaSyncRequest):
                             conn.execute("UPDATE assets SET cloud_error = ? WHERE id = ?", (err[:1000], item["id"]))
 
             if payload.delete_remote_missing:
+                if not hashes:
+                    raise HTTPException(status_code=400, detail="本地素材库为空，已阻止清理云端文件。请先确认本地数据目录没有切错。")
                 response = await client.post(f"{base_url}/api/media/prune", headers=cloud_auth_header(session), json={"keep_hashes": hashes, "confirm": True})
                 response.raise_for_status()
                 deleted_remote = int(response.json().get("deleted") or 0)
@@ -5151,7 +5562,7 @@ async def test_provider_connection(payload: TestConnectionPayload):
     except httpx.HTTPError as e:
         return {"ok": False, "status": 0, "message": str(e)[:300]}
 
-async def probe_provider_liveness(provider: dict):
+def probe_provider_liveness(provider: dict):
     started = time.time()
     provider_id = provider.get("id", "")
     name = provider.get("name") or provider_id
@@ -5179,8 +5590,8 @@ async def probe_provider_liveness(provider: dict):
         return result
     url = f"{base_url}/models" if base_url.endswith("/v1") else f"{base_url}/v1/models"
     try:
-        async with httpx.AsyncClient(timeout=6) as client:
-            resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"})
+        with httpx.Client(timeout=API_LIVENESS_TIMEOUT) as client:
+            resp = client.get(url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"})
         result["status"] = resp.status_code
         result["latency_ms"] = int((time.time() - started) * 1000)
         if resp.status_code >= 400:
@@ -5197,16 +5608,41 @@ async def probe_provider_liveness(provider: dict):
             "model_count": len(items) if isinstance(items, list) else 0,
         })
         return result
+    except httpx.TimeoutException:
+        result["latency_ms"] = int((time.time() - started) * 1000)
+        result["message"] = f"检测超时（{API_LIVENESS_TIMEOUT:g}s）"
+        return result
     except Exception as exc:
         result["latency_ms"] = int((time.time() - started) * 1000)
         result["message"] = f"连接失败：{str(exc)[:160]}"
         return result
 
+async def probe_provider_liveness_guarded(provider: dict):
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(probe_provider_liveness, provider),
+            timeout=API_LIVENESS_TIMEOUT + 0.8,
+        )
+    except asyncio.TimeoutError:
+        provider_id = provider.get("id", "")
+        name = provider.get("name") or provider_id
+        return {
+            "id": provider_id,
+            "name": name,
+            "enabled": bool(provider.get("enabled", True)),
+            "base_url": (provider.get("base_url") or "").strip().rstrip("/"),
+            "ok": False,
+            "status": 0,
+            "message": f"检测超时（{API_LIVENESS_TIMEOUT:g}s）",
+            "model_count": 0,
+            "latency_ms": int((API_LIVENESS_TIMEOUT + 0.8) * 1000),
+        }
+
 @app.get("/api/providers/liveness")
 async def api_providers_liveness():
     providers = load_api_providers()
     enabled = [p for p in providers if p.get("enabled", True)]
-    details = await asyncio.gather(*[probe_provider_liveness(p) for p in providers]) if providers else []
+    details = await asyncio.gather(*[probe_provider_liveness_guarded(p) for p in providers]) if providers else []
     ok_count = sum(1 for item in details if item.get("enabled") and item.get("ok") is True)
     failed_count = sum(1 for item in details if item.get("enabled") and item.get("ok") is False)
     total = len(enabled)
@@ -5230,6 +5666,7 @@ async def api_providers_liveness():
         "failed_count": failed_count,
         "total": total,
         "checked_at": time.time(),
+        "timeout_sec": API_LIVENESS_TIMEOUT,
         "providers": details,
     }
 

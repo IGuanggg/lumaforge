@@ -15,11 +15,11 @@
             } catch(e) {}
         })();
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="/static/theme.js?v=20260522-202-goals1"></script>
-    <script src="/static/i18n.js?v=20260522-202-goals1"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260522-202-goals1">
+    <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
+    <script src="/static/vendor/lucide/lucide.min.js"></script>
+    <script src="/static/theme.js?v=20260525-download-fix1"></script>
+    <script src="/static/i18n.js?v=20260525-download-fix1"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260525-download-fix1">
     <style>
         :root {
             --bg:#f7f8fa;
@@ -279,6 +279,37 @@
                         <div class="path-list" id="path-list"></div>
                         <div class="status" id="path-status">正在读取目录...</div>
                     </section>
+
+                    <section class="block">
+                        <div class="block-head">
+                            <div>
+                                <div class="block-title">本地数据</div>
+                                <div class="block-desc">离线使用优先保存在本机；这里用来快速确认素材、画布、删除保护和云同步边界。</div>
+                            </div>
+                            <button class="action-btn" id="refresh-local-data-btn" type="button">
+                                <i data-lucide="refresh-cw" class="w-4 h-4"></i><span>刷新</span>
+                            </button>
+                        </div>
+                        <div class="kv-list">
+                            <div class="kv"><span>当前账号</span><span id="local-account-text">-</span></div>
+                            <div class="kv"><span>素材库</span><span id="local-assets-text">-</span></div>
+                            <div class="kv"><span>素材容量</span><span id="local-assets-size-text">-</span></div>
+                            <div class="kv"><span>云同步</span><span id="local-sync-text">-</span></div>
+                            <div class="kv"><span>删除保护</span><span id="local-tombstone-text">-</span></div>
+                            <div class="kv"><span>画布</span><span id="local-canvas-text">-</span></div>
+                            <div class="kv"><span>数据目录</span><span id="local-dir-text">-</span></div>
+                        </div>
+                        <div class="path-actions">
+                            <button class="action-btn" id="preview-cleanup-btn" type="button">
+                                <i data-lucide="scan-search" class="w-4 h-4"></i><span>预览清理</span>
+                            </button>
+                            <button class="action-btn danger" id="run-cleanup-btn" type="button">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i><span>清理缓存</span>
+                            </button>
+                        </div>
+                        <div class="update-result" id="cleanup-result"></div>
+                        <div class="status" id="local-data-status">正在读取本地数据...</div>
+                    </section>
                 </div>
 
                 <aside class="content">
@@ -293,6 +324,7 @@
                             <div class="kv"><span>当前版本</span><span id="version-text">-</span></div>
                             <div class="kv"><span>运行模式</span><span id="mode-text">-</span></div>
                             <div class="kv"><span>云端地址</span><span id="cloud-text">-</span></div>
+                            <div class="kv"><span>本地依赖</span><span id="static-health-text">-</span></div>
                             <div class="kv"><span>最近升级</span><span id="update-last-text">-</span></div>
                             <div class="kv"><span>升级备份</span><span id="update-backup-text">-</span></div>
                         </div>
@@ -388,6 +420,107 @@
             return d.toLocaleString();
         }
 
+        function formatBytes(value) {
+            const n = Number(value || 0);
+            if(!Number.isFinite(n) || n <= 0) return '0 B';
+            const units = ['B','KB','MB','GB','TB'];
+            let size = n;
+            let unit = 0;
+            while(size >= 1024 && unit < units.length - 1) {
+                size /= 1024;
+                unit += 1;
+            }
+            return `${size.toFixed(size >= 10 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+        }
+
+        function setText(id, value) {
+            const el = document.getElementById(id);
+            if(el) el.textContent = value;
+        }
+
+        function renderLocalDataHealth(data) {
+            const account = data?.account || {};
+            const assets = data?.assets || {};
+            const canvases = data?.canvases || {};
+            const dirs = data?.dirs || {};
+            const dataDir = dirs.data || {};
+            const accountText = account.logged_in
+                ? `${account.email || '已登录'}${account.auto_config_sync_paused ? ' · 自动配置同步已暂停' : ''}`
+                : '未登录云端账号';
+            setText('local-account-text', accountText);
+            setText('local-assets-text', `${Number(assets.count || 0)} 个，本地待同步 ${Number(assets.pending || 0)} 个`);
+            setText('local-assets-size-text', formatBytes(assets.size_bytes || dirs.assets?.size_bytes || 0));
+            setText('local-sync-text', `已同步 ${Number(assets.synced || 0)}，失败 ${Number(assets.failed || 0)}`);
+            setText('local-tombstone-text', `${Number(assets.deleted_tombstones || 0)} 条删除记录，恢复缺失时会跳过`);
+            setText('local-canvas-text', `${Number(canvases.count || 0)} 个画布，${Number(canvases.backup_count || 0)} 个备份`);
+            setText('local-dir-text', `${formatBytes(dataDir.size_bytes || 0)}，${Number(dataDir.files || 0)} 个文件${dataDir.truncated ? '（已截断）' : ''}`);
+            setStatus('local-data-status', account.auto_config_sync_paused
+                ? '检测到当前账号云端还没有配置，已暂停后台自动上传，避免旧本机配置串到新账号。手动上传配置后会解除。'
+                : '本地数据状态已加载。', account.auto_config_sync_paused ? 'warn' : 'ok');
+        }
+
+        async function loadLocalDataHealth() {
+            try {
+                const data = await fetch('/api/app/local-data-health').then(jsonOrThrow);
+                renderLocalDataHealth(data);
+            } catch(e) {
+                setStatus('local-data-status', e.message || String(e), 'error');
+            }
+        }
+
+        function renderCleanupPreview(data, title = '可清理内容预览') {
+            const box = document.getElementById('cleanup-result');
+            if(!box) return;
+            const total = data?.total || {};
+            const cache = data?.cache || {};
+            const backups = data?.canvas_backups || {};
+            box.classList.add('show');
+            box.innerHTML = `
+                <div class="update-result-title">${escapeHtml(title)}</div>
+                <div class="update-result-meta">预计释放 ${formatBytes(total.size_bytes || 0)}，共 ${Number(total.count || 0)} 个文件。</div>
+                <div class="update-result-meta">缓存：${Number(cache.count || 0)} 个 / ${formatBytes(cache.size_bytes || 0)}；旧画布备份：${Number(backups.count || 0)} 个 / ${formatBytes(backups.size_bytes || 0)}。</div>
+                <div class="update-result-notes">只会清理 cache 目录和旧画布备份，不会删除素材原图、素材库数据库或画布主数据。</div>
+            `;
+        }
+
+        async function previewCleanup() {
+            setStatus('local-data-status', '正在扫描可清理文件...');
+            try {
+                const data = await fetch('/api/app/cleanup-preview?backup_days=14&keep_backups_per_canvas=20').then(jsonOrThrow);
+                renderCleanupPreview(data);
+                setStatus('local-data-status', '清理预览已生成。', 'ok');
+            } catch(e) {
+                setStatus('local-data-status', e.message || String(e), 'error');
+            }
+        }
+
+        async function runCleanup() {
+            if(!confirm('只会清理缓存和旧画布备份，不会删除素材原图或画布主数据。确定继续吗？')) return;
+            setStatus('local-data-status', '正在清理缓存和旧备份...');
+            const btn = document.getElementById('run-cleanup-btn');
+            if(btn) btn.disabled = true;
+            try {
+                const data = await fetch('/api/app/cleanup-run', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({
+                        confirm:true,
+                        clear_cache:true,
+                        clear_old_canvas_backups:true,
+                        backup_days:14,
+                        keep_backups_per_canvas:20
+                    })
+                }).then(jsonOrThrow);
+                renderCleanupPreview(data.remaining_preview, `清理完成：已删除 ${Number(data.deleted || 0)} 个文件，释放 ${formatBytes(data.deleted_size_bytes || 0)}`);
+                await loadLocalDataHealth();
+                setStatus('local-data-status', data.failed_count ? `清理完成，但 ${data.failed_count} 个文件失败。` : '清理完成。', data.failed_count ? 'warn' : 'ok');
+            } catch(e) {
+                setStatus('local-data-status', e.message || String(e), 'error');
+            } finally {
+                if(btn) btn.disabled = false;
+            }
+        }
+
         function renderInfo(info) {
             appInfo = info || {};
             const paths = appInfo.paths || {};
@@ -395,6 +528,14 @@
             document.getElementById('version-text').textContent = appInfo.version || '-';
             document.getElementById('mode-text').textContent = appInfo.desktop ? '桌面端' : '浏览器端';
             document.getElementById('cloud-text').textContent = appInfo.cloud_url || '-';
+            const staticHealth = appInfo.static_health || {};
+            const staticHealthEl = document.getElementById('static-health-text');
+            if(staticHealthEl) {
+                staticHealthEl.textContent = staticHealth.ok
+                    ? `完整 (${Number(staticHealth.checked_count || 0)} 项)`
+                    : `缺失 ${Number(staticHealth.missing_count || 0)} 项`;
+            }
+            if(appInfo.local_data_health) renderLocalDataHealth(appInfo.local_data_health);
             const updateState = appInfo.update_state || {};
             const lastUpdate = document.getElementById('update-last-text');
             const backupText = document.getElementById('update-backup-text');
@@ -647,8 +788,12 @@
         document.getElementById('download-update-btn').addEventListener('click', downloadUpdate);
         document.getElementById('install-update-btn').addEventListener('click', installUpdate);
         document.getElementById('restart-app-btn').addEventListener('click', restartApp);
+        document.getElementById('refresh-local-data-btn')?.addEventListener('click', loadLocalDataHealth);
+        document.getElementById('preview-cleanup-btn')?.addEventListener('click', previewCleanup);
+        document.getElementById('run-cleanup-btn')?.addEventListener('click', runCleanup);
         window.addEventListener('DOMContentLoaded', () => {
             loadInfo();
+            loadLocalDataHealth();
             if(window.lucide) lucide.createIcons();
         });
     </script>
