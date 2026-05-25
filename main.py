@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.6")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260525-desktop-updater1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.7")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260525-updater-installer1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -3563,6 +3563,20 @@ async def app_update_check():
     }
 
 
+@app.get("/api/app/update-state")
+async def app_update_state():
+    state = load_update_state()
+    capability = desktop_update_capability()
+    return {
+        **state,
+        "current_version": APP_VERSION,
+        "build_id": APP_BUILD_ID,
+        "update_capability": capability,
+        "data_dir": RUNTIME_DIR,
+        "app_dir": BASE_DIR,
+    }
+
+
 def _safe_extract_zip(zip_path: str, dest_dir: str):
     """Extract zip with comprehensive zip-slip protection."""
     dest_abs = os.path.abspath(dest_dir)
@@ -3784,6 +3798,7 @@ async def app_update_download():
     os.makedirs(UPDATE_DOWNLOADS_DIR, exist_ok=True)
     filename = _sanitize_update_filename(selected.get("name"), latest)
     local_path = os.path.join(UPDATE_DOWNLOADS_DIR, filename)
+    save_update_state({"phase": "downloading", "version": latest, "filename": filename, "downloaded_bytes": 0, "total_bytes": selected.get("size", 0), "error": None})
     try:
         async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
             dl_resp = await client.get(download_url)
@@ -3793,8 +3808,10 @@ async def app_update_download():
     except Exception as exc:
         if os.path.exists(local_path):
             os.remove(local_path)
+        save_update_state({"phase": "failed", "version": latest, "filename": filename, "error": str(exc)})
         raise HTTPException(status_code=502, detail=f"下载更新包失败：{exc}")
     file_size = os.path.getsize(local_path)
+    save_update_state({"phase": "verifying", "version": latest, "filename": filename, "downloaded_bytes": file_size, "total_bytes": file_size, "error": None})
     actual_sha256 = _sha256_file(local_path)
     expected_sha256 = (selected.get("sha256") or "").strip().lower()
     sha256_verified = False
@@ -3802,10 +3819,12 @@ async def app_update_download():
     if expected_sha256:
         if actual_sha256.lower() != expected_sha256:
             os.remove(local_path)
+            save_update_state({"phase": "failed", "version": latest, "filename": filename, "error": "SHA256 校验失败"})
             raise HTTPException(status_code=400, detail=f"更新包校验失败：SHA256 不匹配（期望 {expected_sha256[:16]}...，实际 {actual_sha256[:16]}...）")
         sha256_verified = True
     else:
         warning = "未提供 SHA256 校验值，请确认来源可信。"
+    save_update_state({"phase": "downloaded", "version": latest, "filename": filename, "path": local_path, "size": file_size, "sha256": actual_sha256, "error": None})
     return {
         "ok": True,
         "version": latest,

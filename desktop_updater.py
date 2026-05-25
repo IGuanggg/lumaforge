@@ -169,22 +169,29 @@ def main():
 
     state = {
         "ok": False,
+        "phase": "waiting_for_exit",
         "target_version": args.version,
         "package": args.package,
         "app_dir": args.app_dir,
         "started_at": int(time.time() * 1000),
     }
+    write_state(args.state, state)
     try:
         wait_for_pid(args.pid)
+        state["phase"] = "extracting"
+        write_state(args.state, state)
         staging = tempfile.mkdtemp(prefix="lumaforge-update-")
         try:
             safe_extract_zip(args.package, staging)
             root = detect_package_root(staging)
             if not root:
                 raise RuntimeError("Update package does not contain a recognizable LumaForge app root.")
+            state["phase"] = "replacing"
+            write_state(args.state, state)
             backup_dir, replaced = replace_app(root, args.app_dir)
             state.update({
                 "ok": True,
+                "phase": "done",
                 "installed": True,
                 "installed_at": int(time.time() * 1000),
                 "backup_dir": backup_dir,
@@ -196,10 +203,25 @@ def main():
     except Exception as exc:
         state.update({
             "ok": False,
+            "phase": "failed",
             "installed": False,
             "error": str(exc),
             "failed_at": int(time.time() * 1000),
         })
+        # Try rollback if backup exists
+        backup_dir = state.get("backup_dir")
+        if backup_dir and os.path.isdir(backup_dir):
+            try:
+                for name in os.listdir(backup_dir):
+                    src = os.path.join(backup_dir, name)
+                    dst = os.path.join(args.app_dir, name)
+                    if os.path.exists(dst):
+                        remove_path(dst)
+                    copy_entry(src, dst)
+                state["phase"] = "rollback"
+                state["rollback"] = True
+            except Exception as rb_exc:
+                state["rollback_error"] = str(rb_exc)
     write_state(args.state, state)
     if state.get("ok") and args.restart:
         restart_app(args.exe)
