@@ -8,6 +8,14 @@ import webbrowser
 
 import uvicorn
 
+APP_NAME = "LumaForge"
+
+def appdata_dir():
+    base = os.getenv("APPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Roaming")
+    return os.path.join(base, APP_NAME)
+
+def default_save_dir():
+    return os.path.join(os.path.expanduser("~"), "Pictures", APP_NAME)
 
 def find_port(preferred):
     try:
@@ -35,8 +43,12 @@ def wait_until_ready(url, timeout=30):
 
 
 def main():
-    app_dir = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, "frozen", False) else __file__))
-    os.environ.setdefault("APP_RUNTIME_DIR", os.path.join(app_dir, "userdata"))
+    os.environ.setdefault("APP_RUNTIME_DIR", appdata_dir())
+    os.environ.setdefault("APP_ASSETS_DIR", default_save_dir())
+    os.environ.setdefault("LUMAFORGE_DESKTOP", "1")
+    os.environ.setdefault("INFINITE_CANVAS_DESKTOP", "1")
+    os.makedirs(os.environ["APP_RUNTIME_DIR"], exist_ok=True)
+    os.makedirs(os.environ["APP_ASSETS_DIR"], exist_ok=True)
     port = find_port(os.getenv("APP_PORT", "3000"))
     url = f"http://127.0.0.1:{port}/"
     from main import app

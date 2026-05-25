@@ -2,6 +2,7 @@ import ctypes
 import json
 import logging
 import os
+import shutil
 import socket
 import sys
 import threading
@@ -41,6 +42,38 @@ def ensure_dir(path):
     path.mkdir(parents=True, exist_ok=True)
     return path
 
+def copy_missing_tree(src, dst):
+    if not src.exists():
+        return False
+    copied = False
+    ensure_dir(dst)
+    for item in src.iterdir():
+        target = dst / item.name
+        if target.exists():
+            continue
+        if item.is_dir():
+            shutil.copytree(item, target)
+        else:
+            shutil.copy2(item, target)
+        copied = True
+    return copied
+
+def migrate_legacy_desktop_data(runtime_dir, save_dir):
+    app_dir = Path(sys.executable).resolve().parent if is_frozen() else Path(__file__).resolve().parent
+    legacy_runtime = app_dir / "userdata"
+    legacy_assets = app_dir / "assets"
+    migrated = []
+    try:
+        if legacy_runtime.exists() and not any(runtime_dir.iterdir()):
+            if copy_missing_tree(legacy_runtime, runtime_dir):
+                migrated.append(str(legacy_runtime))
+        if legacy_assets.exists() and not any(save_dir.iterdir()):
+            if copy_missing_tree(legacy_assets, save_dir):
+                migrated.append(str(legacy_assets))
+    except Exception:
+        logging.exception("Legacy desktop data migration failed")
+    return migrated
+
 
 def configure_desktop_environment():
     runtime_dir = ensure_dir(Path(os.getenv("APP_RUNTIME_DIR") or appdata_dir()))
@@ -56,6 +89,8 @@ def configure_desktop_environment():
     os.environ.setdefault("LUMAFORGE_DESKTOP", "1")
     os.environ.setdefault("INFINITE_CANVAS_DESKTOP", "1")
 
+    migrated_from = migrate_legacy_desktop_data(runtime_dir, save_dir)
+
     for child in ("input", "output", "thumbs", "temp"):
         ensure_dir(save_dir / child)
 
@@ -64,6 +99,7 @@ def configure_desktop_environment():
         "save_dir": save_dir,
         "logs_dir": logs_dir,
         "webview_storage_dir": webview_storage_dir,
+        "migrated_from": migrated_from,
     }
 
 
@@ -197,6 +233,8 @@ def main():
     log_file = configure_logging(paths["logs_dir"], redirect_stdio=is_frozen() and not smoke_test)
     port = find_port(os.getenv("APP_PORT", "3000"))
     logging.info("Desktop launcher start argv=%r smoke_test=%s frozen=%s port=%s", sys.argv, smoke_test, is_frozen(), port)
+    if paths.get("migrated_from"):
+        logging.info("Migrated legacy desktop data from %r", paths["migrated_from"])
 
     if smoke_test:
         exit_code = run_smoke_test(port)

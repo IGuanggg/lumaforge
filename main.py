@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.5")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260525-download-fix1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.6")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260525-desktop-updater1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -3708,20 +3708,26 @@ def launch_desktop_updater(zip_path: str, target_version: str = "", download_met
     if not os.path.isfile(zip_path):
         raise HTTPException(status_code=400, detail="更新包文件不存在")
     app_dir = desktop_program_dir()
+    os.makedirs(UPDATE_DIR, exist_ok=True)
+    run_updater = os.path.join(UPDATE_DIR, "LumaForgeUpdater.exe")
+    try:
+        shutil.copy2(updater, run_updater)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"准备桌面更新器失败：{exc}")
     state = {
         "current_version": APP_VERSION,
         "target_version": target_version or "",
         "installed_at": now_ms(),
         "package": zip_path,
         "download": download_meta or {},
-        "desktop_updater": updater,
+        "desktop_updater": run_updater,
         "app_dir": app_dir,
         "restart_required": True,
         "pending_external_updater": True,
     }
     save_update_state(state)
     args = [
-        updater,
+        run_updater,
         "--pid", str(os.getpid()),
         "--package", zip_path,
         "--app-dir", app_dir,
@@ -3731,7 +3737,7 @@ def launch_desktop_updater(zip_path: str, target_version: str = "", download_met
         "--restart",
     ]
     try:
-        subprocess.Popen(args, cwd=os.path.dirname(updater), close_fds=True)
+        subprocess.Popen(args, cwd=os.path.dirname(run_updater), close_fds=True)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"启动桌面更新器失败：{exc}")
     async def _exit_for_update():
@@ -3743,7 +3749,7 @@ def launch_desktop_updater(zip_path: str, target_version: str = "", download_met
         "installed": False,
         "external_updater_started": True,
         "restart_required": True,
-        "updater_path": updater,
+        "updater_path": run_updater,
         "app_dir": app_dir,
         "update_state": state,
         "message": "已启动桌面更新器，应用即将关闭；更新器会替换程序并自动重启。",
@@ -3940,15 +3946,16 @@ async def app_update_auto():
         raise HTTPException(status_code=400, detail=check.get("auto_update_reason") or "当前环境不支持自动升级")
     download = await app_update_download()
     install = await install_latest_update_package(check.get("latest_version") or "", download)
+    external_updater_started = bool(install.get("external_updater_started"))
     return {
         "ok": True,
         "updated": True,
-        "restart_required": True,
+        "restart_required": not external_updater_started,
         "current_version": check.get("current_version"),
         "latest_version": check.get("latest_version"),
         "download": download,
         "install": install,
-        "message": "自动升级已安装完成，请重启应用后生效。",
+        "message": install.get("message") if external_updater_started else "自动升级已安装完成，请重启应用后生效。",
     }
 
 

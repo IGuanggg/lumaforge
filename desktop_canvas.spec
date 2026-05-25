@@ -1,15 +1,20 @@
 # Build desktop window edition with:
 #   pyinstaller desktop_canvas.spec --noconfirm
 
+import os
 from PyInstaller.utils.hooks import collect_submodules
 
 
 block_cipher = None
 
+updater_datas = []
+if os.path.isfile("dist/LumaForgeUpdater.exe"):
+    updater_datas.append(("dist/LumaForgeUpdater.exe", "."))
+
 datas = [
     ("static", "static"),
     ("workflows", "workflows"),
-]
+] + updater_datas
 
 hiddenimports = (
     collect_submodules("uvicorn")
