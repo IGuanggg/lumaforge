@@ -1049,11 +1049,11 @@
             const target = `/static/canvas.html?list=smart&v=20260526-asset-reliability1`;
             try {
                 if(window.parent && window.parent !== window){
-                    window.parent.localStorage?.setItem('studio_active_page', 'canvas');
-                    const frame = window.parent.document?.getElementById('frame-canvas');
+                    window.parent.localStorage?.setItem('studio_active_page', 'smart-canvas');
+                    const frame = window.parent.document?.getElementById('frame-smart-canvas');
                     if(frame) frame.src = target;
                     if(typeof window.parent.switchUI === 'function'){
-                        window.parent.switchUI(window.parent.document.querySelector(`[onclick*="'canvas'"],[onclick*='"canvas"']`), 'canvas');
+                        window.parent.switchUI(window.parent.document.querySelector(`[onclick*="'smart-canvas'"],[onclick*='"smart-canvas"']`), 'smart-canvas');
                         return;
                     }
                 }

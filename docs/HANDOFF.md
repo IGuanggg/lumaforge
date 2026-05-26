@@ -135,6 +135,7 @@ Implemented polish:
 
 - Smart Canvas "back to list" now opens the shared canvas manager in `list=smart` mode.
 - The shared canvas manager filters and labels smart canvases when opened through that mode.
+- Smart Canvas is now the first-run landing page as a list selector (`/static/canvas.html?list=smart`), not a direct editor route.
 - App Settings shows a one-time v2.0.9 welcome card with quick links to diagnostics and asset checks.
 - Asset health results are grouped into checked / missing files / thumbnail rebuild counts, with quick actions for thumbnail rebuild and removing missing references.
 - Backup restore now has a clearer overwrite warning and visible risk note.
