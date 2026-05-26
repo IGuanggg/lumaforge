@@ -802,6 +802,9 @@
         .smart-create-btn:hover { background:#f3e8ff; border-color:#c4b5fd; color:#4c1d95; }
         .secondary-btn { height:38px; padding:0 13px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; gap:8px; background:#fff; color:#475569; border:1px solid #e8edf3; font-size:12px; font-weight:800; }
         .secondary-btn.active { background:#111827; color:#fff; border-color:#111827; }
+        .canvas-gate.smart-list-mode:not(.trash-mode) #gateCreateBtn { display:none; }
+        .canvas-gate.smart-list-mode:not(.trash-mode) #gateCreateSmartBtn { background:#111827; color:#fff; border-color:#111827; }
+        .canvas-gate.smart-list-mode:not(.trash-mode) #gateCreateSmartBtn:hover { background:#0f172a; border-color:#0f172a; color:#fff; }
         .canvas-gate.trash-mode #gateCreateBtn,
         .canvas-gate.trash-mode #gateCreateSmartBtn { display:none; }
         .trash-note { display:none; margin-top:14px; padding:10px 12px; border-radius:12px; background:#fff8e6; color:#92400e; font-size:11px; line-height:1.35; font-weight:700; border:1px solid #fde68a; }
@@ -1256,6 +1259,26 @@
         const logModal = document.getElementById('logModal');
         const logList = document.getElementById('logList');
         const errorModal = document.getElementById('errorModal');
+        const CANVAS_LIST_MODE = (() => {
+            try {
+                const mode = new URLSearchParams(window.location.search).get('list') || '';
+                return mode === 'smart' || mode === 'classic' ? mode : 'all';
+            } catch(e) {
+                return 'all';
+            }
+        })();
+        function isSmartListMode(){
+            return CANVAS_LIST_MODE === 'smart';
+        }
+        function canvasListItems(source){
+            const items = Array.isArray(source) ? source : [];
+            if(CANVAS_LIST_MODE === 'smart') return items.filter(item => (item.kind || 'classic') === 'smart');
+            if(CANVAS_LIST_MODE === 'classic') return items.filter(item => (item.kind || 'classic') !== 'smart');
+            return items;
+        }
+        function smartListText(zh, en){
+            return langIsEn() ? en : zh;
+        }
         const errorTitle = document.getElementById('errorTitle');
         const errorMessage = document.getElementById('errorMessage');
         let canvases = [];
@@ -2612,8 +2635,17 @@
         }
         function refreshGateViewControls(){
             canvasGate.classList.toggle('trash-mode', trashMode);
-            if(gateTitleText) gateTitleText.textContent = trashMode ? tr('canvas.trash') : tr('canvas.selectCanvas');
-            if(gateSubtitle) gateSubtitle.textContent = trashMode ? tr('canvas.trashSubtitle') : tr('canvas.subtitle');
+            canvasGate.classList.toggle('smart-list-mode', isSmartListMode());
+            if(gateTitleText) {
+                gateTitleText.textContent = trashMode
+                    ? tr('canvas.trash')
+                    : (isSmartListMode() ? smartListText('选择智能画布', 'Select Smart Canvas') : tr('canvas.selectCanvas'));
+            }
+            if(gateSubtitle) {
+                gateSubtitle.textContent = trashMode
+                    ? tr('canvas.trashSubtitle')
+                    : (isSmartListMode() ? smartListText('打开已有智能画布，或新建一个继续创作。', 'Open an existing smart canvas, or create one to continue.') : tr('canvas.subtitle'));
+            }
             const trashCount = deletedCanvases.length;
             if(gateTrashCount){
                 gateTrashCount.textContent = String(trashCount);
@@ -2621,7 +2653,7 @@
             }
             const countPill = document.getElementById('gateCountPill');
             if(countPill){
-                const items = trashMode ? deletedCanvases : canvases;
+                const items = trashMode ? canvasListItems(deletedCanvases) : canvasListItems(canvases);
                 const suffix = tr('canvas.countSuffix');
                 countPill.textContent = suffix ? `${items.length} ${suffix}` : String(items.length);
             }
@@ -2646,11 +2678,13 @@
         }
         function setCreateMode(active, kind='classic'){
             creatingCanvas = active;
-            createCanvasKind = active ? ((kind === 'smart') ? 'smart' : 'classic') : 'classic';
+            const resolvedKind = isSmartListMode() ? 'smart' : kind;
+            createCanvasKind = active ? ((resolvedKind === 'smart') ? 'smart' : 'classic') : 'classic';
             if(active) trashMode = false;
             canvasGate.classList.toggle('creating', active);
             refreshGateViewControls();
-            setStatus(active ? tr('canvas.enterCanvasName') : (canvases.length ? tr('canvas.chooseFirst') : tr('canvas.noCanvasCreateFirst')));
+            const visibleItems = canvasListItems(canvases);
+            setStatus(active ? tr('canvas.enterCanvasName') : (visibleItems.length ? tr('canvas.chooseFirst') : tr('canvas.noCanvasCreateFirst')));
             if(active) {
                 gateTitleInput.placeholder = createCanvasKind === 'smart'
                     ? (tr('canvas.newSmartCanvasPlaceholder') || tr('canvas.newCanvasPlaceholder'))
@@ -2833,13 +2867,14 @@
                 if(!res.ok) throw new Error(tr('canvas.canvasListFailed'));
                 const data = await res.json();
                 canvases = data.canvases || [];
+                const visibleItems = canvasListItems(canvases);
                 refreshGateViewControls();
                 renderCanvasList();
                 refreshTrashCount();
-                if(openFirst && canvases[0]) await openCanvas(canvases[0].id);
+                if(openFirst && visibleItems[0]) await openCanvas(visibleItems[0].id);
                 else if(!canvas) {
                     setCanvasMode(false);
-                    setStatus(trashMode ? (deletedCanvases.length ? tr('canvas.trash') : tr('canvas.trashEmpty')) : (canvases.length ? tr('canvas.chooseFirst') : tr('canvas.noCanvasCreateFirst')));
+                    setStatus(trashMode ? (canvasListItems(deletedCanvases).length ? tr('canvas.trash') : tr('canvas.trashEmpty')) : (visibleItems.length ? tr('canvas.chooseFirst') : tr('canvas.noCanvasCreateFirst')));
                 }
             } catch(e) {
                 setStatus(tr('canvas.canvasListFailed'));
@@ -2888,14 +2923,16 @@
         function renderCanvasListInto(list){
             if(!list) return;
             refreshGateViewControls();
-            const items = trashMode ? deletedCanvases : canvases;
+            const items = trashMode ? canvasListItems(deletedCanvases) : canvasListItems(canvases);
             list.innerHTML = '';
             if(!items.length){
                 const empty = document.createElement('div');
                 empty.className = 'gate-list-empty';
                 empty.innerHTML = trashMode
                     ? `<div class="gate-list-empty-icon"><i data-lucide="trash-2" class="w-6 h-6"></i></div>${tr('canvas.trashEmpty')}`
-                    : `<div class="gate-list-empty-icon"><i data-lucide="layout-grid" class="w-6 h-6"></i></div>${tr('canvas.noCanvas')}<br>${tr('canvas.startWithNewCanvas')}`;
+                    : (isSmartListMode()
+                        ? `<div class="gate-list-empty-icon"><i data-lucide="sparkles" class="w-6 h-6"></i></div>${smartListText('还没有智能画布', 'No smart canvases yet')}<br>${smartListText('新建一个智能画布开始创作', 'Create a smart canvas to start')}`
+                        : `<div class="gate-list-empty-icon"><i data-lucide="layout-grid" class="w-6 h-6"></i></div>${tr('canvas.noCanvas')}<br>${tr('canvas.startWithNewCanvas')}`);
                 list.appendChild(empty);
                 refreshIcons();
                 return;
@@ -2989,7 +3026,7 @@
             refreshIcons();
         }
         async function createCanvas(){
-            const isSmart = createCanvasKind === 'smart';
+            const isSmart = createCanvasKind === 'smart' || isSmartListMode();
             const customTitle = gateTitleInput?.value.trim();
             const titleBase = isSmart ? tr('canvas.newSmartCanvas') : tr('canvas.newCanvas');
             const title = customTitle || `${titleBase} ${new Date().toLocaleTimeString(window.StudioI18n?.lang() === 'en' ? 'en-US' : 'zh-CN', {hour:'2-digit', minute:'2-digit'})}`;
@@ -3398,7 +3435,7 @@
         window.openCanvas = openCanvas;
         window.deleteCanvas = deleteCanvas;
         window.returnToCanvasManager = returnToCanvasManager;
-        gateCreateBtn.addEventListener('click', () => setCreateMode(true));
+        gateCreateBtn.addEventListener('click', () => setCreateMode(true, isSmartListMode() ? 'smart' : 'classic'));
         gateCreateSmartBtn?.addEventListener('click', createSmartCanvas);
         gateBackBtn.addEventListener('click', () => setTrashMode(false));
         gateTrashBtn.addEventListener('click', () => setTrashMode(true));

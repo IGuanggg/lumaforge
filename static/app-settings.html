@@ -222,6 +222,64 @@
         .update-result-meta { color:var(--muted); word-break:break-word; }
         .update-result-notes { margin-top:8px; max-height:120px; overflow:auto; color:var(--muted); white-space:pre-wrap; }
         .update-result a { color:#2563eb; font-weight:900; text-decoration:underline; text-underline-offset:3px; }
+        .file-warning-card {
+            display:none;
+            margin-bottom:20px;
+            padding:18px;
+            border-radius:14px;
+            border:1px solid rgba(220,38,38,.22);
+            background:rgba(254,242,242,.92);
+            color:#991b1b;
+        }
+        .file-warning-card.show { display:block; }
+        .file-warning-title { font-size:15px; line-height:1.35; font-weight:950; }
+        .file-warning-desc { margin-top:6px; color:#b91c1c; font-size:12px; line-height:1.6; font-weight:750; }
+        .file-warning-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+        body.file-mode .layout,
+        body.file-mode #version-welcome-card { display:none; }
+        body.studio-theme-dark .file-warning-card,
+        html.studio-theme-dark body .file-warning-card { background:rgba(127,29,29,.2); border-color:rgba(248,113,113,.28); color:#fecaca; }
+        body.studio-theme-dark .file-warning-desc,
+        html.studio-theme-dark body .file-warning-desc { color:#fca5a5; }
+        .welcome-card {
+            display:none;
+            margin-bottom:20px;
+            padding:16px 18px;
+            border-radius:14px;
+            border:1px solid rgba(37,99,235,.18);
+            background:linear-gradient(180deg, rgba(37,99,235,.08), rgba(255,255,255,.86));
+            color:var(--text);
+        }
+        .welcome-card.show { display:block; animation:settings-result-in .18s ease; }
+        .welcome-top { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+        .welcome-title { font-size:15px; font-weight:950; line-height:1.35; }
+        .welcome-desc { margin-top:4px; color:var(--muted); font-size:12px; line-height:1.55; font-weight:700; }
+        .welcome-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-top:12px; }
+        .welcome-item { display:flex; align-items:center; gap:8px; min-width:0; padding:8px 10px; border-radius:10px; background:rgba(255,255,255,.72); border:1px solid rgba(226,232,240,.86); color:var(--muted); font-size:11.5px; font-weight:850; }
+        .welcome-item i { flex:0 0 auto; color:#2563eb; }
+        .welcome-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+        body.studio-theme-dark .welcome-card,
+        html.studio-theme-dark body .welcome-card { background:linear-gradient(180deg, rgba(96,165,250,.12), rgba(28,30,38,.92)); border-color:rgba(96,165,250,.25); }
+        body.studio-theme-dark .welcome-item,
+        html.studio-theme-dark body .welcome-item { background:rgba(39,42,51,.82); border-color:var(--line-strong); }
+        .result-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+        .health-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:10px; }
+        .health-chip { padding:9px 10px; border-radius:10px; border:1px solid var(--line); background:var(--panel); }
+        .health-chip strong { display:block; font-size:15px; line-height:1.1; color:var(--text); }
+        .health-chip span { display:block; margin-top:3px; font-size:10.5px; color:var(--muted); font-weight:850; }
+        .health-chip.ok { border-color:rgba(16,185,129,.28); background:rgba(16,185,129,.07); }
+        .health-chip.warn { border-color:rgba(245,158,11,.28); background:rgba(245,158,11,.08); }
+        .health-chip.danger { border-color:rgba(239,68,68,.25); background:rgba(239,68,68,.07); }
+        .backup-risk { margin-top:8px; padding:10px 12px; border-radius:10px; border:1px solid rgba(245,158,11,.28); background:rgba(245,158,11,.08); color:#b45309; font-size:11.5px; font-weight:800; line-height:1.55; }
+        .diagnostic-summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:10px; }
+        .diagnostic-bucket { padding:10px; border-radius:10px; border:1px solid var(--line); background:var(--panel); }
+        .diagnostic-bucket-title { font-size:11px; font-weight:950; color:var(--text); margin-bottom:6px; }
+        .diagnostic-row { display:flex; align-items:flex-start; gap:7px; color:var(--muted); font-size:11.5px; line-height:1.45; font-weight:750; padding:4px 0; }
+        .diagnostic-row i { flex:0 0 auto; margin-top:1px; }
+        .diagnostic-row.ok i { color:#059669; }
+        .diagnostic-row.auto i { color:#2563eb; }
+        .diagnostic-row.manual i { color:#b45309; }
+        .diagnostic-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
         .update-progress-card {
             display:none;
             padding:12px 14px;
@@ -318,6 +376,9 @@
             .path-actions { justify-content:flex-start; }
             .kv span:last-child { text-align:left; }
             .update-state-grid { grid-template-columns:1fr; }
+            .welcome-list,
+            .health-grid,
+            .diagnostic-summary { grid-template-columns:1fr; }
         }
     </style>
 </head>
@@ -331,6 +392,32 @@
                 </div>
                 <div class="version-pill"><i data-lucide="badge-info" class="w-4 h-4"></i><span id="version-pill">Version ...</span></div>
             </header>
+            <section class="file-warning-card" id="file-protocol-warning">
+                <div class="file-warning-title">当前是 file:// 直接打开，设置功能不会连接到 LumaForge 本地服务</div>
+                <div class="file-warning-desc">诊断、备份、素材检查、更新检查都需要通过本地服务地址打开。请从应用内导航进入设置页，或使用当前开发服务地址打开。</div>
+                <div class="file-warning-actions">
+                    <a class="action-btn primary" id="open-http-settings-link" href="http://127.0.0.1:3035/static/app-settings.html"><span>打开本地服务设置页</span></a>
+                </div>
+            </section>
+            <section class="welcome-card" id="version-welcome-card">
+                <div class="welcome-top">
+                    <div>
+                        <div class="welcome-title">v2.0.9 已更新：素材可靠性与本地恢复加固</div>
+                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示，用来提醒可以立刻检查和修复的项目。</div>
+                    </div>
+                    <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
+                </div>
+                <div class="welcome-list">
+                    <div class="welcome-item"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i><span>素材详情页显示生成参数</span></div>
+                    <div class="welcome-item"><i data-lucide="repeat-2" class="w-4 h-4"></i><span>复用参数重新生成</span></div>
+                    <div class="welcome-item"><i data-lucide="archive" class="w-4 h-4"></i><span>本地轻量备份与恢复</span></div>
+                    <div class="welcome-item"><i data-lucide="stethoscope" class="w-4 h-4"></i><span>启动诊断与素材修复入口</span></div>
+                </div>
+                <div class="welcome-actions">
+                    <button class="action-btn primary" id="welcome-run-diagnostics-btn" type="button"><i data-lucide="stethoscope" class="w-4 h-4"></i><span>运行诊断</span></button>
+                    <button class="action-btn" id="welcome-check-assets-btn" type="button"><i data-lucide="file-search" class="w-4 h-4"></i><span>检查素材库</span></button>
+                </div>
+            </section>
 
             <section class="layout">
                 <div class="content">
@@ -434,8 +521,12 @@
                             <button class="action-btn primary" id="auto-update-btn" type="button">
                                 <i data-lucide="sparkles" class="w-4 h-4"></i><span>自动升级</span>
                             </button>
+                            <button class="action-btn" id="release-check-btn" type="button">
+                                <i data-lucide="list-checks" class="w-4 h-4"></i><span>发布检查</span>
+                            </button>
                         </div>
                         <div class="update-result" id="update-result"></div>
+                        <div class="update-result" id="release-check-result"></div>
                         <div class="update-progress-card" id="update-progress-card">
                             <div class="update-phase-line">
                                 <span id="update-phase-text">等待检查</span>
@@ -525,6 +616,7 @@
         let appInfo = null;
         let latestReleaseNotes = '';
         let updatePollTimer = null;
+        let lastAssetHealth = null;
 
         async function jsonOrThrow(res) {
             const data = await res.json().catch(() => ({}));
@@ -537,6 +629,17 @@
             if(!el) return;
             el.textContent = message || '';
             el.className = `status ${kind}`.trim();
+        }
+
+        function isFileProtocol() {
+            return window.location.protocol === 'file:';
+        }
+
+        function renderFileProtocolWarning() {
+            document.body.classList.add('file-mode');
+            const warning = document.getElementById('file-protocol-warning');
+            if(warning) warning.classList.add('show');
+            setText('version-pill', '请通过本地服务打开');
         }
 
         function escapeHtml(value) {
@@ -729,6 +832,25 @@
             if(el) el.textContent = value;
         }
 
+        function versionWelcomeStorageKey(version) {
+            return `lumaforge_welcome_${version || 'unknown'}_dismissed`;
+        }
+
+        function renderVersionWelcome() {
+            const card = document.getElementById('version-welcome-card');
+            if(!card) return;
+            const version = appInfo?.version || '';
+            const shouldShow = version === '2.0.9' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            card.classList.toggle('show', shouldShow);
+            if(shouldShow && window.lucide) lucide.createIcons();
+        }
+
+        function dismissVersionWelcome() {
+            const version = appInfo?.version || '2.0.9';
+            localStorage.setItem(versionWelcomeStorageKey(version), '1');
+            renderVersionWelcome();
+        }
+
         function renderLocalDataHealth(data) {
             const account = data?.account || {};
             const assets = data?.assets || {};
@@ -815,15 +937,29 @@
         function renderAssetHealth(data) {
             const box = document.getElementById('asset-health-result');
             if(!box) return;
+            lastAssetHealth = data || null;
             const missing = data?.missing || [];
             const thumbs = data?.thumb_missing || [];
+            const missingCount = Number(data?.missing_count || 0);
+            const thumbCount = Number(data?.thumb_missing_count || 0);
+            const checked = Number(data?.checked || 0);
+            const canRemoveMissing = missing.some(item => item?.id);
             box.classList.add('show');
             box.innerHTML = `
-                <div class="update-result-title">素材检查：${Number(data?.checked || 0)} 项</div>
-                <div class="update-result-meta">丢失文件 ${Number(data?.missing_count || 0)} 个；待重建缩略图 ${Number(data?.thumb_missing_count || 0)} 个。</div>
+                <div class="update-result-title">素材检查：${missingCount || thumbCount ? '需要处理' : '正常'}</div>
+                <div class="health-grid">
+                    <div class="health-chip ${checked ? 'ok' : ''}"><strong>${checked}</strong><span>已检查素材</span></div>
+                    <div class="health-chip ${missingCount ? 'danger' : 'ok'}"><strong>${missingCount}</strong><span>丢失本地文件</span></div>
+                    <div class="health-chip ${thumbCount ? 'warn' : 'ok'}"><strong>${thumbCount}</strong><span>待重建缩略图</span></div>
+                </div>
                 ${missing.length ? `<div class="update-result-notes">丢失示例：${missing.map(item => escapeHtml(item.title || item.local_path || item.id)).join('、')}</div>` : '<div class="update-result-notes">没有发现丢失的本地素材文件。</div>'}
                 ${thumbs.length ? `<div class="update-result-notes">缩略图待处理：${thumbs.map(item => escapeHtml(item.title || item.id)).join('、')}</div>` : ''}
+                ${(thumbCount || canRemoveMissing) ? `<div class="result-actions">
+                    ${thumbCount ? `<button class="action-btn primary" type="button" onclick="rebuildThumbnails()"><i data-lucide="image-plus" class="w-4 h-4"></i><span>重建缺失缩略图</span></button>` : ''}
+                    ${canRemoveMissing ? `<button class="action-btn danger" type="button" onclick="removeMissingAssetRecords()"><i data-lucide="unlink" class="w-4 h-4"></i><span>移除缺失引用</span></button>` : ''}
+                </div>` : ''}
             `;
+            if(window.lucide) lucide.createIcons();
         }
 
         async function checkAssetHealth() {
@@ -856,6 +992,29 @@
             }
         }
 
+        async function removeMissingAssetRecords() {
+            const missing = lastAssetHealth?.missing || [];
+            const ids = missing.map(item => item?.id).filter(Boolean);
+            if(!ids.length) {
+                setStatus('local-data-status', '当前检查结果里没有可移除的缺失引用。', 'warn');
+                return;
+            }
+            if(!confirm(`将从素材库移除 ${ids.length} 条缺失文件引用，不会删除任何本地文件。建议先确认这些文件确实不需要恢复。确定继续吗？`)) return;
+            setStatus('local-data-status', '正在移除缺失素材引用...');
+            try {
+                const data = await fetch('/api/assets/bulk-delete', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({ids, delete_file:false})
+                }).then(jsonOrThrow);
+                await checkAssetHealth();
+                await loadLocalDataHealth();
+                setStatus('local-data-status', `已移除 ${Number(data.deleted || 0)} 条缺失引用。`, data.missing?.length ? 'warn' : 'ok');
+            } catch(e) {
+                setStatus('local-data-status', e.message || String(e), 'error');
+            }
+        }
+
         function renderBackups(data) {
             const select = document.getElementById('backup-select');
             const box = document.getElementById('backup-result');
@@ -865,11 +1024,14 @@
                 ? items.map(item => `<option value="${escapeHtml(item.filename)}">${escapeHtml(item.filename)} · ${formatBytes(item.size_bytes || 0)}</option>`).join('')
                 : '<option value="">暂无备份</option>';
             if(box) {
+                const restoreBtn = document.getElementById('restore-backup-btn');
+                if(restoreBtn) restoreBtn.disabled = !items.length;
                 box.classList.add('show');
                 box.innerHTML = `
                     <div class="update-result-title">本地轻量备份</div>
                     <div class="update-result-meta">备份目录：${escapeHtml(data?.backup_dir || '')}</div>
                     <div class="update-result-notes">包含配置、历史、素材数据库、画布和对话索引；不包含素材原图，适合升级前快速兜底。</div>
+                    <div class="backup-risk">恢复备份会覆盖当前配置、历史、素材数据库、画布和对话索引。恢复成功后建议重启应用，再继续创作。</div>
                 `;
             }
         }
@@ -894,9 +1056,23 @@
         async function restoreBackup() {
             const filename = document.getElementById('backup-select')?.value || '';
             if(!filename) return setStatus('local-data-status', '请先选择一个备份。', 'warn');
-            if(!confirm(`恢复 ${filename} 会覆盖当前配置、历史、素材数据库和画布索引。确定继续吗？`)) return;
-            setStatus('local-data-status', '正在恢复轻量备份...');
+            const warning = [
+                `即将恢复备份：${filename}`,
+                '',
+                '这会覆盖当前配置、历史记录、素材数据库、画布和对话索引。',
+                '素材原图不在轻量备份里，不会被备份包恢复。',
+                '恢复完成后建议重启应用。',
+                '',
+                '确定继续吗？'
+            ].join('\n');
+            if(!confirm(warning)) return;
+            const btn = document.getElementById('restore-backup-btn');
+            if(btn) btn.disabled = true;
+            setStatus('local-data-status', '正在创建恢复前快照...');
             try {
+                const preBackup = await fetch('/api/app/backup-create', { method:'POST' }).then(jsonOrThrow);
+                renderBackups(preBackup);
+                setStatus('local-data-status', `恢复前快照已创建：${preBackup.filename}，正在恢复 ${filename}...`);
                 const data = await fetch('/api/app/backup-restore', {
                     method:'POST',
                     headers:{'Content-Type':'application/json'},
@@ -904,9 +1080,11 @@
                 }).then(jsonOrThrow);
                 await loadInfo();
                 await loadBackups();
-                setStatus('local-data-status', `备份已恢复：${Number(data.restored_count || 0)} 项。建议重启应用。`, 'ok');
+                setStatus('local-data-status', `备份已恢复：${Number(data.restored_count || 0)} 项。恢复前快照：${preBackup.filename}。建议重启应用。`, 'ok');
             } catch(e) {
                 setStatus('local-data-status', e.message || String(e), 'error');
+            } finally {
+                if(btn) btn.disabled = false;
             }
         }
 
@@ -914,11 +1092,41 @@
             const box = document.getElementById('diagnostics-result');
             if(!box) return;
             const checks = data?.checks || [];
+            const assetHealth = data?.asset_health || {};
+            const okItems = [];
+            const autoItems = [];
+            const manualItems = [];
+            checks.forEach(item => {
+                if(item.ok) okItems.push(item);
+                else if(item.id === 'assets' && Number(assetHealth.thumb_missing_count || 0) > 0 && Number(assetHealth.missing_count || 0) === 0) autoItems.push({...item, detail:`${item.detail || ''}；可重建缩略图`});
+                else manualItems.push(item);
+            });
+            if(Number(assetHealth.thumb_missing_count || 0) > 0 && !autoItems.some(item => item.id === 'thumbs')) {
+                autoItems.push({id:'thumbs', label:'Thumbnail rebuild', detail:`${Number(assetHealth.thumb_missing_count || 0)} thumbnails can be rebuilt`});
+            }
+            const bucketHtml = (title, items, kind, icon) => `
+                <div class="diagnostic-bucket">
+                    <div class="diagnostic-bucket-title">${escapeHtml(title)} · ${items.length}</div>
+                    ${items.length ? items.map(item => `<div class="diagnostic-row ${kind}"><i data-lucide="${icon}" class="w-4 h-4"></i><span>${escapeHtml(item.label)}：${escapeHtml(item.detail || '')}</span></div>`).join('') : `<div class="diagnostic-row ${kind}"><i data-lucide="${icon}" class="w-4 h-4"></i><span>暂无</span></div>`}
+                </div>
+            `;
+            const missingCount = Number(assetHealth.missing_count || 0);
+            const thumbCount = Number(assetHealth.thumb_missing_count || 0);
             box.classList.add('show');
             box.innerHTML = `
                 <div class="update-result-title">诊断结果：${data?.ok ? '通过' : '需要处理'}</div>
-                ${checks.map(item => `<div class="update-result-meta">${item.ok ? 'OK' : 'WARN'} · ${escapeHtml(item.label)}：${escapeHtml(item.detail || '')}</div>`).join('')}
+                <div class="diagnostic-summary">
+                    ${bucketHtml('正常', okItems, 'ok', 'check-circle-2')}
+                    ${bucketHtml('可自动修复', autoItems, 'auto', 'wrench')}
+                    ${bucketHtml('需要处理', manualItems, 'manual', 'alert-triangle')}
+                </div>
+                ${(thumbCount || missingCount) ? `<div class="diagnostic-actions">
+                    ${thumbCount ? `<button class="action-btn primary" type="button" onclick="rebuildThumbnails()"><i data-lucide="image-plus" class="w-4 h-4"></i><span>重建缩略图</span></button>` : ''}
+                    ${missingCount ? `<button class="action-btn" type="button" onclick="checkAssetHealth()"><i data-lucide="file-search" class="w-4 h-4"></i><span>查看缺失素材</span></button>` : ''}
+                </div>` : ''}
             `;
+            if(assetHealth) lastAssetHealth = assetHealth;
+            if(window.lucide) lucide.createIcons();
         }
 
         async function runDiagnostics() {
@@ -972,6 +1180,7 @@
             renderUpdateState({...updateState, update_capability: appInfo.update_capability});
             const updateInput = document.getElementById('update-url-input');
             if(updateInput) updateInput.value = appInfo.update_check_url || '';
+            renderVersionWelcome();
             document.getElementById('path-list').innerHTML = PATH_ROWS.map(row => {
                 const value = paths[row.key] || '-';
                 const choose = row.selectable ? `<button class="action-btn primary" type="button" onclick="selectPath('${row.key}')"><i data-lucide="folder-plus" class="w-4 h-4"></i><span>选择</span></button>` : '';
@@ -1302,6 +1511,75 @@
             }
         }
 
+        function publishCheckItem(label, ok, detail, warnOnly=false) {
+            const icon = ok ? 'check-circle-2' : (warnOnly ? 'alert-circle' : 'x-circle');
+            const klass = ok ? 'ok' : (warnOnly ? 'manual' : 'manual');
+            return `<div class="diagnostic-row ${klass}"><i data-lucide="${icon}" class="w-4 h-4"></i><span>${escapeHtml(label)}：${escapeHtml(detail || (ok ? '通过' : '需要处理'))}</span></div>`;
+        }
+
+        async function runReleaseCheck() {
+            const btn = document.getElementById('release-check-btn');
+            const box = document.getElementById('release-check-result');
+            if(btn) btn.disabled = true;
+            if(box) {
+                box.classList.add('show');
+                box.innerHTML = '<div class="update-result-title">发布检查中...</div>';
+            }
+            setStatus('update-status', '正在执行发布检查...');
+            try {
+                const [info, assets, backups] = await Promise.all([
+                    fetch('/api/app/info').then(jsonOrThrow),
+                    fetch('/api/assets/health').then(jsonOrThrow),
+                    fetch('/api/app/backups').then(jsonOrThrow)
+                ]);
+                appInfo = info || appInfo || {};
+                const staticHealth = info.static_health || {};
+                const updateCapability = info.update_capability || {};
+                const checks = [
+                    {label:'当前版本', ok:info.version === '2.0.9', detail:info.version || '-'},
+                    {label:'前端依赖', ok:!!staticHealth.ok, detail:staticHealth.ok ? `${Number(staticHealth.checked_count || 0)} 项完整` : `缺失 ${Number(staticHealth.missing_count || 0)} 项`},
+                    {label:'素材文件', ok:Number(assets.missing_count || 0) === 0, detail:`缺失 ${Number(assets.missing_count || 0)} 个`},
+                    {label:'缩略图', ok:Number(assets.thumb_missing_count || 0) === 0, detail:`待重建 ${Number(assets.thumb_missing_count || 0)} 个`, warnOnly:true},
+                    {label:'本地备份', ok:(backups.items || []).length > 0, detail:(backups.items || []).length ? `已有 ${(backups.items || []).length} 个备份` : '建议发布前创建一次备份', warnOnly:true},
+                    {label:'更新器能力', ok:!!updateCapability.supported, detail:updateCapability.supported ? updateModeText(updateCapability.mode) : (updateCapability.reason || '不可用'), warnOnly:true},
+                    {label:'更新检查地址', ok:!!info.update_check_configured, detail:info.update_check_configured ? (info.update_check_url || '已配置') : '未配置 APP_UPDATE_CHECK_URL', warnOnly:true}
+                ];
+                const blocking = checks.filter(item => !item.ok && !item.warnOnly);
+                const warnings = checks.filter(item => !item.ok && item.warnOnly);
+                if(box) {
+                    box.classList.add('show');
+                    box.innerHTML = `
+                        <div class="update-result-title">发布检查：${blocking.length ? '需要处理' : warnings.length ? '可发布但有提醒' : '通过'}</div>
+                        <div class="diagnostic-summary">
+                            <div class="diagnostic-bucket">
+                                <div class="diagnostic-bucket-title">检查项 · ${checks.length}</div>
+                                ${checks.map(item => publishCheckItem(item.label, item.ok, item.detail, item.warnOnly)).join('')}
+                            </div>
+                            <div class="diagnostic-bucket">
+                                <div class="diagnostic-bucket-title">阻塞项 · ${blocking.length}</div>
+                                ${blocking.length ? blocking.map(item => publishCheckItem(item.label, false, item.detail)).join('') : publishCheckItem('阻塞项', true, '暂无')}
+                            </div>
+                            <div class="diagnostic-bucket">
+                                <div class="diagnostic-bucket-title">提醒项 · ${warnings.length}</div>
+                                ${warnings.length ? warnings.map(item => publishCheckItem(item.label, false, item.detail, true)).join('') : publishCheckItem('提醒项', true, '暂无')}
+                            </div>
+                        </div>
+                        <div class="update-result-notes">最终发版仍需运行 scripts/check_release.ps1，并在 GitHub Release 上传安装器、桌面 zip 和必要校验信息。</div>
+                    `;
+                }
+                setStatus('update-status', blocking.length ? '发布检查发现阻塞项。' : warnings.length ? '发布检查通过，但有提醒项。' : '发布检查通过。', blocking.length ? 'error' : warnings.length ? 'warn' : 'ok');
+                if(window.lucide) lucide.createIcons();
+            } catch(e) {
+                if(box) {
+                    box.classList.add('show');
+                    box.innerHTML = `<div class="update-result-title">发布检查失败</div><div class="update-result-meta">${escapeHtml(e.message || String(e))}</div>`;
+                }
+                setStatus('update-status', e.message || String(e), 'error');
+            } finally {
+                if(btn) btn.disabled = false;
+            }
+        }
+
         window.addEventListener('message', event => {
             if(event.data?.type === 'theme') applyTheme(event.data.theme);
             if(event.data?.type === 'language') applyLanguage(event.data.lang);
@@ -1309,6 +1587,7 @@
         document.getElementById('save-update-url-btn').addEventListener('click', saveUpdateSettings);
         document.getElementById('check-update-btn').addEventListener('click', checkUpdate);
         document.getElementById('auto-update-btn').addEventListener('click', autoUpdate);
+        document.getElementById('release-check-btn')?.addEventListener('click', runReleaseCheck);
         document.getElementById('download-update-btn').addEventListener('click', downloadUpdate);
         document.getElementById('install-update-btn').addEventListener('click', installUpdate);
         document.getElementById('restart-app-btn').addEventListener('click', restartApp);
@@ -1327,7 +1606,20 @@
         document.getElementById('refresh-backups-btn')?.addEventListener('click', () => loadBackups().catch(e => setStatus('local-data-status', e.message || String(e), 'error')));
         document.getElementById('restore-backup-btn')?.addEventListener('click', restoreBackup);
         document.getElementById('run-diagnostics-btn')?.addEventListener('click', runDiagnostics);
+        document.getElementById('dismiss-version-welcome-btn')?.addEventListener('click', dismissVersionWelcome);
+        document.getElementById('welcome-run-diagnostics-btn')?.addEventListener('click', () => {
+            runDiagnostics();
+            document.getElementById('diagnostics-result')?.scrollIntoView({behavior:'smooth', block:'center'});
+        });
+        document.getElementById('welcome-check-assets-btn')?.addEventListener('click', () => {
+            checkAssetHealth();
+            document.getElementById('asset-health-result')?.scrollIntoView({behavior:'smooth', block:'center'});
+        });
         window.addEventListener('DOMContentLoaded', () => {
+            if(isFileProtocol()) {
+                renderFileProtocolWarning();
+                return;
+            }
             loadInfo();
             loadLocalDataHealth();
             loadBackups().catch(() => {});

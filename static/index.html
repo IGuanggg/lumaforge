@@ -1178,7 +1178,23 @@
             </div>
 
             <nav>
-                <div class="nav-item" onclick="switchUI(this, 'zimage')">
+                <div class="nav-item active" onclick="switchUI(this, 'smart-canvas')">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 4h16v16H4z"></path>
+                        <path d="M8 8h8v8H8z"></path>
+                    </svg>
+                    <span class="nav-text" data-i18n="nav.smartCanvas">智能画布</span>
+                </div>
+                <div class="nav-item" onclick="switchUI(this, 'canvas')">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    <span class="nav-text" data-i18n="nav.canvas">无限画布</span>
+                </div>
+                <div class="nav-item" onclick="switchUI(this, 'zimage')" style="display:none" data-hidden-until="3.0">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.587-1.587a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
                     </svg>
@@ -1208,7 +1224,7 @@
                 <!-- 分隔线 -->
                 <div style="width:32px;height:1px;background:var(--border);margin:8px auto;transition:background 0.3s;"></div>
 
-                <div class="nav-item" onclick="switchUI(this, 'online')" style="display:none">
+                <div class="nav-item" onclick="switchUI(this, 'online')" style="display:none" data-hidden-until="3.0">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"></path>
                         <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
@@ -1220,22 +1236,6 @@
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                     </svg>
                     <span class="nav-text" data-i18n="nav.gpt">GPT 对话</span>
-                </div>
-                <div class="nav-item" onclick="switchUI(this, 'smart-canvas')">
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 4h16v16H4z"></path>
-                        <path d="M8 8h8v8H8z"></path>
-                    </svg>
-                    <span class="nav-text" data-i18n="nav.smartCanvas">智能画布</span>
-                </div>
-                <div class="nav-item" onclick="switchUI(this, 'canvas')">
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="14" width="7" height="7"></rect>
-                        <rect x="3" y="14" width="7" height="7"></rect>
-                    </svg>
-                    <span class="nav-text" data-i18n="nav.canvas">无限画布</span>
                 </div>
                 <div class="nav-item" onclick="switchUI(this, 'assets')">
                     <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1345,8 +1345,8 @@
             (function(){
                 try {
                     var pageId = localStorage.getItem('studio_active_page') || 'smart-canvas';
-                    if(pageId === 'online') pageId = 'zimage';
-                    if(pageId && pageId !== 'zimage') {
+                    if(pageId === 'online' || pageId === 'zimage') pageId = 'smart-canvas';
+                    if(pageId) {
                         document.querySelectorAll('.nav-item.active, .side-pill.active').forEach(function(n){
                             n.classList.remove('active');
                         });
@@ -1589,6 +1589,7 @@
         const ACCOUNT_REMEMBER_KEY = 'studio_account_remember_password';
         const ACCOUNT_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
         const DEFAULT_PAGE_ID = 'smart-canvas';
+        const HIDDEN_UNTIL_3_PAGE_IDS = ['zimage','online'];
         const PAGE_IDS = ['zimage','enhance','klein','angle','gpt-chat','smart-canvas','canvas','assets','api-settings','comfyui-settings','app-settings'];
         const APP_BUILD_ID = '20260526-asset-reliability1';
         const API_LIVENESS_CACHE_KEY = 'studio_api_liveness_cache_v1';
@@ -1629,9 +1630,8 @@
 
         function activePromptPageId() {
             const remembered = localStorage.getItem(ACTIVE_PAGE_KEY);
-            if (remembered === 'zimage' || remembered === 'online') return 'zimage';
             if (remembered === 'smart-canvas') return 'smart-canvas';
-            return 'zimage';
+            return DEFAULT_PAGE_ID;
         }
 
         function withBuildId(src) {
@@ -2287,6 +2287,7 @@
 
         function switchUI(el, id, options = {}) {
             if(!PAGE_IDS.includes(id)) id = DEFAULT_PAGE_ID;
+            if(HIDDEN_UNTIL_3_PAGE_IDS.includes(id) && !options.allowHidden) id = DEFAULT_PAGE_ID;
             document.querySelectorAll('.nav-item,.side-pill').forEach(n => n.classList.remove('active'));
             if(el) el.classList.add('active');
             document.querySelectorAll('iframe').forEach(f => f.classList.remove('active'));
@@ -2433,7 +2434,7 @@
 
         function restoreActivePage() {
             let id = PAGE_IDS.includes(localStorage.getItem(ACTIVE_PAGE_KEY)) ? localStorage.getItem(ACTIVE_PAGE_KEY) : DEFAULT_PAGE_ID;
-            if(id === 'canvas') id = DEFAULT_PAGE_ID;
+            if(id === 'canvas' || HIDDEN_UNTIL_3_PAGE_IDS.includes(id)) id = DEFAULT_PAGE_ID;
             const trigger = document.querySelector(`[onclick*="'${id}'"],[onclick*='"${id}"']`);
             switchUI(trigger, id, { skipRemember:true });
             document.documentElement.classList.remove('studio-route-booting');

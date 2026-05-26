@@ -131,6 +131,18 @@ The user specifically asked for:
 - Thumbnail rebuild.
 - Final interface/UI/API check and hardening.
 
+Implemented polish:
+
+- Smart Canvas "back to list" now opens the shared canvas manager in `list=smart` mode.
+- The shared canvas manager filters and labels smart canvases when opened through that mode.
+- App Settings shows a one-time v2.0.9 welcome card with quick links to diagnostics and asset checks.
+- Asset health results are grouped into checked / missing files / thumbnail rebuild counts, with quick actions for thumbnail rebuild and removing missing references.
+- Backup restore now has a clearer overwrite warning and visible risk note.
+- Diagnostics output is grouped into OK / auto-fixable / manual-action buckets.
+- App Settings now blocks direct `file://` use with a clear local-service warning.
+- Backup restore creates a new lightweight snapshot before applying the selected backup.
+- Version/update panel includes a publish check button covering app version, static assets, asset health, thumbnails, backup presence, update capability, and update-check URL.
+
 ## v2.0.7 Recommended Scope
 
 ### 1. Update UX
