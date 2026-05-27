@@ -68,7 +68,7 @@ Write-Host "[sign] Timestamp: $TimestampUrl"
 $files = @(
     "dist\LumaForge\LumaForge.exe",
     "dist\LumaForge\LumaForgeUpdater.exe",
-    "releases\LumaForge-Setup-2.0.10.exe"
+    "releases\LumaForge-Setup-2.0.11.exe"
 )
 
 $signed = 0

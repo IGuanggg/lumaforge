@@ -2,9 +2,9 @@
 
 LumaForge 是一个本地优先的 AI 创作工作台，核心是无限画布、素材库、Agent 创作、GPT 对话、图像增强、视频生成和云同步。
 
-当前版本：`2.0.10`
+当前版本：`2.0.11`
 
-v2.0.10 是小版本修复：统一智能画布、无限画布和素材库的下载另存为体验，并强化生成等待中的转圈动画反馈。
+v2.0.11 是小版本修复：智能画布 loading 节点自动同步素材库结果，图片生成参数查看按钮与一键复制提示词，小版本稳定性修复。
 
 ## 核心功能
 
@@ -20,7 +20,7 @@ v2.0.10 是小版本修复：统一智能画布、无限画布和素材库的下
 - 云端账户：邮箱验证、配置自动同步、头像、密码、云端媒体同步。
 - 云后端：`LumaForge Cloud`，提供账户、配置同步、媒体同步和加密数据库备份。
 - 画布数据安全：保存增加备份目录，避免异常空画布覆盖已有节点；云端导入过滤无效连线。
-- 应用维护：应用设置页提供本地轻量备份/恢复、启动诊断、素材库丢失文件检查、缩略图重建、v2.0.10 更新欢迎卡、诊断结果分组和更新后状态提示。
+- 应用维护：应用设置页提供本地轻量备份/恢复、启动诊断、素材库丢失文件检查、缩略图重建、v2.0.11 更新欢迎卡、诊断结果分组和更新后状态提示。
 
 ## 项目命名
 
@@ -89,7 +89,7 @@ dist\LumaForge Browser\LumaForge.exe
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f Dockerfile.cloud \
-  -t iguang9881/lumaforge-cloud:2.0.10 \
+  -t iguang9881/lumaforge-cloud:2.0.11 \
   -t iguang9881/lumaforge-cloud:latest \
   --push .
 ```
@@ -100,7 +100,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
 
-docker pull iguang9881/lumaforge-cloud:2.0.10
+docker pull iguang9881/lumaforge-cloud:2.0.11
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 
@@ -108,10 +108,10 @@ docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.10 \
+  -e CLOUD_APP_VERSION=2.0.11 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.10
+  iguang9881/lumaforge-cloud:2.0.11
 ```
 
 不要删除 `/opt/lumaforge-cloud/cloud-data`，否则云端账户、SMTP、配置同步和备份记录会丢失。
@@ -121,13 +121,13 @@ docker run -d \
 发布前运行：
 
 ```powershell
-.\scripts\check_release.ps1 -Version 2.0.10
+.\scripts\check_release.ps1 -Version 2.0.11
 ```
 
 GitHub Release 建议同时上传：
 
-- `releases/LumaForge-Setup-2.0.10.exe` 安装器
-- `releases/LumaForge-2.0.10-desktop.zip` 桌面自动更新包
+- `releases/LumaForge-Setup-2.0.11.exe` 安装器
+- `releases/LumaForge-2.0.11-desktop.zip` 桌面自动更新包
 - 对应 SHA256 校验信息
 
 发布流程和人工回归项见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。
