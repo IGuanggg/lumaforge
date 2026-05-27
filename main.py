@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.9")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260526-asset-reliability1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.10")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260527-download-save-as1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -3486,6 +3486,31 @@ def select_local_directory(initial_path: str):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"打开文件夹选择器失败：{exc}")
 
+def select_save_file(initial_filename: str, initial_dir: str = ""):
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        filename = safe_download_filename(initial_filename or "download", "download")
+        directory = initial_dir if initial_dir and os.path.isdir(initial_dir) else OUTPUT_OUTPUT_DIR
+        ext = os.path.splitext(filename)[1].lower()
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        selected = filedialog.asksaveasfilename(
+            initialdir=directory,
+            initialfile=filename,
+            defaultextension=ext or "",
+            filetypes=[
+                ("Image files", "*.png *.jpg *.jpeg *.webp"),
+                ("Video files", "*.mp4 *.webm *.mov *.m4v"),
+                ("All files", "*.*"),
+            ],
+        )
+        root.destroy()
+        return selected
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"打开另存为窗口失败：{exc}")
+
 def open_local_path(path: str):
     os.makedirs(path, exist_ok=True)
     if sys.platform.startswith("win"):
@@ -4495,6 +4520,26 @@ async def download_url(payload: DownloadUrlRequest):
 @app.get("/api/download-url")
 async def download_url_get(url: str, filename: str = ""):
     return await download_url(DownloadUrlRequest(url=url, filename=filename))
+
+@app.post("/api/app/save-as")
+async def app_save_as(payload: DownloadUrlRequest):
+    source_name, raw, content_type = await bytes_from_download_url(payload.url)
+    filename = safe_download_filename(payload.filename or source_name, source_name or "download")
+    selected = select_save_file(filename)
+    if not selected:
+        return {"ok": False, "cancelled": True, "filename": filename}
+    selected = os.path.abspath(selected)
+    os.makedirs(os.path.dirname(selected), exist_ok=True)
+    with open(selected, "wb") as fh:
+        fh.write(raw)
+    return {
+        "ok": True,
+        "cancelled": False,
+        "path": selected,
+        "filename": os.path.basename(selected),
+        "size_bytes": len(raw),
+        "content_type": content_type or "application/octet-stream",
+    }
 
 @app.post("/api/canvas-assets/download")
 async def download_canvas_assets(payload: CanvasAssetsDownloadRequest):

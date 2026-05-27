@@ -17,7 +17,7 @@ Last updated: 2026-05-26
 
 ## Current State
 
-- Current local app version in code: 2.0.9
+- Current local app version in code: 2.0.10
 - Current build id: 20260526-asset-reliability1
 - Main local URL: http://localhost:3010/
 - Main app file: main.py
@@ -114,7 +114,7 @@ The update process must replace program files only. It must not overwrite user d
 
 ## Current User Request / Next Target
 
-Current planned version: 2.0.9
+Current planned version: 2.0.10
 
 Goal:
 
@@ -136,7 +136,7 @@ Implemented polish:
 - Smart Canvas "back to list" now opens the shared canvas manager in `list=smart` mode.
 - The shared canvas manager filters and labels smart canvases when opened through that mode.
 - Smart Canvas is now the first-run landing page as a list selector (`/static/canvas.html?list=smart`), not a direct editor route.
-- App Settings shows a one-time v2.0.9 welcome card with quick links to diagnostics and asset checks.
+- App Settings shows a one-time v2.0.10 welcome card with quick links to diagnostics and asset checks.
 - Asset health results are grouped into checked / missing files / thumbnail rebuild counts, with quick actions for thumbnail rebuild and removing missing references.
 - Backup restore now has a clearer overwrite warning and visible risk note.
 - Diagnostics output is grouped into OK / auto-fixable / manual-action buckets.

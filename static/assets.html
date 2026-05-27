@@ -432,31 +432,107 @@
         }
         function closeContext(){ $('contextMenu').classList.remove('open'); }
 
-        async function downloadAsset(asset){
-            if(!asset) return;
-            const directLink = document.createElement('a');
-            const href = `/api/assets/${encodeURIComponent(asset.id)}/download`;
-            if(window.parent && window.parent !== window){
-                window.parent.postMessage({type:'studio-download', href, filename: asset.title || `asset-${asset.id}`}, '*');
-                return;
+        function assetDownloadName(asset){
+            if(!asset) return 'asset.png';
+            const rawTitle = String(asset.title || `asset-${asset.id || Date.now()}`).trim();
+            const safeTitle = rawTitle.split(/[\\/]/).pop().replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').trim() || `asset-${asset.id || Date.now()}`;
+            if(/\.[a-z0-9]{2,5}$/i.test(safeTitle)) return safeTitle;
+            const source = String(asset.local_path || asset.local_url || '').split('?')[0].split('#')[0];
+            const ext = source.includes('.') ? source.split('.').pop() : (asset.type === 'video' ? 'mp4' : 'png');
+            const safeExt = /^[a-z0-9]{2,5}$/i.test(ext || '') ? ext : (asset.type === 'video' ? 'mp4' : 'png');
+            return `${safeTitle}.${safeExt}`;
+        }
+
+        function downloadPickerTypes(asset, filename){
+            const ext = (filename.split('.').pop() || '').toLowerCase();
+            if(asset?.type === 'video' || ['mp4','webm','mov','m4v'].includes(ext)) {
+                return [{description:'Video', accept:{'video/*':['.mp4','.webm','.mov','.m4v']}}];
             }
-            directLink.href = href;
-            directLink.download = asset.title || `asset-${asset.id}`;
-            document.body.appendChild(directLink);
-            directLink.click();
-            directLink.remove();
-            return;
-            const res = await fetch(`/api/assets/${encodeURIComponent(asset.id)}/download`);
-            if(!res.ok) throw new Error('下载失败');
+            return [{description:'Image', accept:{'image/*':['.png','.jpg','.jpeg','.webp']}}];
+        }
+
+        async function saveUrlWithBrowserPicker(url, filename, asset){
+            const pickerOwner = typeof window.showSaveFilePicker === 'function' ? window : window.parent;
+            const picker = pickerOwner?.showSaveFilePicker;
+            if(typeof picker !== 'function') return null;
+            const handle = await picker.call(pickerOwner, {
+                suggestedName: filename,
+                types: downloadPickerTypes(asset, filename)
+            });
+            const res = await fetch(url);
+            if(!res.ok) throw new Error('读取素材文件失败');
             const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            return {ok:true, filename};
+        }
+
+        async function saveUrlWithBackend(url, filename){
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 12000);
+            try {
+                const res = await fetch('/api/app/save-as', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({url, filename}),
+                    signal:controller.signal
+                });
+                if(!res.ok) throw new Error('另存为失败');
+                return await res.json();
+            } finally {
+                clearTimeout(timer);
+            }
+        }
+
+        function fallbackBrowserDownload(href, filename){
             const link = document.createElement('a');
-            link.href = url;
-            link.download = asset.title || `asset-${asset.id}`;
+            link.href = href;
+            link.download = filename;
             document.body.appendChild(link);
             link.click();
             link.remove();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            return {ok:true, fallback:true};
+        }
+
+        async function downloadAsset(asset){
+            if(!asset) return;
+            const filename = assetDownloadName(asset);
+            const sourceUrl = asset.local_url || `/api/assets/${encodeURIComponent(asset.id)}/download`;
+            const downloadUrl = `/api/assets/${encodeURIComponent(asset.id)}/download`;
+            const previewBtn = $('previewDownloadBtn');
+            const oldText = previewBtn?.querySelector('span')?.textContent || '下载';
+            if(previewBtn && state.previewAsset?.id === asset.id) {
+                previewBtn.disabled = true;
+                previewBtn.querySelector('span').textContent = '保存中';
+            }
+            showToast('正在打开另存为...');
+            try {
+                let data = null;
+                try {
+                    data = await saveUrlWithBrowserPicker(downloadUrl, filename, asset);
+                } catch(err) {
+                    if(err?.name === 'AbortError') {
+                        showToast('已取消保存');
+                        return {ok:false, cancelled:true};
+                    }
+                    data = null;
+                }
+                if(!data) {
+                    try {
+                        data = await saveUrlWithBackend(sourceUrl, filename);
+                    } catch(err) {
+                        data = fallbackBrowserDownload(downloadUrl, filename);
+                    }
+                }
+                showToast(data?.cancelled ? '已取消保存' : (data?.fallback ? '已交给浏览器下载' : '已另存为本地文件'));
+                return data;
+            } finally {
+                if(previewBtn && state.previewAsset?.id === asset.id) {
+                    previewBtn.disabled = false;
+                    previewBtn.querySelector('span').textContent = oldText;
+                }
+            }
         }
 
         async function toggleFavorite(asset){

@@ -213,7 +213,7 @@
         .theme-dark .run-time-pill { box-shadow:0 8px 18px rgba(0,0,0,.32); }
         .loading-skeleton { display:grid; gap:8px; }
         .loading-cell { position:relative; overflow:hidden; border-radius:12px; background:linear-gradient(90deg, var(--soft) 0%, var(--card) 50%, var(--soft) 100%); background-size:200% 100%; animation:shimmer 1.5s infinite linear; border:1px solid var(--line); }
-        .loading-cell::after { content:""; position:absolute; left:50%; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px; border-radius:999px; border:2px solid rgba(59,130,246,.18); border-top-color:rgba(59,130,246,.72); animation:spin .9s linear infinite; }
+        .loading-cell::after { content:""; position:absolute; left:50%; top:50%; width:26px; height:26px; margin:-13px 0 0 -13px; border-radius:999px; background:conic-gradient(from 0deg, rgba(59,130,246,.12), rgba(59,130,246,.95), rgba(59,130,246,.12)); -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); mask:radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); animation:spin .72s linear infinite; box-shadow:0 0 0 1px rgba(59,130,246,.08); }
         .loading-cell.single { width:260px; height:180px; }
         @keyframes shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }
         @keyframes spin { to { transform:rotate(360deg); } }
@@ -567,7 +567,6 @@
             .image-node.node-pending,
             .run-time-pill,
             .loading-cell,
-            .loading-cell::after,
             .thumb-item,
             .thumb-item img,
             .image-wrap,
@@ -1545,8 +1544,8 @@
                     return openSmartEnhanceMenu(smartEnhanceBtn || smartImageToolbar);
                 }
                 if(action === 'download') {
-                    await downloadSmartUrl(target.image.url, smartDownloadName(target.image));
-                    toast('已开始下载');
+                    const result = await downloadSmartUrl(target.image.url, smartDownloadName(target.image));
+                    toast(result?.cancelled ? '已取消保存' : '已另存为本地文件');
                     return;
                 }
                 if(action === 'brush') {
@@ -3017,8 +3016,8 @@
                 if(action === 'flip-x') return flipSelectedNodes('x');
                 if(action === 'flip-y') return flipSelectedNodes('y');
                 if(action === 'download' && target?.image?.url) {
-                    await downloadSmartUrl(target.image.url, smartDownloadName(target.image));
-                    toast('已开始下载');
+                    const result = await downloadSmartUrl(target.image.url, smartDownloadName(target.image));
+                    toast(result?.cancelled ? '已取消保存' : '已另存为本地文件');
                     return;
                 }
                 if(action === 'delete') {
@@ -3109,35 +3108,14 @@
         }
         async function downloadSmartUrl(url, filename){
             if(!url) return;
-            if(!String(url).startsWith('data:')){
-                const href = `/api/download-url?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || smartDownloadName(url))}`;
-                if(window.parent && window.parent !== window){
-                    window.parent.postMessage({type:'studio-download', href, filename: filename || smartDownloadName(url)}, '*');
-                    return;
-                }
-                const link = document.createElement('a');
-                link.href = href;
-                link.download = filename || smartDownloadName(url);
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                return;
-            }
-            const res = await fetch('/api/download-url', {
+            const name = filename || smartDownloadName(url);
+            const res = await fetch('/api/app/save-as', {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({url, filename: filename || smartDownloadName(url)})
+                body:JSON.stringify({url, filename:name})
             });
             if(!res.ok) throw new Error('下载失败');
-            const blob = await res.blob();
-            const objectUrl = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            link.download = filename || smartDownloadName(url);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+            return await res.json();
         }
         function thumbMediaHtml(img, node=null){
             const transform = imageTransformStyle(node);

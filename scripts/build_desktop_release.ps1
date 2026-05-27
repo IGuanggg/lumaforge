@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$Version = "2.0.9"
+$Version = "2.0.10"
 
 Write-Host "[1/8] Cleaning dist and build..."
 Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
@@ -42,6 +42,7 @@ Write-Host "  OK: $zipName"
 Write-Host "[6/8] Building installer (if ISCC available)..."
 $iscc = $null
 $paths = @(
+    "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
     "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
     "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
 )

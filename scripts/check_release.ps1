@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "2.0.2"
+    [string]$Version = "2.0.10"
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,10 +37,10 @@ Assert-Contains "Dockerfile.cloud" "ENV CLOUD_APP_VERSION=$Version"
 Assert-Contains "docker-compose.cloud.yml" "lumaforge-cloud"
 Assert-Contains "docker-compose.cloud.yml" "iguang9881/lumaforge-cloud"
 Assert-Contains "desktop_canvas.spec" 'name="LumaForge"'
-Assert-Contains "static/index.html" "光绘工坊"
+Assert-Contains "static/index.html" "LumaForge"
 
 Write-Host "[2/5] Checking Python syntax..."
-python -m py_compile main.py cloud_config_server.py launcher.py desktop_launcher.py
+python -m py_compile main.py cloud_config_server.py launcher.py desktop_launcher.py desktop_updater.py
 
 Write-Host "[3/5] Checking key HTML script syntax when Node is available..."
 if (Get-Command node -ErrorAction SilentlyContinue) {

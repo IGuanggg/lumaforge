@@ -8910,35 +8910,14 @@
         }
         async function downloadUrl(url, filename){
             if(!url) return;
-            if(!String(url).startsWith('data:')){
-                const href = `/api/download-url?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || outputDownloadName(url))}`;
-                if(window.parent && window.parent !== window){
-                    window.parent.postMessage({type:'studio-download', href, filename: filename || outputDownloadName(url)}, '*');
-                    return;
-                }
-                const link = document.createElement('a');
-                link.href = href;
-                link.download = filename || outputDownloadName(url);
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                return;
-            }
-            const res = await fetch('/api/download-url', {
+            const name = filename || outputDownloadName(url);
+            const res = await fetch('/api/app/save-as', {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({url, filename})
+                body:JSON.stringify({url, filename:name})
             });
             if(!res.ok) throw new Error('下载失败');
-            const blob = await res.blob();
-            const link = document.createElement('a');
-            const objectUrl = URL.createObjectURL(blob);
-            link.href = objectUrl;
-            link.download = filename || outputDownloadName(url);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+            return await res.json();
         }
         function setOutputCompareMode(active){
             outputPreview.classList.toggle('compare-mode', active);

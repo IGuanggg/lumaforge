@@ -402,16 +402,16 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.0.9 已更新：素材可靠性与本地恢复加固</div>
-                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示，用来提醒可以立刻检查和修复的项目。</div>
+                        <div class="welcome-title">v2.0.10 小版本更新：下载另存为与加载反馈修复</div>
+                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示，用来提醒这次小版本修复的下载与等待反馈。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
                 </div>
                 <div class="welcome-list">
-                    <div class="welcome-item"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i><span>素材详情页显示生成参数</span></div>
-                    <div class="welcome-item"><i data-lucide="repeat-2" class="w-4 h-4"></i><span>复用参数重新生成</span></div>
-                    <div class="welcome-item"><i data-lucide="archive" class="w-4 h-4"></i><span>本地轻量备份与恢复</span></div>
-                    <div class="welcome-item"><i data-lucide="stethoscope" class="w-4 h-4"></i><span>启动诊断与素材修复入口</span></div>
+                    <div class="welcome-item"><i data-lucide="download" class="w-4 h-4"></i><span>智能画布下载改为本地另存为</span></div>
+                    <div class="welcome-item"><i data-lucide="folder-down" class="w-4 h-4"></i><span>素材库下载增加另存为兜底</span></div>
+                    <div class="welcome-item"><i data-lucide="loader-2" class="w-4 h-4"></i><span>生成等待圆环动画更明显</span></div>
+                    <div class="welcome-item"><i data-lucide="list-checks" class="w-4 h-4"></i><span>发布检查继续覆盖小版本</span></div>
                 </div>
                 <div class="welcome-actions">
                     <button class="action-btn primary" id="welcome-run-diagnostics-btn" type="button"><i data-lucide="stethoscope" class="w-4 h-4"></i><span>运行诊断</span></button>
@@ -840,13 +840,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.0.9' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.0.10' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.0.9';
+            const version = appInfo?.version || '2.0.10';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }
@@ -1536,7 +1536,7 @@
                 const staticHealth = info.static_health || {};
                 const updateCapability = info.update_capability || {};
                 const checks = [
-                    {label:'当前版本', ok:info.version === '2.0.9', detail:info.version || '-'},
+                    {label:'当前版本', ok:info.version === '2.0.10', detail:info.version || '-'},
                     {label:'前端依赖', ok:!!staticHealth.ok, detail:staticHealth.ok ? `${Number(staticHealth.checked_count || 0)} 项完整` : `缺失 ${Number(staticHealth.missing_count || 0)} 项`},
                     {label:'素材文件', ok:Number(assets.missing_count || 0) === 0, detail:`缺失 ${Number(assets.missing_count || 0)} 个`},
                     {label:'缩略图', ok:Number(assets.thumb_missing_count || 0) === 0, detail:`待重建 ${Number(assets.thumb_missing_count || 0)} 个`, warnOnly:true},
