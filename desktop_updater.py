@@ -158,6 +158,7 @@ def restart_app(exe_path: str):
     if not exe_path or not os.path.isfile(exe_path):
         return
     try:
+        time.sleep(2.0)
         subprocess.Popen([exe_path], cwd=os.path.dirname(exe_path), close_fds=True)
     except Exception:
         pass

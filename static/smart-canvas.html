@@ -17,8 +17,8 @@
         })();
     </script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260526-asset-reliability1"></script>
-    <script src="/static/i18n.js?v=20260526-asset-reliability1"></script>
+    <script src="/static/theme.js?v=20260528-smart-canvas-reconcile1"></script>
+    <script src="/static/i18n.js?v=20260528-smart-canvas-reconcile1"></script>
     <style>
 :root {
             --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.9); --card:#fff;
@@ -129,8 +129,11 @@
         .theme-dark .image-node:not(.empty-node) .node-delete { background:transparent; color:#f8fafc; text-shadow:0 1px 4px rgba(0,0,0,.85); }
         .image-wrap { position:relative; width:100%; border-radius:13px; overflow:visible; background:#fff; }
         .image-wrap .mini-x, .thumb-item .mini-x { position:absolute; right:7px; top:7px; opacity:0; pointer-events:none; }
+        .image-wrap .image-param, .thumb-item .image-param { top:39px; color:#64748b; }
+        .image-wrap .image-param:hover, .thumb-item .image-param:hover { color:#2563eb; background:#eff6ff; border-color:#bfdbfe; }
         .theme-dark .image-wrap .mini-x, .theme-dark .thumb-item .mini-x { background:rgba(15,23,42,.86); color:#cbd5e1; border-color:rgba(148,163,184,.28); box-shadow:0 8px 18px rgba(0,0,0,.3); }
         .theme-dark .image-wrap .mini-x:hover, .theme-dark .thumb-item .mini-x:hover { background:rgba(248,113,113,.22); color:#fecaca; border-color:rgba(248,113,113,.36); }
+        .theme-dark .image-wrap .image-param:hover, .theme-dark .thumb-item .image-param:hover { color:#bfdbfe; background:rgba(37,99,235,.22); border-color:rgba(96,165,250,.38); }
         .thumb-item:hover .mini-x, .thumb-item.image-selected .mini-x, .image-wrap.image-selected .mini-x, .image-node.selected:not(.group-node):not(.empty-node) .image-wrap .mini-x { opacity:1; pointer-events:auto; }
         .image-node.dragging .mini-x { opacity:0 !important; pointer-events:none; }
         .node-img { display:block; width:var(--node-img-w, 260px); height:var(--node-img-h, 180px); object-fit:cover; border-radius:12px; background:#fff; }
@@ -500,6 +503,30 @@
         .smart-menu-shortcut { color:var(--faint); font-weight:650; }
         .smart-menu-sep { height:1px; background:var(--line); margin:6px 5px; }
         .smart-enhance-note { padding:4px 8px 2px; color:var(--faint); font-size:10px; font-weight:650; }
+        .smart-param-modal { position:absolute; inset:0; z-index:92; display:none; align-items:center; justify-content:center; padding:24px; background:rgba(15,23,42,.34); backdrop-filter:blur(14px); }
+        .smart-param-modal.open { display:flex; }
+        .smart-param-panel { width:min(980px, calc(100vw - 48px)); max-height:min(760px, calc(100vh - 48px)); border-radius:22px; background:var(--panel); border:1px solid var(--line); box-shadow:0 28px 88px rgba(15,23,42,.28); overflow:hidden; display:grid; grid-template-columns:minmax(260px, 1fr) minmax(320px, 420px); }
+        .smart-param-media { min-width:0; background:var(--soft); display:flex; align-items:center; justify-content:center; padding:18px; }
+        .smart-param-media img,.smart-param-media video { max-width:100%; max-height:calc(min(760px, 100vh - 48px) - 36px); border-radius:16px; object-fit:contain; background:var(--card); box-shadow:0 14px 38px rgba(15,23,42,.14); }
+        .smart-param-detail { min-width:0; padding:18px; max-height:min(760px, calc(100vh - 48px)); overflow:auto; border-left:1px solid var(--line); }
+        .smart-param-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+        .smart-param-title { color:var(--text); font-size:18px; font-weight:900; letter-spacing:0; }
+        .smart-param-close { flex:0 0 auto; width:38px; height:38px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; color:var(--text); background:var(--card); border:1px solid var(--line); }
+        .smart-param-close:hover { color:#dc2626; border-color:#fecaca; background:#fff1f2; }
+        .smart-param-grid { display:grid; grid-template-columns:92px minmax(0, 1fr); gap:10px 14px; align-items:start; color:var(--text); font-size:12px; line-height:1.48; }
+        .smart-param-grid dt { color:var(--muted); font-weight:850; }
+        .smart-param-grid dd { margin:0; min-width:0; font-weight:750; overflow-wrap:anywhere; white-space:pre-wrap; }
+        .smart-param-prompt { margin:4px 0 14px; padding:12px; border-radius:14px; background:var(--soft); border:1px solid var(--line); color:var(--text); font-size:13px; line-height:1.58; font-weight:800; white-space:pre-wrap; overflow-wrap:anywhere; }
+        .smart-param-box { margin-top:14px; max-height:220px; overflow:auto; padding:12px; border-radius:14px; background:var(--soft); border:1px solid var(--line); color:var(--muted); font:11px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:pre-wrap; overflow-wrap:anywhere; }
+        .smart-param-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+        .smart-param-action { height:34px; padding:0 12px; border-radius:999px; display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--line); color:var(--text); font-size:12px; font-weight:850; }
+        .smart-param-action.primary { background:var(--strong); color:var(--strong-text); border-color:var(--strong); }
+        .smart-param-action i,.smart-param-action svg,.smart-param-close i,.smart-param-close svg { width:16px; height:16px; }
+        @media (max-width: 760px){
+            .smart-param-panel { grid-template-columns:1fr; overflow:auto; }
+            .smart-param-detail { border-left:0; border-top:1px solid var(--line); max-height:none; }
+            .smart-param-media img,.smart-param-media video { max-height:42vh; }
+        }
         .image-node.node-hidden { opacity:.32; filter:grayscale(.75); }
         .image-node.node-locked { outline:1px dashed rgba(100,116,139,.52); outline-offset:3px; }
         .toast { position:absolute; top:24px; right:24px; z-index:60; max-width:360px; padding:10px 13px; border-radius:14px; background:var(--panel); border:1px solid var(--line); color:var(--text); box-shadow:0 16px 44px var(--shadow); font-size:12px; font-weight:800; opacity:0; transform:translateY(-8px); pointer-events:none; transition:.18s ease; }
@@ -644,6 +671,7 @@
             <button class="smart-tool-btn" type="button" data-smart-tool="brush"><i data-lucide="paintbrush"></i><span>画笔</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="angle"><i data-lucide="box"></i><span>多角度</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="same"><i data-lucide="sparkles"></i><span>画同款</span></button>
+            <button class="smart-tool-btn" type="button" data-smart-tool="params"><i data-lucide="scroll-text"></i><span>参数</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="download"><i data-lucide="download"></i><span>下载</span></button>
         </div>
         <div id="smartEnhanceMenu" class="smart-enhance-menu" aria-hidden="true"></div>
@@ -715,6 +743,22 @@
             <div class="asset-hover-name"></div>
         </div>
         <div id="selectionBox" class="selection-box"></div>
+        <div id="smartParamModal" class="smart-param-modal" onclick="closeSmartParamModal()">
+            <div class="smart-param-panel" onclick="event.stopPropagation()">
+                <div id="smartParamMedia" class="smart-param-media"></div>
+                <div class="smart-param-detail">
+                    <div class="smart-param-head">
+                        <div class="smart-param-title">生成参数</div>
+                        <button class="smart-param-close" type="button" onclick="closeSmartParamModal()" title="关闭"><i data-lucide="x"></i></button>
+                    </div>
+                    <div id="smartParamContent"></div>
+                    <div class="smart-param-actions">
+                        <button class="smart-param-action primary" type="button" onclick="copySmartParamPrompt()"><i data-lucide="copy"></i><span>复制提示词</span></button>
+                        <button class="smart-param-action" type="button" onclick="closeSmartParamModal()"><span>关闭</span></button>
+                    </div>
+                </div>
+            </div>
+        </div>
         <div id="imageEditModal" class="image-edit-modal">
             <div class="image-edit-panel">
                 <div class="image-edit-head">
@@ -962,6 +1006,10 @@
         let previewComparePos = 50;
         let imageEditPanDrag = null;
         let viewport = {x:0, y:0, scale:1};
+        let smartPendingReconcileTimer = null;
+        let smartPendingReconcileRunning = false;
+        let smartParamTarget = null;
+        let smartParamPromptText = '';
         let settings = {
             engine:'api',
             apiKind:'image',
@@ -1243,6 +1291,7 @@
                 '<div class="smart-menu-sep"></div>',
                 smartMenuRow('send-chat', '发送至对话', '', !selectedImageTarget()),
                 smartMenuRow('save-asset', '保存到资产库', '', !selectedImageTarget()),
+                smartMenuRow('params', '查看生成参数', '', !selectedImageTarget()),
                 smartMenuRow('group', '创建编组', 'Ctrl+G', !canGroup),
                 smartMenuRow('ungroup', '解除编组', 'Ctrl+Shift+G', !canUngroup || targetNode?.locked),
                 smartMenuRow('merge', '合并图层', 'Ctrl+E', !canGroup),
@@ -1472,6 +1521,146 @@
                 || ''
             ).trim();
         }
+        function prettySmartJson(value){
+            if(!value || (typeof value === 'object' && !Object.keys(value).length)) return '';
+            try { return JSON.stringify(value, null, 2); } catch(e) { return String(value); }
+        }
+        function formatSmartFullTime(value){
+            const n = Number(value || 0);
+            if(!n) return '-';
+            const ms = n > 100000000000 ? n : n > 10000000000 ? n : n * 1000;
+            const d = new Date(ms);
+            return Number.isNaN(d.getTime()) ? '-' : d.toLocaleString();
+        }
+        function smartImagePromptText(target, asset=null){
+            const node = target?.node || {};
+            const image = target?.image || {};
+            const gen = asset?.generation || {};
+            const meta = asset?.metadata || {};
+            return String(
+                node.runModelPrompt
+                || image.runModelPrompt
+                || node.runPrompt
+                || image.runPrompt
+                || node.promptDraftText
+                || image.promptDraftText
+                || asset?.prompt
+                || gen.prompt
+                || meta.prompt
+                || ''
+            ).trim();
+        }
+        function smartImageModelText(target, asset=null){
+            const node = target?.node || {};
+            const gen = asset?.generation || {};
+            const meta = asset?.metadata || {};
+            const st = node.runSettings || {};
+            return asset?.model || gen.model || meta.model || st.model || st.msCustomModel || st.msgenModel || st.videoModel || st.comfyWorkflow || '-';
+        }
+        function smartImageSourceText(target, asset=null){
+            const gen = asset?.generation || {};
+            const meta = asset?.metadata || {};
+            const st = target?.node?.runSettings || {};
+            return asset?.source_type || gen.source_type || meta.source_type || [st.engine, st.apiKind].filter(Boolean).join(' / ') || '-';
+        }
+        function smartImageDimsText(target, asset=null){
+            const img = target?.image || {};
+            const w = Number(asset?.width || asset?.generation?.width || img.natural_w || img.width || 0);
+            const h = Number(asset?.height || asset?.generation?.height || img.natural_h || img.height || 0);
+            return w && h ? `${w} x ${h}` : '-';
+        }
+        function smartImageTaskText(asset=null){
+            const gen = asset?.generation || {};
+            const meta = asset?.metadata || {};
+            return gen.task_id || gen.prompt_id || gen.request_id || meta.task_id || meta.prompt_id || meta.request_id || '-';
+        }
+        function smartImageProviderText(asset=null){
+            const gen = asset?.generation || {};
+            const meta = asset?.metadata || {};
+            return gen.provider_name || gen.provider_id || meta.provider_name || meta.provider_id || '-';
+        }
+        function renderSmartParamContent(target, asset=null, loading=false){
+            const prompt = smartImagePromptText(target, asset);
+            smartParamPromptText = prompt;
+            const node = target?.node || {};
+            const gen = asset?.generation || {};
+            const meta = asset?.metadata || {};
+            const st = node.runSettings || {};
+            const rows = [
+                ['模型', smartImageModelText(target, asset)],
+                ['来源', smartImageSourceText(target, asset)],
+                ['尺寸', smartImageDimsText(target, asset)],
+                ['Seed', gen.seed || meta.seed || '-'],
+                ['Provider', smartImageProviderText(asset)],
+                ['任务 ID', smartImageTaskText(asset)],
+                ['生成时间', formatSmartFullTime(asset?.created_at || gen.created_at || node.runAt || node.runStartedAt)]
+            ];
+            const extra = {};
+            if(st && Object.keys(st).length) extra.runSettings = st;
+            if(gen.params || meta.params) extra.params = gen.params || meta.params;
+            if(node.runPromptRefs?.length) extra.references = node.runPromptRefs;
+            if(gen.workflow_json || meta.workflow_json) extra.workflow_json = gen.workflow_json || meta.workflow_json;
+            if(gen.raw_usage || meta.raw_usage) extra.raw_usage = gen.raw_usage || meta.raw_usage;
+            const loadingHint = loading ? '<div class="smart-param-box">正在从素材库补全任务 ID、Provider 和尺寸...</div>' : '';
+            return `
+                <dl class="smart-param-grid">
+                    <dt>提示词</dt>
+                    <dd><div class="smart-param-prompt">${escapeHtml(prompt || '这张图没有保存提示词')}</div></dd>
+                    ${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}
+                </dl>
+                ${loadingHint || `<div class="smart-param-box">${escapeHtml(prettySmartJson(extra) || '没有额外参数')}</div>`}
+            `;
+        }
+        function closeSmartParamModal(){
+            const modal = document.getElementById('smartParamModal');
+            modal?.classList.remove('open');
+            const media = document.getElementById('smartParamMedia');
+            const content = document.getElementById('smartParamContent');
+            if(media) media.innerHTML = '';
+            if(content) content.innerHTML = '';
+            smartParamTarget = null;
+            smartParamPromptText = '';
+        }
+        async function findSmartAssetForUrl(url){
+            if(!url) return null;
+            try {
+                const data = await fetch('/api/assets?type=image&limit=200').then(async r => {
+                    if(!r.ok) throw new Error(await r.text());
+                    return r.json();
+                });
+                return (data.items || []).find(asset => asset.local_url === url || asset.url === url) || null;
+            } catch(e) {
+                return null;
+            }
+        }
+        async function openSmartImageParams(target=selectedImageTarget()){
+            if(!target?.image?.url) return;
+            smartParamTarget = {nodeId:target.node.id, index:target.index, url:target.image.url};
+            const modal = document.getElementById('smartParamModal');
+            const media = document.getElementById('smartParamMedia');
+            const content = document.getElementById('smartParamContent');
+            if(media){
+                const safeUrl = escapeHtml(target.image.url);
+                media.innerHTML = isVideoMediaItem(target.image)
+                    ? `<video src="${safeUrl}" controls autoplay playsinline></video>`
+                    : `<img src="${safeUrl}" alt="">`;
+            }
+            if(content) content.innerHTML = renderSmartParamContent(target, null, true);
+            modal?.classList.add('open');
+            refreshIcons();
+            const asset = await findSmartAssetForUrl(target.image.url);
+            if(!smartParamTarget || smartParamTarget.url !== target.image.url) return;
+            if(content) content.innerHTML = renderSmartParamContent(target, asset, false);
+            refreshIcons();
+        }
+        function copySmartParamPrompt(){
+            const text = smartParamPromptText || smartImagePromptText(selectedImageTarget());
+            if(!text){
+                toast('这张图没有可复制的提示词');
+                return;
+            }
+            navigator.clipboard?.writeText(text).then(() => toast('提示词已复制')).catch(() => toast('复制失败'));
+        }
         function createSamePendingOutput(sourceNode, meta){
             const sourceRect = nodeRect(sourceNode);
             const existingBranches = outgoingInputConnectionsFor(sourceNode).length;
@@ -1548,6 +1737,7 @@
                     toast(result?.cancelled ? '已取消保存' : '已另存为本地文件');
                     return;
                 }
+                if(action === 'params') return await openSmartImageParams(target);
                 if(action === 'brush') {
                     openImageEditor(target.node.id, target.index);
                     setTimeout(() => setImageEditMode('brush', true), 80);
@@ -2698,7 +2888,11 @@
                 document.title = canvas.title || tr('canvas.smartCanvas');
                 setTextById('smartTitle', canvas.title || tr('canvas.smartCanvas'));
                 nodes = Array.isArray(canvas.nodes) ? canvas.nodes : [];
-                nodes.forEach(n => { if(n.pending) n.pending = 0; });
+                nodes.forEach(n => {
+                    if(n.pending) n.pending = 0;
+                    if(n.running) n.running = false;
+                });
+                reconcileStuckSmartNodes();
                 canvas.connections = Array.isArray(canvas.connections) ? canvas.connections : [];
                 sanitizeCanvasConnections();
                 viewport = {...viewport, ...(canvas.viewport || {})};
@@ -3009,6 +3203,7 @@
                 if(action === 'duplicate') return duplicateSelectedSmartNodes();
                 if(action === 'send-chat') return await sendSelectedImageToChat();
                 if(action === 'save-asset') return await saveSelectedImageToAssetLibrary();
+                if(action === 'params') return await openSmartImageParams(target);
                 if(action === 'group' || action === 'merge') return groupSelectedNodes();
                 if(action === 'ungroup') return splitGroupNode(node);
                 if(action === 'toggle-hidden') return toggleSelectedNodeFlag('hidden');
@@ -3168,8 +3363,8 @@
             }
             if(imgs.length === 0 && node.runError) return `<div class="node-result-placeholder error" style="width:${layout.width}px;height:${layout.height}px"><i data-lucide="circle-alert"></i><span>${escapeHtml(node.runError)}</span></div>`;
             if(imgs.length === 0 && (node.runStartedAt || node.runFinishedAt)) return `<div class="node-result-placeholder empty-result" style="width:${layout.width}px;height:${layout.height}px"><i data-lucide="image-off"></i><span>任务结束，但没有返回图片</span></div>`;
-            if(imgs.length > 1) return `<div class="thumb-grid" style="--thumb-cols:${layout.cols}; --thumb-size:${layout.thumb}px">${imgs.map((img, i) => `<div class="thumb-item ${selectedImage.nodeId === node.id && selectedImage.index === i ? 'image-selected' : ''}" data-image-index="${i}">${thumbMediaHtml(img, node)}<button class="mini-x image-delete" type="button" data-image-index="${i}" title="${escapeHtml(tr('smart.deleteImage'))}"><i data-lucide="trash-2"></i></button></div>`).join('')}</div>`;
-            if(imgs[0]) return `<div class="image-wrap ${selectedImage.nodeId === node.id && selectedImage.index === 0 ? 'image-selected' : ''}" data-image-index="0" style="--node-img-w:${layout.width}px;--node-img-h:${layout.height}px">${singleMediaHtml(imgs[0], layout.width, layout.height, node)}<button class="mini-x image-delete" type="button" data-image-index="0" title="${escapeHtml(tr('smart.deleteImage'))}"><i data-lucide="trash-2"></i></button></div>`;
+            if(imgs.length > 1) return `<div class="thumb-grid" style="--thumb-cols:${layout.cols}; --thumb-size:${layout.thumb}px">${imgs.map((img, i) => `<div class="thumb-item ${selectedImage.nodeId === node.id && selectedImage.index === i ? 'image-selected' : ''}" data-image-index="${i}">${thumbMediaHtml(img, node)}<button class="mini-x image-delete" type="button" data-image-index="${i}" title="${escapeHtml(tr('smart.deleteImage'))}"><i data-lucide="trash-2"></i></button><button class="mini-x image-param" type="button" data-image-index="${i}" title="查看生成参数"><i data-lucide="scroll-text"></i></button></div>`).join('')}</div>`;
+            if(imgs[0]) return `<div class="image-wrap ${selectedImage.nodeId === node.id && selectedImage.index === 0 ? 'image-selected' : ''}" data-image-index="0" style="--node-img-w:${layout.width}px;--node-img-h:${layout.height}px">${singleMediaHtml(imgs[0], layout.width, layout.height, node)}<button class="mini-x image-delete" type="button" data-image-index="0" title="${escapeHtml(tr('smart.deleteImage'))}"><i data-lucide="trash-2"></i></button><button class="mini-x image-param" type="button" data-image-index="0" title="查看生成参数"><i data-lucide="scroll-text"></i></button></div>`;
             return `<div class="node-drop"><i data-lucide="image-plus"></i><span>${escapeHtml(tr('smart.uploadHint'))}</span></div>`;
         }
         function nowMs(){ return Date.now(); }
@@ -3247,6 +3442,7 @@
             if(window.lucide) lucide.createIcons();
             measureSmartNodeImages();
             refreshRunTimerPills();
+            scheduleSmartPendingReconcile();
         }
         function measureSmartNodeImages(){
             world.querySelectorAll('.image-node img').forEach(imgEl => {
@@ -3563,13 +3759,23 @@
                         deleteImage(id, Number(btn.dataset.imageIndex));
                     });
                 });
+                el.querySelectorAll('.image-param').forEach(btn => {
+                    btn.addEventListener('click', e => {
+                        e.preventDefault(); e.stopPropagation();
+                        selectedId = id;
+                        selectedIds = [];
+                        selectedImage = {nodeId:id, index:Number(btn.dataset.imageIndex || 0)};
+                        render();
+                        openSmartImageParams(selectedImageTarget());
+                    });
+                });
                 el.querySelectorAll('.thumb-item,.image-wrap').forEach(item => {
                     item.setAttribute('draggable', 'false');
                     item.addEventListener('dragstart', e => {
                         e.preventDefault();
                     });
                     item.addEventListener('contextmenu', e => {
-                        if(e.target.closest('.image-delete')) return;
+                        if(e.target.closest('.image-delete,.image-param')) return;
                         e.preventDefault();
                         e.stopPropagation();
                         const owner = nodes.find(n => n.id === id);
@@ -3582,7 +3788,7 @@
                         setTimeout(() => openSmartContextMenu(e, id, Number(item.dataset.imageIndex || 0)), 0);
                     });
                     item.addEventListener('click', e => {
-                        if(e.target.closest('.image-delete')) return;
+                        if(e.target.closest('.image-delete,.image-param')) return;
                         e.stopPropagation();
                         const owner = nodes.find(n => n.id === id);
                         hideRunTimerForNode(owner);
@@ -3592,7 +3798,7 @@
                         render();
                     });
                 item.addEventListener('dblclick', e => {
-                    if(e.target.closest('.image-delete')) return;
+                    if(e.target.closest('.image-delete,.image-param')) return;
                     e.stopPropagation();
                     openImageEditor(id, Number(item.dataset.imageIndex || 0));
                 });
@@ -5342,6 +5548,10 @@
             if(metaTarget) attachRunMeta(metaTarget, meta);
             pendingNode.images = (pendingNode.images || []).map(img => stripImageGenerationMeta(img));
             selectedId = pendingNode._selectAfterRunId || pendingNode.id;
+            delete pendingNode.canvasTaskId;
+            delete pendingNode.canvasTaskCreatedAt;
+            delete pendingNode.canvasTaskPrompt;
+            delete pendingNode.canvasTaskExpectedCount;
             delete pendingNode._runMetaTargetId;
             delete pendingNode._selectAfterRunId;
             selectedImage = {nodeId:'', index:-1};
@@ -5515,7 +5725,7 @@
             }
             const urls = settings.engine === 'modelscope'
                 ? await runModelscopeGeneration(prompt, refs)
-                : await runApiGeneration(prompt, refs);
+                : await runApiGeneration(prompt, refs, node);
             return {urls, kind:'image'};
         }
         async function runCascadeStepIntoNode(sourceNode, targetNode, inputRefs){
@@ -5777,7 +5987,7 @@
                 }
                 const outImages = settings.engine === 'modelscope'
                     ? await runModelscopeGeneration(prompt, refs)
-                    : await runApiGeneration(prompt, refs);
+                    : await runApiGeneration(prompt, refs, pendingNode, meta);
                 if(!outImages.length) throw new Error(tr('smart.errNoOutImages'));
                 finalizePendingNode(pendingNode, outImages, meta);
                 clearPromptInput({preserveDraft:true});
@@ -5847,7 +6057,7 @@
             if(field?.type === 'textarea' || /prompt|text|提示词|正向|负向/.test(key)) return 'prompt';
             return 'setting';
         }
-        async function runApiGeneration(prompt, refs){
+        async function runApiGeneration(prompt, refs, pendingNode=null, meta=null){
             if(!settings.provider_id || !settings.model) throw new Error(tr('smart.errNoApiModel'));
             const count = Math.max(1, Math.min(8, Number(settings.count || 1)));
             const payload = {prompt, provider_id:settings.provider_id, model:settings.model, size:sizeForRun(), quality:settings.quality || 'auto', n:count, reference_images:refs};
@@ -5855,8 +6065,23 @@
                 if(!r.ok) throw new Error(await r.text());
                 return r.json();
             });
-            const result = await pollTask(task.task_id);
-            return (result?.images || []).filter(Boolean);
+            if(pendingNode){
+                pendingNode.canvasTaskId = task.task_id || '';
+                pendingNode.canvasTaskCreatedAt = Date.now();
+                pendingNode.canvasTaskPrompt = prompt;
+                pendingNode.canvasTaskExpectedCount = count;
+                pendingNode.running = true;
+                scheduleSave();
+                render();
+            }
+            const result = await pollTask(task.task_id, {
+                prompt,
+                startedAt: pendingNode?.runStartedAt || pendingNode?.canvasTaskCreatedAt || meta?.createdAt || Date.now(),
+                expectedCount: count,
+                node: pendingNode,
+                meta
+            });
+            return smartResultImageUrls(result).filter(Boolean);
         }
         async function runApiVideoGeneration(prompt, refs){
             if(!settings.videoModel) throw new Error(tr('smart.errNoVideoModel'));
@@ -6082,12 +6307,167 @@
             } catch(e) {}
             return text;
         }
-        async function pollTask(taskId){
+        function normalizeSmartPromptForMatch(value){
+            return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+        function smartResultImageUrls(result){
+            if(!result) return [];
+            const urls = [];
+            const add = value => {
+                if(typeof value === 'string' && value) urls.push(value);
+                else if(value && typeof value === 'object'){
+                    const url = value.url || value.local_url || value.image_url || value.output_url || value.path || '';
+                    if(url) urls.push(url);
+                }
+            };
+            ['images', 'outputs', 'result', 'data'].forEach(key => {
+                const value = result[key];
+                if(Array.isArray(value)) value.forEach(add);
+            });
+            add(result.url || result.image_url || result.output_url);
+            return [...new Set(urls)].filter(Boolean);
+        }
+        function smartKnownOutputUrls(exceptNode=null){
+            const known = new Set();
+            nodes.forEach(node => {
+                if(exceptNode && node.id === exceptNode.id) return;
+                (node.images || []).forEach(img => {
+                    if(img?.url) known.add(img.url);
+                });
+            });
+            return known;
+        }
+        function smartRunMetaFromNode(node){
+            return {
+                prompt: node?.runModelPrompt || node?.canvasTaskPrompt || node?.runPrompt || '',
+                displayPrompt: node?.runPrompt || node?.runModelPrompt || node?.canvasTaskPrompt || '',
+                promptText: node?.runPrompt || '',
+                promptRefs: node?.runPromptRefs || [],
+                sourceNodeId: node?.sourceNodeId || node?.id || '',
+                settings: cloneSmartSettings(node?.runSettings || settings),
+                createdAt: Number(node?.runAt || node?.runStartedAt || node?.created_at || Date.now())
+            };
+        }
+        async function loadRecentSmartImageAssets(){
+            const data = await fetch('/api/assets?type=image&limit=200').then(async r => {
+                if(!r.ok) throw new Error(await r.text());
+                return r.json();
+            });
+            return Array.isArray(data.items) ? data.items : [];
+        }
+        function smartUrlsFromAssets(items, opts={}){
+            const prompt = normalizeSmartPromptForMatch(opts.prompt || opts.node?.runModelPrompt || opts.node?.runPrompt || opts.node?.canvasTaskPrompt || '');
+            const taskId = String(opts.taskId || opts.node?.canvasTaskId || '').trim();
+            const startedAt = Number(opts.startedAt || opts.node?.runStartedAt || opts.node?.created_at || 0);
+            const expectedCount = Math.max(1, Number(opts.expectedCount || opts.node?.pending || 1));
+            const known = smartKnownOutputUrls(opts.node || null);
+            const floor = startedAt ? startedAt - 90000 : 0;
+            const scored = [];
+            (items || []).forEach(asset => {
+                const gen = asset?.generation || {};
+                const meta = asset?.metadata || {};
+                const url = asset?.local_url || asset?.url || '';
+                if(!url || known.has(url)) return;
+                const createdMs = Number(asset?.created_at || gen.created_at || 0) * 1000;
+                if(floor && createdMs && createdMs < floor) return;
+                const taskFields = [
+                    gen.task_id, gen.taskId, gen.request_id, gen.requestId,
+                    meta.task_id, meta.taskId, meta.request_id, meta.requestId,
+                    gen.params?.task_id, gen.params?.taskId, meta.params?.task_id, meta.params?.taskId
+                ].map(value => String(value || '').trim()).filter(Boolean);
+                const taskMatch = Boolean(taskId && taskFields.includes(taskId));
+                const assetPrompt = normalizeSmartPromptForMatch(gen.prompt || asset?.prompt || meta.prompt || '');
+                const promptMatch = Boolean(prompt && assetPrompt && (
+                    assetPrompt === prompt || assetPrompt.includes(prompt) || prompt.includes(assetPrompt)
+                ));
+                if(!taskMatch && !promptMatch) return;
+                scored.push({url, createdMs: createdMs || 0, score: taskMatch ? 2 : 1});
+            });
+            scored.sort((a, b) => (b.score - a.score) || (b.createdMs - a.createdMs));
+            return scored.map(item => item.url).slice(0, expectedCount);
+        }
+        async function findCompletedSmartImages(opts={}, assetItems=null){
+            const items = assetItems || await loadRecentSmartImageAssets();
+            return smartUrlsFromAssets(items, opts);
+        }
+        function reconcileStuckSmartNodes(){
+            let hasStuck = false;
+            nodes.forEach(node => {
+                if((node.images || []).length) return;
+                if(node.runError) return;
+                const hasMeta = node.runStartedAt || node.canvasTaskCreatedAt || node.canvasTaskId || node.runModelPrompt || node.runPrompt || node.runSettings?.model;
+                if(!hasMeta) return;
+                node.pending = 1;
+                node.running = true;
+                if(!node.runStartedAt) node.runStartedAt = node.canvasTaskCreatedAt || node.created_at || Date.now();
+                hasStuck = true;
+            });
+            if(hasStuck) scheduleSmartPendingReconcile(1200);
+        }
+        async function reconcileSmartPendingNodes(){
+            if(smartPendingReconcileRunning) return;
+            const pendingNodes = nodes.filter(node => (node.pending || node.running) && !(node.images || []).length && (node.runStartedAt || node.canvasTaskId || node.runModelPrompt || node.runPrompt));
+            if(!pendingNodes.length) return;
+            smartPendingReconcileRunning = true;
+            try {
+                const items = await loadRecentSmartImageAssets();
+                let changed = false;
+                for(const node of pendingNodes){
+                    const urls = smartUrlsFromAssets(items, {
+                        node,
+                        taskId: node.canvasTaskId,
+                        prompt: node.canvasTaskPrompt || node.runModelPrompt || node.runPrompt,
+                        startedAt: node.runStartedAt || node.created_at,
+                        expectedCount: node.pending || node.canvasTaskExpectedCount || 1
+                    });
+                    if(!urls.length) continue;
+                    finalizePendingNode(node, urls, smartRunMetaFromNode(node), 'image');
+                    node.running = false;
+                    changed = true;
+                }
+                if(changed){
+                    scheduleSave();
+                    render();
+                    toast('已从素材库同步完成图片');
+                }
+            } catch(e) {
+                console.warn('smart pending reconcile failed', e);
+            } finally {
+                smartPendingReconcileRunning = false;
+                if(nodes.some(node => (node.pending || node.running) && !(node.images || []).length)){
+                    scheduleSmartPendingReconcile(6000);
+                }
+            }
+        }
+        function scheduleSmartPendingReconcile(delay=3500){
+            if(smartPendingReconcileTimer) return;
+            const hasPending = nodes.some(node => (node.pending || node.running) && !(node.images || []).length);
+            if(!hasPending) return;
+            smartPendingReconcileTimer = setTimeout(() => {
+                smartPendingReconcileTimer = null;
+                reconcileSmartPendingNodes();
+            }, delay);
+        }
+        async function pollTask(taskId, opts={}){
             for(let i = 0; i < 900; i++){
                 await new Promise(resolve => setTimeout(resolve, 2000));
-                const task = await fetch(`/api/canvas-image-tasks/${encodeURIComponent(taskId)}`).then(r => r.json());
-                if(task.status === 'succeeded') return task.result;
-                if(task.status === 'failed') throw new Error(friendlyTaskError(task.error));
+                let task = null;
+                try {
+                    const res = await fetch(`/api/canvas-image-tasks/${encodeURIComponent(taskId)}`);
+                    if(res.ok) task = await res.json();
+                } catch(e) {}
+                if(task?.status === 'succeeded'){
+                    const urls = smartResultImageUrls(task.result);
+                    if(urls.length) return task.result;
+                    const fallback = await findCompletedSmartImages({...opts, taskId}).catch(() => []);
+                    if(fallback.length) return {images:fallback};
+                    return task.result;
+                }
+                if(task?.status === 'failed') throw new Error(friendlyTaskError(task.error));
+                if(i >= 4 && i % 3 === 1){
+                    const fallback = await findCompletedSmartImages({...opts, taskId}).catch(() => []);
+                    if(fallback.length) return {images:fallback};
+                }
             }
             throw new Error(tr('smart.errRunTimeout'));
         }
@@ -6193,21 +6573,21 @@
         shell.addEventListener('mousedown', e => {
             if(!zoomPreviewState) return;
             if(e.button !== 0) return;
-            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
+            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
             e.preventDefault();
             e.stopPropagation();
         }, true);
         shell.addEventListener('click', e => {
             if(!zoomPreviewState) return;
             if(e.button !== 0) return;
-            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
+            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
             e.preventDefault();
             e.stopPropagation();
             exitZoomPreview(screenToWorld(e));
         }, true);
         shell.onmousedown = e => {
-            if(zoomPreviewState && e.button === 0 && !e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
-            if(e.target.closest('.image-node,.composer,.smart-back,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
+            if(zoomPreviewState && e.button === 0 && !e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
+            if(e.target.closest('.image-node,.composer,.smart-back,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
             closeCreateMenu();
             if(e.button === 0 && e.ctrlKey){
                 e.preventDefault();
@@ -6223,14 +6603,14 @@
             shell.classList.add('panning');
         };
         shell.ondblclick = e => {
-            if(didPan || e.target.closest('.image-node,.composer,.smart-back,.image-edit-modal,.create-menu,.smart-image-toolbar,.smart-context-menu')) return;
+            if(didPan || e.target.closest('.image-node,.composer,.smart-back,.image-edit-modal,.smart-param-modal,.create-menu,.smart-image-toolbar,.smart-context-menu')) return;
             if(document.getElementById('imageEditModal')?.classList.contains('open')) return;
             e.preventDefault();
             openCreateMenu(e);
         };
         shell.onclick = e => {
             if(selectionJustFinished) return;
-            if(didPan || e.target.closest('.image-node,.composer,.smart-back,.image-edit-modal,.create-menu,.smart-image-toolbar,.smart-context-menu')) return;
+            if(didPan || e.target.closest('.image-node,.composer,.smart-back,.image-edit-modal,.smart-param-modal,.create-menu,.smart-image-toolbar,.smart-context-menu')) return;
             if(document.getElementById('imageEditModal')?.classList.contains('open')) return;
             closeCreateMenu();
             clearSelection();
@@ -6802,7 +7182,7 @@
             if(!event.target.closest('.smart-context-menu')) closeSmartContextMenu();
         });
         document.addEventListener('keydown', event => {
-            if(event.key === 'Escape') { closeAllSmartPopovers(); closeCreateMenu(); closeSmartEnhanceMenu(); closeSmartContextMenu(); }
+            if(event.key === 'Escape') { closeAllSmartPopovers(); closeCreateMenu(); closeSmartEnhanceMenu(); closeSmartContextMenu(); closeSmartParamModal(); }
         });
         document.getElementById('cropBox').addEventListener('mousedown', event => beginCropDrag(event, 'move'));
         document.getElementById('cropHandle').addEventListener('mousedown', event => beginCropDrag(event, 'resize'));

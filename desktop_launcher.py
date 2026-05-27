@@ -14,6 +14,8 @@ import uvicorn
 
 
 APP_NAME = "LumaForge"
+DESKTOP_READY_TIMEOUT = 120
+DESKTOP_READY_REQUEST_TIMEOUT = 4
 
 
 def is_frozen():
@@ -146,17 +148,21 @@ def find_port(preferred):
         return sock.getsockname()[1]
 
 
-def wait_until_ready(url, timeout=35):
+def wait_until_ready(url, timeout=DESKTOP_READY_TIMEOUT):
     deadline = time.time() + timeout
     last_error = ""
+    attempts = 0
     while time.time() < deadline:
+        attempts += 1
         try:
-            with urllib.request.urlopen(url, timeout=1.5) as response:
+            with urllib.request.urlopen(url, timeout=DESKTOP_READY_REQUEST_TIMEOUT) as response:
                 if response.status < 500:
+                    logging.info("Desktop service ready after %s attempts", attempts)
                     return True, ""
         except Exception as exc:
             last_error = str(exc)
-            time.sleep(0.25)
+            logging.info("Desktop service not ready yet attempt=%s error=%s", attempts, last_error)
+            time.sleep(0.5 if attempts < 20 else 1.0)
     return False, last_error
 
 

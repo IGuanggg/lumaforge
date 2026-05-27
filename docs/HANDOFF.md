@@ -1,6 +1,6 @@
 # LumaForge Project Handoff
 
-Last updated: 2026-05-26
+Last updated: 2026-05-28
 
 ## Project Identity
 
@@ -17,8 +17,8 @@ Last updated: 2026-05-26
 
 ## Current State
 
-- Current local app version in code: 2.0.10
-- Current build id: 20260526-asset-reliability1
+- Current local app version in code: 2.0.11
+- Current build id: 20260528-smart-canvas-reconcile1
 - Main local URL: http://localhost:3010/
 - Main app file: main.py
 - Desktop launcher: desktop_launcher.py
@@ -114,11 +114,11 @@ The update process must replace program files only. It must not overwrite user d
 
 ## Current User Request / Next Target
 
-Current planned version: 2.0.10
+Current planned version: 2.0.11
 
 Goal:
 
-Version hardening around asset reuse, local recovery, diagnostics, and update status clarity.
+v2.0.11 smart canvas experience hardening: auto-reconcile stuck loading nodes from asset library, and image generation parameter viewer button.
 
 The user specifically asked for:
 
