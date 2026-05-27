@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.cloud
-    image: iguang9881/lumaforge-cloud:${CLOUD_APP_VERSION:-2.0.11}
+    image: iguang9881/lumaforge-cloud:${CLOUD_APP_VERSION:-2.0.12}
     container_name: lumaforge-cloud
     restart: unless-stopped
     env_file:
@@ -11,7 +11,7 @@ services:
     environment:
       CLOUD_CONFIG_DB: /app/data/cloud_config.db
       CLOUD_CONFIG_PORT: 8787
-      CLOUD_APP_VERSION: ${CLOUD_APP_VERSION:-2.0.11}
+      CLOUD_APP_VERSION: ${CLOUD_APP_VERSION:-2.0.12}
     ports:
       - "${CLOUD_BIND_HOST:-127.0.0.1}:${CLOUD_HTTP_PORT:-8787}:8787"
     volumes:

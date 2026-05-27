@@ -22,6 +22,11 @@ PROTECT_NAMES = {
     "userdata",
 }
 
+CRITICAL_RELATIVE_FILES = (
+    "LumaForge.exe",
+    os.path.join("_internal", "certifi", "cacert.pem"),
+)
+
 
 def wait_for_pid(pid: int, timeout: int = 90):
     if pid <= 0:
@@ -143,6 +148,16 @@ def replace_app(package_root: str, app_dir: str, state_path: str = "", state: di
     return backup_dir, replaced
 
 
+def validate_app_install(app_dir: str):
+    missing = []
+    for relative_path in CRITICAL_RELATIVE_FILES:
+        target = os.path.join(app_dir, relative_path)
+        if not os.path.isfile(target):
+            missing.append(relative_path)
+    if missing:
+        raise RuntimeError(f"Update install is incomplete; missing: {', '.join(missing)}")
+
+
 def write_state(path: str, payload: dict):
     if not path:
         return
@@ -197,6 +212,7 @@ def main():
             state["phase"] = "replacing"
             write_state(args.state, state)
             backup_dir, replaced = replace_app(root, args.app_dir, args.state, state)
+            validate_app_install(args.app_dir)
             state.update({
                 "ok": True,
                 "phase": "done",

@@ -32,10 +32,47 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.11")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260528-smart-canvas-reconcile1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.12")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260528-ssl-cert-harden1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
+
+
+def configure_ssl_cert_file():
+    for env_name in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"):
+        value = os.getenv(env_name)
+        if value and os.path.isfile(value):
+            return value
+
+    exe_dir = os.path.dirname(sys.executable) if getattr(sys, "frozen", False) else os.path.dirname(__file__)
+    bundle_base = getattr(sys, "_MEIPASS", exe_dir)
+    candidates = [
+        os.path.join(bundle_base, "certifi", "cacert.pem"),
+        os.path.join(exe_dir, "_internal", "certifi", "cacert.pem"),
+        os.path.join(exe_dir, "certifi", "cacert.pem"),
+    ]
+    try:
+        import certifi
+
+        candidates.append(certifi.where())
+    except Exception:
+        pass
+
+    for cert_path in candidates:
+        if cert_path and os.path.isfile(cert_path):
+            os.environ["SSL_CERT_FILE"] = cert_path
+            os.environ["REQUESTS_CA_BUNDLE"] = cert_path
+            return cert_path
+    return ""
+
+
+SSL_CERT_FILE = configure_ssl_cert_file()
+import ssl as _ssl_module  # force ssl module to load after SSL_CERT_FILE is set
+
+if SSL_CERT_FILE:
+    logger.info("SSL certificate file configured: %s", SSL_CERT_FILE)
+else:
+    logger.warning("No SSL certificate file found; HTTPS requests may fail")
 
 QUIET_ACCESS_PATHS = {
     "/api/queue_status",
@@ -176,7 +213,19 @@ async def _cleanup_canvas_tasks():
 @asynccontextmanager
 async def lifespan(app):
     global GLOBAL_HTTP_CLIENT, CLOUD_MEDIA_PERIODIC_TASK
-    GLOBAL_HTTP_CLIENT = httpx.AsyncClient(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True)
+    try:
+        GLOBAL_HTTP_CLIENT = httpx.AsyncClient(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True)
+    except Exception as client_exc:
+        logger.warning("httpx.AsyncClient default SSL failed: %s; retrying with certifi fallback", client_exc)
+        try:
+            import ssl as _ssl
+            import certifi as _certifi
+            _ctx = _ssl.create_default_context(cafile=_certifi.where())
+            GLOBAL_HTTP_CLIENT = httpx.AsyncClient(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True, verify=_ctx)
+            logger.info("httpx.AsyncClient created with explicit certifi CA bundle")
+        except Exception as fallback_exc:
+            logger.error("httpx.AsyncClient fallback also failed: %s; creating without SSL verify", fallback_exc)
+            GLOBAL_HTTP_CLIENT = httpx.AsyncClient(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True, verify=False)
     cleanup_task = asyncio.create_task(_cleanup_canvas_tasks())
     CLOUD_MEDIA_PERIODIC_TASK = asyncio.create_task(_cloud_media_periodic_sync())
     schedule_cloud_media_sync()

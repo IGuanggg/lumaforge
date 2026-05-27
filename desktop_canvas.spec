@@ -2,6 +2,7 @@
 #   pyinstaller desktop_canvas.spec --noconfirm
 
 import os
+import certifi
 from PyInstaller.utils.hooks import collect_submodules
 
 
@@ -14,6 +15,7 @@ if os.path.isfile("dist/LumaForgeUpdater.exe"):
 datas = [
     ("static", "static"),
     ("workflows", "workflows"),
+    (certifi.where(), "certifi"),
 ] + updater_datas
 
 hiddenimports = (
@@ -32,7 +34,7 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=["runtime_hook_ssl_cert.py"],
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

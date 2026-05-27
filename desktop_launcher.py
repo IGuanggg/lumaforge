@@ -44,6 +44,35 @@ def ensure_dir(path):
     path.mkdir(parents=True, exist_ok=True)
     return path
 
+
+def configure_ssl_certificates():
+    for env_name in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"):
+        value = os.getenv(env_name)
+        if value and Path(value).is_file():
+            return value
+
+    exe_dir = Path(sys.executable).resolve().parent if is_frozen() else Path(__file__).resolve().parent
+    candidates = [
+        bundle_dir() / "certifi" / "cacert.pem",
+        exe_dir / "_internal" / "certifi" / "cacert.pem",
+        exe_dir / "certifi" / "cacert.pem",
+    ]
+    try:
+        import certifi
+
+        candidates.append(Path(certifi.where()))
+    except Exception:
+        pass
+
+    for cert_path in candidates:
+        if cert_path and cert_path.is_file():
+            cert_value = str(cert_path)
+            os.environ["SSL_CERT_FILE"] = cert_value
+            os.environ["REQUESTS_CA_BUNDLE"] = cert_value
+            return cert_value
+    return ""
+
+
 def copy_missing_tree(src, dst):
     if not src.exists():
         return False
@@ -91,6 +120,7 @@ def configure_desktop_environment():
     os.environ.setdefault("LUMAFORGE_DESKTOP", "1")
     os.environ.setdefault("INFINITE_CANVAS_DESKTOP", "1")
 
+    ssl_cert_file = configure_ssl_certificates()
     migrated_from = migrate_legacy_desktop_data(runtime_dir, save_dir)
 
     for child in ("input", "output", "thumbs", "temp"):
@@ -101,6 +131,7 @@ def configure_desktop_environment():
         "save_dir": save_dir,
         "logs_dir": logs_dir,
         "webview_storage_dir": webview_storage_dir,
+        "ssl_cert_file": ssl_cert_file,
         "migrated_from": migrated_from,
     }
 
@@ -239,6 +270,10 @@ def main():
     log_file = configure_logging(paths["logs_dir"], redirect_stdio=is_frozen() and not smoke_test)
     port = find_port(os.getenv("APP_PORT", "3000"))
     logging.info("Desktop launcher start argv=%r smoke_test=%s frozen=%s port=%s", sys.argv, smoke_test, is_frozen(), port)
+    if paths.get("ssl_cert_file"):
+        logging.info("Desktop SSL certificate file: %s", paths["ssl_cert_file"])
+    else:
+        logging.warning("Desktop SSL certificate file was not found")
     if paths.get("migrated_from"):
         logging.info("Migrated legacy desktop data from %r", paths["migrated_from"])
 

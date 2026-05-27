@@ -1,6 +1,6 @@
 ﻿# LumaForge 打包与部署
 
-目标版本：`2.0.11`
+目标版本：`2.0.12`
 
 ## 桌面窗口版
 
@@ -23,7 +23,7 @@ dist\LumaForge\LumaForge.exe
 发布给自动更新使用的 zip 必须包含 `LumaForge/` 根目录：
 
 ```text
-LumaForge-2.0.11-desktop.zip
+LumaForge-2.0.12-desktop.zip
   LumaForge\
     LumaForge.exe
     LumaForgeUpdater.exe
@@ -70,17 +70,17 @@ python launcher.py
 ```bash
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
-docker pull iguang9881/lumaforge-cloud:2.0.11
+docker pull iguang9881/lumaforge-cloud:2.0.12
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.11 \
+  -e CLOUD_APP_VERSION=2.0.12 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.11
+  iguang9881/lumaforge-cloud:2.0.12
 ```
 
 ## 注意事项

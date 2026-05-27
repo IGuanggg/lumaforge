@@ -17,8 +17,8 @@ Last updated: 2026-05-28
 
 ## Current State
 
-- Current local app version in code: 2.0.11
-- Current build id: 20260528-smart-canvas-reconcile1
+- Current local app version in code: 2.0.12
+- Current build id: 20260528-ssl-cert-harden1
 - Main local URL: http://localhost:3010/
 - Main app file: main.py
 - Desktop launcher: desktop_launcher.py
@@ -114,11 +114,11 @@ The update process must replace program files only. It must not overwrite user d
 
 ## Current User Request / Next Target
 
-Current planned version: 2.0.11
+Current planned version: 2.0.12
 
 Goal:
 
-v2.0.11 smart canvas experience hardening: auto-reconcile stuck loading nodes from asset library, and image generation parameter viewer button.
+v2.0.12 SSL certificate hardening for cross-machine install/update stability. Fixes FileNotFoundError for cacert.pem on freshly installed machines.
 
 The user specifically asked for:
 
