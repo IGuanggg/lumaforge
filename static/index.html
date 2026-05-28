@@ -149,6 +149,7 @@
             padding: 40px 0;
             transition: width 0.5s var(--fluid-ease) 0.5s, background 0.3s, border-color 0.3s;
             z-index: 50;
+            overscroll-behavior: contain;
         }
 
         .sidebar:hover {
@@ -2439,6 +2440,13 @@
             switchUI(trigger, id, { skipRemember:true });
             document.documentElement.classList.remove('studio-route-booting');
         }
+        function keepSidebarWheelLocal(event) {
+            if(!(event.altKey || event.ctrlKey || event.metaKey)) return;
+            if(!event.target?.closest?.('.sidebar')) return;
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        window.addEventListener('wheel', keepSidebarWheelLocal, { passive:false, capture:true });
         document.addEventListener('DOMContentLoaded', restoreActivePage, { once:true });
         document.addEventListener('DOMContentLoaded', () => {
             applyRememberedAccount();

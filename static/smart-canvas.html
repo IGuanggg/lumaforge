@@ -1151,6 +1151,7 @@
         }
         function selectedNode(){ return nodes.find(n => n.id === selectedId) || null; }
         function clearSelection(){
+            persistActiveComposerDraft();
             selectedId = '';
             selectedIds = [];
             selectedImage = {nodeId:'', index:-1};
@@ -1160,6 +1161,34 @@
         }
         function selectedNodeIds(){
             return selectedIds.length ? selectedIds.slice() : (selectedId ? [selectedId] : []);
+        }
+        function persistActiveComposerDraft(){
+            try { savePromptDraftForCurrent(); } catch(e) {}
+        }
+        function setNodeSelection(ids){
+            persistActiveComposerDraft();
+            const valid = new Set(nodes.map(n => n.id));
+            const unique = Array.from(new Set((ids || []).filter(id => valid.has(id))));
+            selectedIds = unique.length > 1 ? unique : [];
+            selectedId = unique.length === 1 ? unique[0] : '';
+            selectedImage = {nodeId:'', index:-1};
+        }
+        function selectOnlyNode(id){
+            setNodeSelection(id ? [id] : []);
+        }
+        function toggleNodeSelection(id){
+            if(!id) return;
+            const current = new Set(selectedNodeIds());
+            if(current.has(id)) current.delete(id);
+            else current.add(id);
+            setNodeSelection([...current]);
+        }
+        function selectAllNodes(){
+            const ids = nodes.filter(node => !node.hidden).map(node => node.id);
+            if(!ids.length) return;
+            setNodeSelection(ids);
+            toast(`已选择 ${ids.length} 个节点`);
+            render();
         }
         function selectedImageTarget(){
             const explicitNode = nodes.find(n => n.id === selectedImage.nodeId);
@@ -2958,6 +2987,7 @@
             node.images = (node.images || []).map(img => stripImageGenerationMeta(img));
         }
         function createNode(x, y, images=[], options={}){
+            persistActiveComposerDraft();
             if(!options.skipUndo) pushUndo();
             const nodeImages = (images || []).map(img => ({...img}));
             const node = {id:uid('smart'), type:'smart-image', x, y, title:nodeImages.length > 1 ? 'Group' : 'Image', images:nodeImages, created_at:Date.now()};
@@ -2969,6 +2999,7 @@
             return node;
         }
         function createPromptNode(x, y, options={}){
+            persistActiveComposerDraft();
             if(!options.skipUndo) pushUndo();
             const providerId = resolveChatProviderId();
             const node = {
@@ -2995,6 +3026,7 @@
             return node;
         }
         function createLoopNode(x, y, options={}){
+            persistActiveComposerDraft();
             if(!options.skipUndo) pushUndo();
             const node = {id:uid('loop'), type:'smart-loop', x, y, w:270, h:190, title:'Loop', created_at:Date.now()};
             nodes.push(node);
@@ -3405,10 +3437,9 @@
             if(!active && runTimerInterval){ clearInterval(runTimerInterval); runTimerInterval = null; }
         }
         function render(){
+            const previousWorldHtml = world.innerHTML;
+            try {
             const composerEl = composer;
-            world.innerHTML = '';
-            if(composerEl) world.appendChild(composerEl);
-            world.insertAdjacentHTML('beforeend', renderConnections());
             const nodesHtml = nodes.map(node => {
                 const imgs = node.images || [];
                 const title = node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : (node.historyForNodeId ? 'Group' : (imgs.length > 1 ? 'Group' : 'Image'));
@@ -3433,6 +3464,10 @@
                     <div class="node-port port-out" data-port="out" title="杈撳嚭"></div>
                 </div>`;
             }).join('');
+            const connectionsHtml = renderConnections();
+            world.innerHTML = '';
+            if(composerEl) world.appendChild(composerEl);
+            world.insertAdjacentHTML('beforeend', connectionsHtml);
             world.insertAdjacentHTML('beforeend', nodesHtml);
             bindNodeEvents();
             bindConnectionEvents();
@@ -3443,6 +3478,11 @@
             measureSmartNodeImages();
             refreshRunTimerPills();
             scheduleSmartPendingReconcile();
+            } catch(err) {
+                console.error('Smart canvas render failed', err);
+                if(previousWorldHtml && !world.querySelector('.image-node')) world.innerHTML = previousWorldHtml;
+                toast('智能画布渲染异常，已保留上一次画面');
+            }
         }
         function measureSmartNodeImages(){
             world.querySelectorAll('.image-node img').forEach(imgEl => {
@@ -3724,18 +3764,16 @@
                     if(Date.now() < suppressNodeClickUntil) return;
                     const node = nodes.find(n => n.id === id);
                     hideRunTimerForNode(node);
-                    selectedId = id;
-                    selectedIds = [];
-                    selectedImage = {nodeId:'', index:-1};
+                    if(e.ctrlKey || e.metaKey || e.shiftKey) toggleNodeSelection(id);
+                    else selectOnlyNode(id);
                     render();
                 };
                 el.oncontextmenu = e => {
                     if(e.target.closest('.thumb-item,.image-wrap,.mini-x,.node-port,.prompt-node-control,.prompt-node-pill,textarea,select,input,button')) return;
                     e.preventDefault();
                     e.stopPropagation();
-                    selectedId = id;
-                    selectedIds = selectedIds.includes(id) ? selectedIds : [];
-                    selectedImage = {nodeId:'', index:-1};
+                    if(!isNodeSelected(id)) selectOnlyNode(id);
+                    else persistActiveComposerDraft();
                     render();
                     setTimeout(() => openSmartContextMenu(e, id, 0), 0);
                 };
@@ -3762,6 +3800,7 @@
                 el.querySelectorAll('.image-param').forEach(btn => {
                     btn.addEventListener('click', e => {
                         e.preventDefault(); e.stopPropagation();
+                        persistActiveComposerDraft();
                         selectedId = id;
                         selectedIds = [];
                         selectedImage = {nodeId:id, index:Number(btn.dataset.imageIndex || 0)};
@@ -3781,6 +3820,7 @@
                         const owner = nodes.find(n => n.id === id);
                         const image = owner?.images?.[Number(item.dataset.imageIndex || 0)];
                         if(!image?.url) return;
+                        persistActiveComposerDraft();
                         selectedId = id;
                         selectedIds = [];
                         selectedImage = {nodeId:id, index:Number(item.dataset.imageIndex || 0)};
@@ -3792,6 +3832,7 @@
                         e.stopPropagation();
                         const owner = nodes.find(n => n.id === id);
                         hideRunTimerForNode(owner);
+                        persistActiveComposerDraft();
                         selectedId = id;
                         selectedIds = [];
                         selectedImage = {nodeId:id, index:Number(item.dataset.imageIndex || 0)};
@@ -3852,6 +3893,7 @@
                     if(!node) return;
                     if(node.locked){ toast('节点已锁定'); return; }
                     if(e.altKey) node = duplicateForAltDrag(node);
+                    if(!isNodeSelected(node.id)) selectOnlyNode(node.id);
                     const dragIds = selectedIds.includes(node.id) ? selectedIds.slice() : [node.id];
                     const group = dragIds.map(dragId => {
                         const n = nodes.find(x => x.id === dragId);
@@ -6487,12 +6529,11 @@
             const b = screenToWorld(event);
             const minX = Math.min(a.x, b.x), minY = Math.min(a.y, b.y);
             const maxX = Math.max(a.x, b.x), maxY = Math.max(a.y, b.y);
-            selectedIds = nodes.filter(node => {
+            const ids = nodes.filter(node => {
                 const r = nodeRect(node);
                 return r.x < maxX && r.x + r.width > minX && r.y < maxY && r.y + r.height > minY;
             }).map(n => n.id);
-            selectedId = selectedIds.length === 1 ? selectedIds[0] : '';
-            selectedImage = {nodeId:'', index:-1};
+            setNodeSelection(ids);
             selectionState = null;
             selectionJustFinished = true;
             selectionBox.style.display = 'none';
@@ -6947,6 +6988,11 @@
                 copySelectedNodes();
                 return;
             }
+            if((e.ctrlKey || e.metaKey) && key === 'a' && !isEditableTarget(e.target)){
+                e.preventDefault();
+                selectAllNodes();
+                return;
+            }
             if((e.ctrlKey || e.metaKey) && key === 'x' && !isEditableTarget(e.target)){
                 e.preventDefault();
                 cutSelectedSmartNodes();
@@ -7134,6 +7180,14 @@
             renderInputThumbsRow(selectedNode());
             scheduleSave();
         });
+        promptInput.addEventListener('blur', () => {
+            savePromptDraftForCurrent();
+            scheduleSave();
+        });
+        promptInput.addEventListener('compositionend', () => {
+            savePromptDraftForCurrent();
+            scheduleSave();
+        });
         promptInput.addEventListener('keyup', maybeOpenMentionPicker);
         promptInput.addEventListener('mouseup', saveMentionRange);
         promptInput.addEventListener('focus', saveMentionRange);
@@ -7175,6 +7229,11 @@
             const btn = event.target.closest('[data-smart-menu]');
             if(btn && !btn.disabled) handleSmartContextAction(btn.dataset.smartMenu);
         });
+        document.addEventListener('pointerdown', event => {
+            if(!composer?.classList.contains('open')) return;
+            if(promptInput?.contains(event.target)) return;
+            savePromptDraftForCurrent();
+        }, true);
         document.addEventListener('click', event => {
             if(!event.target.closest('.smart-control')) closeAllSmartPopovers();
             if(!event.target.closest('.mention-picker') && !event.target.closest('#promptInput')) closeMentionPicker();
