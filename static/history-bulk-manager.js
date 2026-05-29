@@ -56,7 +56,7 @@
     function attach(options={}){
         ensureStyle();
         const masonry = typeof options.masonry === 'string' ? document.querySelector(options.masonry) : (options.masonry || document.getElementById('masonry'));
-        if(!masonry || masonry._historyBulkManager) return masonry?._historyBulkManager || null;
+        if(!masonry || !(masonry instanceof Node) || masonry.nodeType !== Node.ELEMENT_NODE || masonry._historyBulkManager) return masonry?._historyBulkManager || null;
         const L = labels();
         const toolbar = document.createElement('div');
         toolbar.className = 'history-bulk-toolbar';
@@ -66,6 +66,7 @@
             <button class="history-bulk-btn danger" type="button" data-bulk-delete disabled>${L.delete}</button>
             <button class="history-bulk-btn" type="button" data-bulk-toggle>${L.manage}</button>
         `;
+        if(!masonry.parentNode) return null;
         masonry.parentNode.insertBefore(toolbar, masonry);
         const toggleBtn = toolbar.querySelector('[data-bulk-toggle]');
         const deleteBtn = toolbar.querySelector('[data-bulk-delete]');
@@ -164,7 +165,7 @@
             clearTimeout(syncTimer);
             syncTimer = setTimeout(sync, 30);
         });
-        observer.observe(masonry, {childList:true});
+        if(masonry.isConnected) observer.observe(masonry, {childList:true});
         const manager = {sync, setSelecting, isSelecting:() => selecting};
         masonry._historyBulkManager = manager;
         sync();

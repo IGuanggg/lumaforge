@@ -24,8 +24,8 @@
         })();
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
-    <script src="/static/theme.js?v=20260529-v2014-canvas-polish1"></script>
-    <script src="/static/i18n.js?v=20260529-v2014-canvas-polish1"></script>
+    <script src="/static/theme.js?v=20260529-v2015-smart-canvas-hardening1"></script>
+    <script src="/static/i18n.js?v=20260529-v2015-smart-canvas-hardening1"></script>
     <style>
 /* 本地 Tailwind 工具类兜底：CDN 慢/未就绪时也能立刻给图标尺寸，避免首屏左侧栏空白 */
         .w-1\.5 { width: 0.375rem; }
@@ -1088,6 +1088,10 @@
         }
 
         .account-sync-card.show { display:flex; }
+        .account-sync-card.media {
+            border-color:rgba(37,99,235,.2);
+            background:rgba(37,99,235,.07);
+        }
 
         .account-sync-head {
             display:flex;
@@ -1111,6 +1115,12 @@
             background:rgba(16,185,129,.12);
             font-size:10px;
             font-weight:950;
+        }
+
+        .account-sync-card.media .account-sync-pill {
+            color:#1d4ed8;
+            border-color:rgba(37,99,235,.24);
+            background:rgba(37,99,235,.12);
         }
 
         .account-sync-meta {
@@ -1310,7 +1320,7 @@
                     </svg>
                     <span class="side-pill-text" data-i18n="common.appSettings">应用设置</span>
                 </button>
-                <div class="nano-monitor api-none" id="nano-monitor" title="API 状态检测中">
+                <div class="nano-monitor api-none" id="nano-monitor" title="API 状态为手动检测，点击打开面板后可手动检测">
                     <div class="stat-group">
                         <div class="pulse-dot"></div>
                         <div class="spinner-nano"></div>
@@ -1333,11 +1343,11 @@
                     <span id="api-status-title">API 状态</span>
                 </div>
                 <div class="api-status-actions">
-                    <button id="api-status-refresh" class="api-status-btn" type="button">重测</button>
+                    <button id="api-status-refresh" class="api-status-btn" type="button">手动检测</button>
                     <button id="api-status-close" class="api-status-btn" type="button">关闭</button>
                 </div>
             </div>
-            <div id="api-status-summary" class="api-status-summary">API 状态检测中</div>
+            <div id="api-status-summary" class="api-status-summary">API 状态已改为手动检测，点击“手动检测”才会请求后端。</div>
             <div id="api-status-list" class="api-status-list"></div>
         </div>
         <div id="studio-toast-stack" class="studio-toast-stack" aria-live="polite"></div>
@@ -1485,6 +1495,8 @@
                                 <div class="account-actions">
                                     <button class="account-action primary" type="button" onclick="accountDownloadConfig()">下载云端配置</button>
                                     <button class="account-action" type="button" onclick="accountUploadConfig()">立即同步配置</button>
+                                    <button class="account-action" type="button" onclick="accountSyncCloudMedia()">同步素材</button>
+                                    <button class="account-action" type="button" onclick="accountRefreshCloudMediaStatus()">素材状态</button>
                                     <button class="account-action danger" type="button" onclick="accountLogout()">退出登录</button>
                                 </div>
                                 <label class="account-check">
@@ -1501,9 +1513,21 @@
                                         <span id="account-config-sync-time">最近配置同步：暂无记录</span>
                                     </div>
                                 </div>
+                                <div id="account-media-sync-card" class="account-sync-card media">
+                                    <div class="account-sync-head">
+                                        <div class="account-sync-title">素材云同步</div>
+                                        <span id="account-media-sync-pill" class="account-sync-pill">待检查</span>
+                                    </div>
+                                    <div class="account-sync-meta">
+                                        <span id="account-media-sync-local">本地素材：-</span>
+                                        <span id="account-media-sync-remote">云端素材：-</span>
+                                        <span id="account-media-sync-result">最近同步：暂无</span>
+                                        <span id="account-media-sync-note">会补全已存在图片的提示词、模型和尺寸元数据。</span>
+                                    </div>
+                                </div>
                             </div>
                             <div id="account-sync-status" class="account-status">未连接云端</div>
-                            <div class="account-note account-authed">配置会自动同步 API 平台、模型列表、ComfyUI 地址和 API Key；素材库图片/视频会按缺失文件增量同步到云端对象存储。</div>
+                            <div class="account-note account-authed">配置会自动同步 API 平台、模型列表、ComfyUI 地址和 API Key；素材库图片/视频会增量同步到云端对象存储，并补全已存在素材的提示词元数据。</div>
                         </section>
 
                         <section id="account-section-profile" class="account-section">
@@ -1592,9 +1616,9 @@
         const DEFAULT_PAGE_ID = 'smart-canvas';
         const HIDDEN_UNTIL_3_PAGE_IDS = ['zimage','online'];
         const PAGE_IDS = ['zimage','enhance','klein','angle','gpt-chat','smart-canvas','canvas','assets','api-settings','comfyui-settings','app-settings'];
-        const APP_BUILD_ID = '20260529-v2014-canvas-polish1';
-        const API_LIVENESS_CACHE_KEY = 'studio_api_liveness_cache_v1';
-        let appStatus = { online_count: 0, api_ok_count: 0, api_total: 0, api_failed_count: 0, api_state: 'none', api_message: 'API 状态检测中', queue_text: '0', busy: false };
+        const APP_BUILD_ID = '20260529-v2015-smart-canvas-hardening1';
+        const API_LIVENESS_CACHE_KEY = 'studio_api_liveness_manual_cache_v2';
+        let appStatus = { online_count: 0, api_ok_count: 0, api_total: 0, api_failed_count: 0, api_state: 'none', api_message: 'API 状态未检测，点击手动检测才会请求后端', queue_text: '0', busy: false };
         let accountState = { logged_in:false, email:'', email_verified:false, display_name:'', avatar_url:'', base_url:'', custom_cloud:false };
         let apiLivenessState = null;
         let apiLivenessLoading = false;
@@ -1747,6 +1771,19 @@
             return date.toLocaleString();
         }
 
+        function formatStudioBytes(value) {
+            const bytes = Number(value || 0);
+            if(!bytes) return '0 B';
+            const units = ['B','KB','MB','GB','TB'];
+            let size = bytes;
+            let index = 0;
+            while(size >= 1024 && index < units.length - 1) {
+                size /= 1024;
+                index++;
+            }
+            return `${size >= 10 || index === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`;
+        }
+
         function updateAccountConfigSyncCard(ts, modeText) {
             const card = document.getElementById('account-config-sync-card');
             if(card) card.classList.toggle('show', !!accountState.logged_in);
@@ -1757,6 +1794,82 @@
                 : '自动同步已开启：保存 API、模型、ComfyUI 设置后会自动上传。';
             if(mode) mode.textContent = modeText || defaultMode;
             if(time) time.textContent = `最近配置同步：${accountFormatSyncTime(ts || accountState.updated_at)}`;
+        }
+
+        function updateAccountMediaSyncCard(data) {
+            const card = document.getElementById('account-media-sync-card');
+            if(card) card.classList.toggle('show', !!accountState.logged_in);
+            if(!data) return;
+            const local = data.local || {};
+            const remote = data.remote || {};
+            const sync = data.sync || {};
+            const last = sync.last_result || {};
+            const localEl = document.getElementById('account-media-sync-local');
+            const remoteEl = document.getElementById('account-media-sync-remote');
+            const resultEl = document.getElementById('account-media-sync-result');
+            const noteEl = document.getElementById('account-media-sync-note');
+            const pill = document.getElementById('account-media-sync-pill');
+            if(localEl) {
+                localEl.textContent = `本地素材：${Number(local.count || 0)} 个，待上传 ${Number(local.pending || 0)} 个，失败 ${Number(local.failed || 0)} 个`;
+            }
+            if(remoteEl) {
+                remoteEl.textContent = data.logged_in
+                    ? `云端素材：${Number(remote.total || 0)} 个，${formatStudioBytes(Number(remote.size_bytes || 0))}`
+                    : '云端素材：未登录';
+            }
+            if(resultEl) {
+                const finished = last.finished_at ? accountFormatSyncTime(last.finished_at) : '暂无';
+                resultEl.textContent = `最近同步：上传 ${Number(last.uploaded || 0)}，跳过 ${Number(last.skipped || 0)}，补元数据 ${Number(last.metadata_updated || 0)}，失败 ${Number(last.failed_count || 0)} · ${finished}`;
+            }
+            if(noteEl) {
+                noteEl.textContent = sync.running
+                    ? '素材云同步正在运行，请稍后刷新状态。'
+                    : '会补全已存在图片的提示词、模型和尺寸元数据。';
+            }
+            if(pill) pill.textContent = sync.running ? '同步中' : (Number(local.failed || 0) ? '有失败' : '正常');
+        }
+
+        async function accountRefreshCloudMediaStatus(options = {}) {
+            if(!accountState.logged_in && !options.quiet) {
+                setAccountStatus('请先登录云端账号');
+                return null;
+            }
+            try {
+                const data = await fetch('/api/cloud/media/status').then(r => accountJsonOrError(r, '读取素材云状态失败'));
+                updateAccountMediaSyncCard(data);
+                if(!options.quiet) setAccountStatus('素材云状态已刷新');
+                return data;
+            } catch(e) {
+                if(!options.quiet) setAccountStatus(e.message || String(e));
+                throw e;
+            }
+        }
+
+        async function accountSyncCloudMedia() {
+            if(!accountState.logged_in) {
+                setAccountStatus('请先登录云端账号');
+                return;
+            }
+            setAccountStatus('正在同步素材并补全提示词元数据...');
+            try {
+                const data = await fetch('/api/cloud/media/sync', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({
+                        missing_only:true,
+                        retry_failed:true,
+                        delete_remote_missing:false,
+                        limit:5000
+                    })
+                }).then(r => accountJsonOrError(r, '素材同步失败'));
+                await accountRefreshCloudMediaStatus({ quiet:true }).catch(() => null);
+                const msg = `素材同步完成：上传 ${Number(data.uploaded || 0)}，跳过 ${Number(data.skipped || 0)}，补元数据 ${Number(data.metadata_updated || 0)}，失败 ${Number(data.failed_count || 0)}`;
+                setAccountStatus(msg, true);
+                showStudioToast(msg, Number(data.failed_count || 0) ? 'warning' : 'success', 3200);
+            } catch(e) {
+                setAccountStatus(e.message || String(e));
+                showStudioToast(e.message || '素材同步失败', 'error', 3200);
+            }
         }
 
         function setAccountEmailStatus(text) {
@@ -1903,8 +2016,13 @@
             toggleAccountCustomCloud(!!accountState.custom_cloud);
             syncAccountEmailVerifyCard();
             updateAccountConfigSyncCard(accountState.updated_at);
-            if(accountState.logged_in) setAccountStatus(`已登录 ${accountState.email || ''}`);
-            else {
+            if(accountState.logged_in) {
+                setAccountStatus(`已登录 ${accountState.email || ''}`);
+                accountRefreshCloudMediaStatus({ quiet:true }).catch(() => null);
+            } else {
+                updateAccountMediaSyncCard({ logged_in:false, local:{}, remote:null, sync:{} });
+            }
+            if(!accountState.logged_in) {
                 selectAccountTab('sync');
                 setAccountStatus('未登录');
             }
@@ -2135,7 +2253,7 @@
             document.querySelectorAll('iframe').forEach(frame => {
                 try { frame.contentWindow?.postMessage({ type:'providers-changed' }, '*'); } catch(e) {}
             });
-            syncApiLiveness();
+            markApiLivenessStale();
         }
 
         function filenameFromDisposition(disposition, fallback) {
@@ -2176,7 +2294,7 @@
         try {
             const apiChannel = new BroadcastChannel('studio-api');
             apiChannel.onmessage = event => {
-                if(event.data?.type === 'providers-changed') syncApiLiveness();
+                if(event.data?.type === 'providers-changed') markApiLivenessStale();
             };
         } catch(e) {}
 
@@ -2469,7 +2587,6 @@
             document.getElementById('nano-monitor')?.addEventListener('click', event => {
                 event.stopPropagation();
                 toggleApiStatusPopover();
-                if(!apiLivenessState) syncApiLiveness(true);
             });
             document.getElementById('api-status-refresh')?.addEventListener('click', event => {
                 event.stopPropagation();
@@ -2565,13 +2682,13 @@
             const checkedAt = Number(data.checked_at || 0);
             const checkedText = checkedAt ? ` · ${new Date(checkedAt * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}` : '';
             const refreshText = apiLivenessLoading ? ' · 正在刷新' : checkedText;
-            summary.textContent = `${data.message || 'API 状态检测中'}${refreshText}`;
+            summary.textContent = `${data.message || 'API 状态未检测，点击“手动检测”才会请求后端'}${refreshText}`;
             if(apiLivenessLoading && !providers.length) {
                 list.innerHTML = '<div class="api-status-empty">正在检测 API 平台，请稍等。</div>';
                 return;
             }
             if(!providers.length) {
-                list.innerHTML = '<div class="api-status-empty">暂无 API 平台，去 API 设置添加后再检测。</div>';
+                list.innerHTML = '<div class="api-status-empty">API 状态为手动检测；需要时点击上方“手动检测”。</div>';
                 return;
             }
             list.innerHTML = providers.map(item => {
@@ -2650,7 +2767,27 @@
             } catch(e) {}
         }
 
+        function markApiLivenessStale() {
+            if(apiLivenessState) {
+                apiLivenessState = {
+                    ...apiLivenessState,
+                    message: 'API 配置已变更，点击“手动检测”刷新状态'
+                };
+            } else {
+                apiLivenessState = {
+                    state:'none',
+                    ok_count:0,
+                    total:0,
+                    failed_count:0,
+                    message:'API 状态未检测，点击“手动检测”才会请求后端',
+                    providers:[]
+                };
+            }
+            applyApiLiveness(apiLivenessState);
+        }
+
         async function syncApiLiveness(force = false) {
+            if(!force) return;
             const refreshBtn = document.getElementById('api-status-refresh');
             if(force && refreshBtn) refreshBtn.disabled = true;
             apiLivenessLoading = true;
@@ -2682,7 +2819,7 @@
             apiLivenessBootstrapped = true;
             const cached = loadCachedApiLiveness();
             if(cached) applyApiLiveness(cached);
-            syncApiLiveness(false);
+            else markApiLivenessStale();
         }
 
         async function syncStatus() {
@@ -2733,7 +2870,6 @@
             setInterval(syncStatus, 2000);
             syncStatus();
             bootstrapApiLiveness();
-            setInterval(() => syncApiLiveness(false), 30000);
         }
 
         // --- 夜间模式 ---

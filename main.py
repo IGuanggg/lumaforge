@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.14")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260529-v2014-canvas-polish1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.15")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260529-v2015-smart-canvas-hardening1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -3163,6 +3163,7 @@ def local_data_health():
         "pending": 0,
         "failed": 0,
         "deleted_tombstones": 0,
+        "cloud_last_result": CLOUD_MEDIA_LAST_RESULT or {},
     }
     try:
         with ASSET_LOCK:
@@ -5839,6 +5840,38 @@ async def cloud_media_remote_list(client, base_url: str, session: dict, limit: i
     return response.json()
 
 
+def cloud_media_metadata_for_item(item: dict) -> dict:
+    path = item.get("local_path") or ""
+    return {
+        "id": item.get("id"),
+        "title": item.get("title") or (os.path.basename(path) if path else ""),
+        "type": item.get("type") or asset_type_for_path(path),
+        "content_type": content_type_for_path(path) if path else "",
+        "width": item.get("width") or 0,
+        "height": item.get("height") or 0,
+        "source_type": item.get("source_type") or "",
+        "prompt": item.get("prompt") or "",
+        "model": item.get("model") or "",
+    }
+
+
+def cloud_media_metadata_needs_update(local_meta: dict, remote_item: dict) -> bool:
+    if not remote_item:
+        return False
+    text_fields = ("title", "type", "source_type", "prompt", "model")
+    for field in text_fields:
+        local_value = str(local_meta.get(field) or "").strip()
+        remote_value = str(remote_item.get(field) or "").strip()
+        if local_value and local_value != remote_value:
+            return True
+    for field in ("width", "height"):
+        local_value = int(local_meta.get(field) or 0)
+        remote_value = int(remote_item.get(field) or 0)
+        if local_value and local_value != remote_value:
+            return True
+    return False
+
+
 @app.get("/api/cloud/media/status")
 async def cloud_media_status():
     local = local_media_summary()
@@ -5940,7 +5973,7 @@ async def cloud_media_sync(payload: CloudMediaSyncRequest):
     base_url = cloud_base_url(session)
     items = local_media_assets(payload.limit)
     hashes = [item["sha256"] for item in items if item.get("sha256")]
-    uploaded, skipped, failed = [], [], []
+    uploaded, skipped, metadata_updated, failed = [], [], [], []
     deleted_remote = 0
     remote_items = {}
     try:
@@ -5953,9 +5986,11 @@ async def cloud_media_sync(payload: CloudMediaSyncRequest):
             for item in items:
                 sha = item.get("sha256") or ""
                 local_error = item.get("cloud_error") or ""
-                if payload.missing_only and sha in remote_items and not (payload.retry_failed and local_error):
+                remote = remote_items.get(sha) or {}
+                metadata = cloud_media_metadata_for_item(item)
+                metadata_needs_update = cloud_media_metadata_needs_update(metadata, remote)
+                if payload.missing_only and sha in remote_items and not (payload.retry_failed and local_error) and not metadata_needs_update:
                     skipped.append(item["id"])
-                    remote = remote_items.get(sha) or {}
                     with ASSET_LOCK:
                         with asset_db() as conn:
                             conn.execute(
@@ -5970,17 +6005,9 @@ async def cloud_media_sync(payload: CloudMediaSyncRequest):
                         with asset_db() as conn:
                             conn.execute("UPDATE assets SET cloud_error = ? WHERE id = ?", ("local file missing", item["id"]))
                     continue
-                metadata = {
-                    "id": item.get("id"),
-                    "title": item.get("title") or os.path.basename(path),
-                    "type": item.get("type") or asset_type_for_path(path),
-                    "content_type": content_type_for_path(path),
-                    "width": item.get("width") or 0,
-                    "height": item.get("height") or 0,
-                    "source_type": item.get("source_type") or "",
-                    "prompt": item.get("prompt") or "",
-                    "model": item.get("model") or "",
-                }
+                metadata["title"] = metadata.get("title") or os.path.basename(path)
+                metadata["type"] = metadata.get("type") or asset_type_for_path(path)
+                metadata["content_type"] = metadata.get("content_type") or content_type_for_path(path)
                 try:
                     with open(path, "rb") as fh:
                         response = await client.post(
@@ -5998,7 +6025,12 @@ async def cloud_media_sync(payload: CloudMediaSyncRequest):
                                 "UPDATE assets SET cloud_key = ?, cloud_url = ?, cloud_synced_at = ?, cloud_error = '' WHERE id = ?",
                                 (remote.get("object_key", ""), remote.get("cloud_url", ""), time.time(), item["id"]),
                             )
-                    (skipped if data.get("skipped") else uploaded).append(item["id"])
+                    if data.get("metadata_updated"):
+                        metadata_updated.append(item["id"])
+                    elif data.get("skipped"):
+                        skipped.append(item["id"])
+                    else:
+                        uploaded.append(item["id"])
                 except Exception as exc:
                     err = str(exc)
                     failed.append({"id": item.get("id"), "title": item.get("title"), "error": err})
@@ -6026,6 +6058,7 @@ async def cloud_media_sync(payload: CloudMediaSyncRequest):
         "local_count": len(items),
         "uploaded": len(uploaded),
         "skipped": len(skipped),
+        "metadata_updated": len(metadata_updated),
         "failed": failed,
         "failed_count": len(failed),
         "deleted_remote": deleted_remote,
@@ -6035,6 +6068,7 @@ async def cloud_media_sync(payload: CloudMediaSyncRequest):
     CLOUD_MEDIA_LAST_RESULT = {
         "uploaded": result["uploaded"],
         "skipped": result["skipped"],
+        "metadata_updated": result["metadata_updated"],
         "failed_count": result["failed_count"],
         "deleted_remote": deleted_remote,
         "finished_at": result["finished_at"],

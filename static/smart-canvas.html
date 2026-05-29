@@ -17,8 +17,8 @@
         })();
     </script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260529-v2014-canvas-polish1"></script>
-    <script src="/static/i18n.js?v=20260529-v2014-canvas-polish1"></script>
+    <script src="/static/theme.js?v=20260529-v2015-smart-canvas-hardening1"></script>
+    <script src="/static/i18n.js?v=20260529-v2015-smart-canvas-hardening1"></script>
     <style>
 :root {
             --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.9); --card:#fff;
@@ -64,6 +64,10 @@
         .image-node.empty-node:hover { border-color:var(--strong); box-shadow:0 10px 30px rgba(15,23,42,.08); }
         .image-node.empty-node.selected { border-color:var(--strong); box-shadow:0 0 0 1px var(--strong), 0 12px 34px var(--shadow); }
         .image-node.prompt-smart-node, .image-node.loop-smart-node { background:var(--card); border:1px solid var(--line); box-shadow:0 12px 34px var(--shadow); overflow:visible; }
+        .image-node.smart-frame-group { z-index:1; min-height:0; border:1.5px dashed rgba(15,23,42,.58); border-radius:18px; background:rgba(255,255,255,.08); box-shadow:none; cursor:move; }
+        .theme-dark .image-node.smart-frame-group { border-color:rgba(248,250,252,.62); background:rgba(15,23,42,.1); }
+        .image-node.smart-frame-group:hover, .image-node.smart-frame-group.selected { border-color:var(--strong); background:rgba(255,255,255,.14); box-shadow:0 0 0 3px rgba(15,23,42,.045); }
+        .theme-dark .image-node.smart-frame-group:hover, .theme-dark .image-node.smart-frame-group.selected { background:rgba(30,41,59,.16); box-shadow:0 0 0 3px rgba(248,250,252,.06); }
         .image-node.node-error:not(.empty-node) { border-color:#ef4444; box-shadow:0 0 0 1px rgba(239,68,68,.6), 0 12px 34px rgba(239,68,68,.18); }
         .image-node.node-error:not(.empty-node) .node-hint { color:#ef4444; }
         .image-node.prompt-smart-node:hover, .image-node.loop-smart-node:hover { border-color:var(--strong); box-shadow:0 10px 30px rgba(15,23,42,.08); }
@@ -112,6 +116,14 @@
         .empty-node .node-delete { position:static !important; opacity:1 !important; pointer-events:auto !important; right:auto; top:auto; box-shadow:none; background:transparent; color:var(--muted); border:0; }
         .empty-node .node-delete:hover { color:#dc2626; background:#fee2e2; }
         .node-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+        .node-name-label { position:absolute; left:0; top:-32px; z-index:7; max-width:min(320px, calc(100% + 40px)); height:28px; padding:0 10px; border-radius:10px; display:inline-flex; align-items:center; gap:6px; color:var(--muted); background:transparent; border:1px solid transparent; font-size:15px; line-height:1; font-weight:850; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:text; pointer-events:auto; }
+        .node-name-label:hover, .node-name-label.editing { color:var(--text); background:var(--panel); border-color:var(--line); box-shadow:0 10px 24px rgba(15,23,42,.1); }
+        .node-name-label i,.node-name-label svg { width:16px; height:16px; flex:0 0 auto; }
+        .node-name-label span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+        .node-title[data-node-title] { cursor:text; border-radius:7px; padding:3px 5px; margin-left:-5px; }
+        .node-title[data-node-title]:hover, .node-title[data-node-title].editing { background:var(--soft); color:var(--text); }
+        .node-title-input { width:min(260px, 100%); height:24px; min-width:90px; border:1px solid var(--strong); border-radius:8px; background:var(--card); color:var(--text); padding:0 7px; font:inherit; font-size:12px; line-height:1; font-weight:850; outline:none; box-shadow:0 0 0 3px rgba(15,23,42,.08); }
+        .node-name-label .node-title-input { width:min(260px, calc(100vw - 80px)); height:24px; font-size:14px; }
         .node-actions { display:flex; align-items:center; gap:6px; }
         .node-count { min-width:22px; height:20px; padding:0 7px; border-radius:999px; display:flex; align-items:center; justify-content:center; background:var(--soft); border:1px solid var(--line); color:var(--muted); font-size:10px; font-weight:900; }
         .mini-x { width:26px; height:26px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; color:#94a3b8; background:rgba(255,255,255,.92); border:1px solid #e8edf3; opacity:1; cursor:pointer; box-shadow:0 8px 18px rgba(15,23,42,.12); backdrop-filter:blur(10px); transition:opacity .14s ease, transform .14s ease, background .14s ease, color .14s ease, border-color .14s ease; }
@@ -178,6 +190,7 @@
         @keyframes conn-dot-pulse { 0%,100% { r:3.4px; opacity:.72; } 50% { r:4.8px; opacity:1; } }
         @keyframes dash { to { stroke-dashoffset:-18; } }
         .image-node { z-index:2; }
+        .image-node.smart-frame-group { z-index:1; }
         .node-resize-handle { position:absolute; right:7px; bottom:7px; width:18px; height:18px; border-radius:8px; cursor:nwse-resize; background:rgba(255,255,255,.86); border:1px solid #e8edf3; display:flex; align-items:center; justify-content:center; color:#94a3b8; opacity:0; transition:all .18s ease; z-index:5; }
         .node-resize-handle::before { content:""; width:8px; height:8px; border-right:2px solid currentColor; border-bottom:2px solid currentColor; }
         .node-resize-handle:hover { color:#111827; border-color:#cbd5e1; background:#fff; }
@@ -211,6 +224,10 @@
         .image-node.connect-pop.loop-smart-node { animation:smart-node-connect-pop .36s ease-out; transform-origin:center; }
         .image-node.drop-target { outline:2px dashed var(--strong); outline-offset:4px; border-radius:18px; }
         .image-node.drag-out { opacity:.5; }
+        .smart-group-label { position:absolute; left:14px; top:-16px; height:28px; max-width:calc(100% - 28px); padding:0 10px; border-radius:999px; display:inline-flex; align-items:center; gap:6px; background:var(--panel); border:1px solid var(--line); color:var(--text); box-shadow:0 10px 24px rgba(15,23,42,.12); font-size:11px; font-weight:850; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; pointer-events:auto; cursor:text; }
+        .smart-group-label:hover, .smart-group-label.editing { border-color:var(--strong); box-shadow:0 10px 24px rgba(15,23,42,.16); }
+        .smart-group-label i,.smart-group-label svg { width:13px; height:13px; flex:0 0 auto; }
+        .smart-group-label span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
         .run-time-pill { position:absolute; left:8px; top:8px; z-index:7; height:24px; padding:0 9px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; background:rgba(37,99,235,.92); color:#fff; font-size:10.5px; font-weight:800; font-variant-numeric:tabular-nums; box-shadow:0 8px 18px rgba(15,23,42,.18); pointer-events:none; animation:smart-pill-pulse 1.8s ease-in-out infinite; }
         .run-time-pill.done { background:#10b981; color:#fff; }
         .run-time-pill.done { animation:none; }
@@ -250,6 +267,10 @@
         .composer { --ctrl-font:10.5px; --ctrl-icon:11px; --ctrl-height:26px; --ctrl-gap:4px; --ctrl-xpad:8px; --ctrl-pop-font:10.5px; --ctrl-pop-icon:10px; --ctrl-pop-height:24px; --ctrl-pop-radius:9px; position:absolute; z-index:30; width:520px; transform:translateY(10px); opacity:0; pointer-events:none; transition:opacity .18s cubic-bezier(.4,.0,.2,1), transform .18s cubic-bezier(.4,.0,.2,1); }
         .composer.open { opacity:1; transform:translateY(0); pointer-events:auto; }
         .composer-card { position:relative; background:var(--panel); border:1px solid var(--line); border-radius:18px; box-shadow:0 20px 56px var(--shadow); backdrop-filter:blur(20px); padding:10px; display:grid; grid-template-columns:minmax(0, 1fr) auto; grid-template-areas:"head head" "thumbs thumbs" "prompt prompt" "params run"; column-gap:10px; row-gap:8px; align-items:start; }
+        .composer-expanded { z-index:72; }
+        .composer-expanded .composer-card { min-height:min(760px, calc(100vh - 96px)); grid-template-rows:auto auto minmax(0, 1fr) auto; box-shadow:0 28px 86px rgba(15,23,42,.2); }
+        .composer-expanded .prompt-row { min-height:0; }
+        .composer-expanded .prompt-input { height:calc(min(760px, 100vh - 96px) - 178px) !important; max-height:none; min-height:360px; font-size:13px; line-height:1.6; padding:14px 16px; }
         .input-thumbs-row { grid-area:thumbs; display:none; align-items:center; gap:6px; padding:2px 2px 4px; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; }
         .input-thumbs-row.has-items { display:flex; }
         .input-thumb { position:relative; width:42px; height:42px; flex:0 0 auto; border-radius:9px; overflow:hidden; border:1px solid var(--line); background:var(--soft); cursor:grab; transition:transform .12s ease, border-color .12s ease, box-shadow .12s ease; }
@@ -271,6 +292,9 @@
         .kind-toggle button i, .kind-toggle button svg { width:11px !important; height:11px !important; stroke-width:2; }
         .kind-toggle button:hover { color:var(--text); }
         .kind-toggle button.active { background:var(--strong); color:var(--strong-text); }
+        .composer-expand-btn { position:absolute; right:10px; top:10px; z-index:5; width:30px; height:30px; border-radius:11px; display:inline-flex; align-items:center; justify-content:center; color:var(--muted); background:transparent; border:1px solid transparent; transition:background .14s ease, color .14s ease, border-color .14s ease; pointer-events:auto; }
+        .composer-expand-btn:hover { color:var(--text); background:var(--card); border-color:var(--line); }
+        .composer-expand-btn i,.composer-expand-btn svg { width:16px; height:16px; stroke-width:2.2; }
         .prompt-resize { position:absolute; left:50%; bottom:-3px; transform:translateX(-50%); width:36px; height:8px; cursor:ns-resize; display:flex; align-items:center; justify-content:center; opacity:.5; transition:opacity .15s ease; z-index:3; }
         .prompt-row:hover .prompt-resize, .prompt-row:focus-within .prompt-resize { opacity:1; }
         .prompt-resize::after { content:""; width:22px; height:2px; border-radius:999px; background:var(--muted); }
@@ -488,8 +512,8 @@
         .asset-hover-preview { position:fixed; z-index:88; display:none; width:260px; max-height:300px; border-radius:16px; overflow:hidden; background:var(--card); border:1px solid var(--line); box-shadow:0 24px 70px rgba(15,23,42,.22); pointer-events:none; animation:smart-pop-in .16s ease; transform-origin:left top; }
         .asset-hover-preview img { width:100%; max-height:260px; display:block; object-fit:contain; background:var(--soft); }
         .asset-hover-preview .asset-hover-name { padding:8px 10px; color:var(--text); font-size:11px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; border-top:1px solid var(--line); }
-        .smart-image-toolbar { position:absolute; z-index:70; display:none; align-items:center; gap:4px; padding:7px; border-radius:18px; background:var(--panel); border:1px solid var(--line); color:var(--text); box-shadow:0 18px 48px var(--shadow); backdrop-filter:blur(18px); transform:translate(-50%, -100%); pointer-events:auto; }
-        .smart-image-toolbar.open { display:flex; animation:smart-toolbar-in .16s ease; }
+        .smart-image-toolbar, .smart-selection-toolbar { position:absolute; z-index:70; display:none; align-items:center; gap:4px; padding:7px; border-radius:18px; background:var(--panel); border:1px solid var(--line); color:var(--text); box-shadow:0 18px 48px var(--shadow); backdrop-filter:blur(18px); transform:translate(-50%, -100%); pointer-events:auto; }
+        .smart-image-toolbar.open, .smart-selection-toolbar.open { display:flex; animation:smart-toolbar-in .16s ease; }
         .smart-tool-btn { height:30px; padding:0 10px; border-radius:12px; display:inline-flex; align-items:center; justify-content:center; gap:5px; color:var(--muted); background:transparent; border:1px solid transparent; font-size:11px; font-weight:750; white-space:nowrap; transition:background .14s ease, color .14s ease, border-color .14s ease, transform .14s ease; }
         .smart-tool-btn.is-hidden { display:none; }
         .smart-tool-btn:hover { color:var(--text); background:var(--card); border-color:var(--line); transform:translateY(-1px); }
@@ -590,6 +614,7 @@
         @media (prefers-reduced-motion: reduce) {
             .smart-image-toolbar.open,
             .smart-context-menu.open,
+            .smart-selection-toolbar.open,
             .smart-enhance-menu.open,
             .asset-hover-preview,
             .image-node,
@@ -629,7 +654,7 @@
                 animation:none !important;
             }
         }
-        @media (max-width:760px) { .composer { width:min(540px, calc(100vw - 28px)); } .composer-card { grid-template-columns:minmax(0, 1fr) auto; } .smart-minimap { width:148px; height:98px; } .asset-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+        @media (max-width:760px) { .composer { width:min(540px, calc(100vw - 28px)); } .composer-card { grid-template-columns:minmax(0, 1fr) auto; } .composer-expanded .composer-card { min-height:calc(100vh - 52px); } .composer-expanded .prompt-input { min-height:280px; height:calc(100vh - 230px) !important; } .smart-minimap { width:148px; height:98px; } .asset-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
         @media (max-width:540px) { .asset-grid { grid-template-columns:1fr; } }
     </style>
 </head>
@@ -663,6 +688,7 @@
                         <button id="runBtn" class="run-btn" type="button"><i data-lucide="sparkles"></i><span data-i18n="smart.run">运行</span></button>
                     </div>
                 </div>
+                <button id="composerExpandBtn" class="composer-expand-btn" type="button" title="放大提示词框" aria-label="放大提示词框"><i data-lucide="expand"></i></button>
             </div>
         </div>
         <button class="smart-back" type="button" onclick="backToCanvasList()"><i data-lucide="arrow-left"></i><span data-i18n="canvas.backToList">返回画布列表</span></button>
@@ -671,10 +697,14 @@
             <button id="smartEnhanceBtn" class="smart-tool-btn" type="button" data-smart-tool="enhance"><i data-lucide="scan-search"></i><span>高清</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="remove-bg"><i data-lucide="scan-face"></i><span>去背景</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="brush"><i data-lucide="paintbrush"></i><span>画笔</span></button>
-            <button class="smart-tool-btn" type="button" data-smart-tool="angle"><i data-lucide="box"></i><span>多角度</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="same"><i data-lucide="sparkles"></i><span>画同款</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="params"><i data-lucide="scroll-text"></i><span>参数</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="download"><i data-lucide="download"></i><span>下载</span></button>
+        </div>
+        <div id="smartSelectionToolbar" class="smart-selection-toolbar" aria-hidden="true">
+            <button class="smart-tool-btn" type="button" data-smart-selection-tool="duplicate"><i data-lucide="copy-plus"></i><span>创建副本</span></button>
+            <button class="smart-tool-btn" type="button" data-smart-selection-tool="group"><i data-lucide="group"></i><span>打组</span></button>
+            <button class="smart-tool-btn" type="button" data-smart-selection-tool="ungroup"><i data-lucide="ungroup"></i><span>解组</span></button>
         </div>
         <div id="smartEnhanceMenu" class="smart-enhance-menu" aria-hidden="true"></div>
         <div id="smartContextMenu" class="smart-context-menu" aria-hidden="true"></div>
@@ -876,6 +906,7 @@
         const dynamicParams = document.getElementById('dynamicParams');
         const runBtn = document.getElementById('runBtn');
         const cascadeRunBtn = document.getElementById('cascadeRunBtn');
+        const composerExpandBtn = document.getElementById('composerExpandBtn');
         const fileInput = document.getElementById('fileInput');
         const apiKindToggle = document.getElementById('apiKindToggle');
         const inputThumbsRow = document.getElementById('inputThumbsRow');
@@ -898,6 +929,7 @@
         const assetDialogOk = document.getElementById('assetDialogOk');
         const assetHoverPreview = document.getElementById('assetHoverPreview');
         const smartImageToolbar = document.getElementById('smartImageToolbar');
+        const smartSelectionToolbar = document.getElementById('smartSelectionToolbar');
         const smartEnhanceBtn = document.getElementById('smartEnhanceBtn');
         const smartEnhanceMenu = document.getElementById('smartEnhanceMenu');
         const smartContextMenu = document.getElementById('smartContextMenu');
@@ -938,6 +970,7 @@
         let smartCascadeRunning = false;
         let runBtnCooldownToken = 0;
         let smartRunStateToken = 0;
+        let composerExpanded = false;
         const smartNodeRunTokens = new Map();
         let lastImagePasteAt = 0;
         let lastNodePasteAt = 0;
@@ -980,6 +1013,7 @@
             selectedId = snap.selectedId;
             selectedIds = snap.selectedIds;
             selectedImage = snap.selectedImage;
+            sanitizeFrameGroups();
             activeComposerSubject = null;
             lastComposerNodeId = '';
             render();
@@ -1100,7 +1134,7 @@
         }
         function backToCanvasList(){
             savePromptDraftForCurrent();
-            const target = `/static/canvas.html?list=smart&v=20260529-v2014-canvas-polish1`;
+            const target = `/static/canvas.html?list=smart&v=20260529-v2015-smart-canvas-hardening1`;
             try {
                 if(window.parent && window.parent !== window){
                     window.parent.localStorage?.setItem('studio_active_page', 'smart-canvas');
@@ -1162,12 +1196,115 @@
             selectedId = '';
             selectedIds = [];
             selectedImage = {nodeId:'', index:-1};
+            activeComposerSubject = null;
+            lastComposerNodeId = '';
         }
         function isNodeSelected(id){
             return selectedId === id || selectedIds.includes(id);
         }
         function selectedNodeIds(){
             return selectedIds.length ? selectedIds.slice() : (selectedId ? [selectedId] : []);
+        }
+        function isSmartFrameGroup(node){
+            return node?.type === 'smart-group';
+        }
+        function groupMemberIds(group){
+            return Array.isArray(group?.memberIds) ? group.memberIds.filter(Boolean) : [];
+        }
+        function cleanImageFileName(value){
+            const name = String(value || '').split(/[\\/]/).pop().split('?')[0].split('#')[0].trim();
+            return name.replace(/\.[a-z0-9]{2,5}$/i, '').trim();
+        }
+        function imageDisplayName(image){
+            if(!image) return '';
+            const direct = cleanImageFileName(image.name || image.filename || image.title || '');
+            if(direct) return direct;
+            const fromUrl = cleanImageFileName(image.url || image.local_url || image.path || '');
+            return fromUrl;
+        }
+        function defaultNodeTitle(node){
+            if(isSmartFrameGroup(node)) return `图片节点 ${groupMemberIds(node).length}`;
+            if(node?.type === 'smart-prompt') return 'Prompt';
+            if(node?.type === 'smart-loop') return 'Loop';
+            const count = (node?.images || []).length;
+            if(node?.historyForNodeId) return 'Group';
+            if(count > 1) return 'Group';
+            return imageDisplayName((node?.images || [])[0]) || 'Image';
+        }
+        function refreshDefaultNodeTitle(node){
+            if(node && !node.customTitle) node.title = defaultNodeTitle(node);
+        }
+        function nodeTitleText(node){
+            return String(node?.title || defaultNodeTitle(node) || '').trim();
+        }
+        function nodeTitleIcon(node){
+            if(isSmartFrameGroup(node)) return 'group';
+            if(node?.type === 'smart-prompt') return 'text-cursor-input';
+            if(node?.type === 'smart-loop') return 'repeat-2';
+            return 'image';
+        }
+        function normalizeMemberIdsForCopy(copy, idMap){
+            if(!isSmartFrameGroup(copy) || !Array.isArray(copy.memberIds)) return;
+            copy.memberIds = copy.memberIds.map(id => idMap.get(id)).filter(Boolean);
+            if(!copy.customTitle) copy.title = defaultNodeTitle(copy);
+        }
+        function groupsForNodeId(id){
+            if(!id) return [];
+            return nodes.filter(node => isSmartFrameGroup(node) && groupMemberIds(node).includes(id));
+        }
+        function frameGroupSelectionForMembers(ids){
+            const set = new Set(ids || []);
+            return nodes.filter(node => {
+                if(!isSmartFrameGroup(node)) return false;
+                const members = groupMemberIds(node);
+                return members.length && members.some(id => set.has(id));
+            }).map(node => node.id);
+        }
+        function selectedFrameGroups(){
+            const idSet = new Set(selectedNodeIds());
+            return nodes.filter(node => isSmartFrameGroup(node) && idSet.has(node.id));
+        }
+        function selectedContentNodeIds(){
+            return selectedNodeIds().filter(id => {
+                const node = nodes.find(n => n.id === id);
+                return node && !isSmartFrameGroup(node);
+            });
+        }
+        function groupableSelectedNodeIds(){
+            const seen = new Set();
+            return selectedContentNodeIds().filter(id => {
+                if(seen.has(id)) return false;
+                if(groupsForNodeId(id).length) return false;
+                seen.add(id);
+                return true;
+            });
+        }
+        function selectedNodeIdsForClone(){
+            const ids = new Set(selectedNodeIds());
+            selectedFrameGroups().forEach(group => groupMemberIds(group).forEach(id => ids.add(id)));
+            frameGroupSelectionForMembers(ids).forEach(id => ids.add(id));
+            const ordered = nodes.map(node => node.id).filter(id => ids.has(id));
+            return [...ordered, ...[...ids].filter(id => !ordered.includes(id))].filter(id => nodes.some(node => node.id === id));
+        }
+        function selectedNodeBounds(ids){
+            const rects = (ids || []).map(id => nodes.find(n => n.id === id)).filter(Boolean).map(nodeRect);
+            if(!rects.length) return null;
+            const minX = Math.min(...rects.map(r => r.x));
+            const minY = Math.min(...rects.map(r => r.y));
+            const maxX = Math.max(...rects.map(r => r.x + r.width));
+            const maxY = Math.max(...rects.map(r => r.y + r.height));
+            return {x:minX, y:minY, width:maxX - minX, height:maxY - minY};
+        }
+        function groupFrameBoundsForMembers(ids){
+            const bounds = selectedNodeBounds(ids);
+            if(!bounds) return null;
+            const pad = 28;
+            return {
+                x:Math.round(bounds.x - pad),
+                y:Math.round(bounds.y - pad),
+                width:Math.round(bounds.width + pad * 2),
+                height:Math.round(bounds.height + pad * 2)
+            };
         }
         function persistActiveComposerDraft(){
             try { savePromptDraftForCurrent(); } catch(e) {}
@@ -1209,7 +1346,7 @@
         }
         function isBlankCanvasActionTarget(target){
             if(!target) return false;
-            if(target.closest?.('.image-node,.composer,.smart-back,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return false;
+            if(target.closest?.('.image-node,.composer,.smart-back,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return false;
             return target === shell || target === world || Boolean(target.closest?.('#world, .connection-layer'));
         }
         function handleBlankCanvasAction(event){
@@ -1252,6 +1389,7 @@
             if(!smartContextMenu) return;
             smartContextMenu.classList.remove('open');
             smartContextMenu.setAttribute('aria-hidden', 'true');
+            updateSmartSelectionToolbar();
         }
         function closeSmartEnhanceMenu(){
             if(!smartEnhanceMenu) return;
@@ -1308,6 +1446,12 @@
                 closeSmartEnhanceMenu();
                 return;
             }
+            if(selectedIds.length > 1){
+                smartImageToolbar.classList.remove('open');
+                smartImageToolbar.setAttribute('aria-hidden', 'true');
+                closeSmartEnhanceMenu();
+                return;
+            }
             const enhanceOptions = enhanceOptionsForImage(target.image);
             smartEnhanceBtn?.classList.toggle('is-hidden', !enhanceOptions.length);
             if(!enhanceOptions.length) closeSmartEnhanceMenu();
@@ -1332,6 +1476,34 @@
             smartImageToolbar.classList.add('open');
             smartImageToolbar.setAttribute('aria-hidden', 'false');
         }
+        function updateSmartSelectionToolbar(){
+            if(!smartSelectionToolbar) return;
+            const ids = selectedNodeIds();
+            const hasMultiContent = groupableSelectedNodeIds().length > 1;
+            const hasFrameGroup = selectedFrameGroups().length > 0;
+            if((!hasMultiContent && !hasFrameGroup) || imageEditModal?.classList.contains('open')){
+                smartSelectionToolbar.classList.remove('open');
+                smartSelectionToolbar.setAttribute('aria-hidden', 'true');
+                return;
+            }
+            const bounds = selectedNodeBounds(ids);
+            if(!bounds){
+                smartSelectionToolbar.classList.remove('open');
+                smartSelectionToolbar.setAttribute('aria-hidden', 'true');
+                return;
+            }
+            smartSelectionToolbar.querySelector('[data-smart-selection-tool="group"]')?.classList.toggle('is-hidden', !hasMultiContent);
+            smartSelectionToolbar.querySelector('[data-smart-selection-tool="ungroup"]')?.classList.toggle('is-hidden', !hasFrameGroup);
+            const rawLeft = viewport.x + (bounds.x + bounds.width / 2) * viewport.scale;
+            const rawTop = viewport.y + bounds.y * viewport.scale - 12;
+            const width = smartSelectionToolbar.offsetWidth || 260;
+            const left = Math.max(width / 2 + 10, Math.min(shell.clientWidth - width / 2 - 10, rawLeft));
+            const top = Math.max(48, rawTop);
+            smartSelectionToolbar.style.left = `${left}px`;
+            smartSelectionToolbar.style.top = `${top}px`;
+            smartSelectionToolbar.classList.add('open');
+            smartSelectionToolbar.setAttribute('aria-hidden', 'false');
+        }
         function smartMenuRow(action, label, shortcut='', disabled=false){
             return `<button class="smart-menu-row" type="button" data-smart-menu="${action}" ${disabled ? 'disabled' : ''}><span>${escapeHtml(label)}</span><span class="smart-menu-shortcut">${escapeHtml(shortcut)}</span></button>`;
         }
@@ -1341,8 +1513,8 @@
             const imageCount = (targetNode?.images || []).length;
             const hasSelection = Boolean(targetNode);
             const canPaste = Boolean(nodeClipboard?.nodes?.length);
-            const canGroup = selectedNodeIds().length > 1;
-            const canUngroup = imageCount > 1;
+            const canGroup = groupableSelectedNodeIds().length > 1;
+            const canUngroup = selectedFrameGroups().length > 0 || isSmartFrameGroup(targetNode) || imageCount > 1;
             selectedId = targetNode?.id || selectedId;
             selectedIds = selectedIds.filter(id => nodes.some(n => n.id === id));
             selectedImage = targetNode && (targetNode.type === 'smart-image' || !targetNode.type) ? {nodeId:targetNode.id, index:Number(imageIndex) || 0} : {nodeId:'', index:-1};
@@ -1380,6 +1552,7 @@
             smartContextMenu.classList.add('open');
             smartContextMenu.setAttribute('aria-hidden', 'false');
             updateSmartImageToolbar();
+            updateSmartSelectionToolbar();
             refreshIcons();
         }
         function selectedImageRef(){
@@ -1842,7 +2015,8 @@
                 }
                 if(action?.startsWith('enhance-')) return await runSelectedEnhance(Number(action.split('-')[1]) || 2048);
                 if(action === 'same') return await runSelectedSame();
-                if(action === 'remove-bg' || action === 'angle') return await runSelectedReferenceAction(action);
+                if(action === 'angle') return;
+                if(action === 'remove-bg') return await runSelectedReferenceAction(action);
             } catch(err) {
                 toast((err.message || '操作失败').slice(0, 160));
             }
@@ -1896,6 +2070,7 @@
             return {width:Math.round(width), height:Math.round(height)};
         }
         function imageLayout(images, scale=1, node=null){
+            if(isSmartFrameGroup(node)) return {cols:1, rows:1, width:Math.round(Number(node.w) || 320), height:Math.round(Number(node.h) || 240), thumb:96, single:true};
             if(node?.type === 'smart-prompt') return {cols:1, rows:1, ...promptNodeLayoutSize(node), thumb:96, single:true};
             if(node?.type === 'smart-loop') return {cols:1, rows:1, width:Math.round(Number(node.w) || 270), height:Math.round(Number(node.h) || 190), thumb:96, single:true};
             const count = (images || []).length;
@@ -1937,6 +2112,7 @@
             shell.style.backgroundPosition = '0 0';
             renderMinimap();
             updateSmartImageToolbar();
+            updateSmartSelectionToolbar();
         }
         function screenToWorld(event){
             const rect = shell.getBoundingClientRect();
@@ -2918,7 +3094,7 @@
             try { localStorage.setItem(SMART_CANVAS_ID_KEY, id); } catch(e) {}
             const url = new URL(window.location.href);
             url.searchParams.set('id', id);
-            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260529-v2014-canvas-polish1');
+            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260529-v2015-smart-canvas-hardening1');
             history.replaceState(null, '', url.toString());
         }
         async function ensureSmartCanvasId(){
@@ -2974,6 +3150,15 @@
             const ids = new Set((nodes || []).map(node => node.id).filter(Boolean));
             canvas.connections = (canvas.connections || []).filter(conn => ids.has(conn.from) && ids.has(conn.to));
         }
+        function sanitizeFrameGroups(){
+            const ids = new Set((nodes || []).map(node => node.id).filter(Boolean));
+            nodes.forEach(node => {
+                if(!isSmartFrameGroup(node)) return;
+                node.memberIds = groupMemberIds(node).filter(id => ids.has(id) && id !== node.id);
+                refreshDefaultNodeTitle(node);
+            });
+            nodes = nodes.filter(node => !isSmartFrameGroup(node) || groupMemberIds(node).length > 0);
+        }
         async function loadCanvas(){
             await ensureSmartCanvasId();
             if(!canvasId) return;
@@ -2988,7 +3173,9 @@
                 nodes.forEach(n => {
                     if(n.pending) n.pending = 0;
                     if(n.running) n.running = false;
+                    refreshDefaultNodeTitle(n);
                 });
+                sanitizeFrameGroups();
                 reconcileStuckSmartNodes();
                 canvas.connections = Array.isArray(canvas.connections) ? canvas.connections : [];
                 sanitizeCanvasConnections();
@@ -2997,9 +3184,9 @@
                 if(canvas.settings) settings = {...settings, ...canvas.settings};
                 if(settings.comfy_workflow && !settings.comfyWorkflow) settings.comfyWorkflow = settings.comfy_workflow;
                 if(settings.comfy_params && !settings.comfyParams) settings.comfyParams = settings.comfy_params;
-                updateProviderModels();
-                applyViewport();
-                render();
+            updateProviderModels();
+            applyViewport();
+            render();
             } catch(e) {
                 console.error('Smart canvas load failed', e);
                 toast(`${tr('smart.toastCanvasFail')}：${(e?.message || e || '').toString().slice(0, 80)}`);
@@ -3015,6 +3202,7 @@
             nodes.forEach(node => {
                 node.images = (node.images || []).map(img => stripImageGenerationMeta(img));
             });
+            sanitizeFrameGroups();
             sanitizeCanvasConnections();
             canvas.nodes = nodes;
             canvas.settings = settings;
@@ -3060,6 +3248,7 @@
             const nodeImages = (images || []).map(img => ({...img}));
             const node = {id:uid('smart'), type:'smart-image', x, y, title:nodeImages.length > 1 ? 'Group' : 'Image', images:nodeImages, created_at:Date.now()};
             inheritNodeMetaFromImage(node);
+            refreshDefaultNodeTitle(node);
             nodes.push(node);
             if(options.select !== false) selectedId = node.id;
             render();
@@ -3105,7 +3294,7 @@
         }
         function cloneSmartNode(node, dx=0, dy=0){
             const copy = JSON.parse(JSON.stringify(node));
-            copy.id = uid(node.type === 'smart-prompt' ? 'prompt' : node.type === 'smart-loop' ? 'loop' : 'smart');
+            copy.id = uid(node.type === 'smart-prompt' ? 'prompt' : node.type === 'smart-loop' ? 'loop' : isSmartFrameGroup(node) ? 'group' : 'smart');
             copy.x = (Number(node.x) || 0) + dx;
             copy.y = (Number(node.y) || 0) + dy;
             copy.running = false;
@@ -3118,7 +3307,7 @@
         }
         function copySelectedNodes(){
             if(!canvas || isEditableTarget(document.activeElement)) return;
-            const ids = selectedNodeIds();
+            const ids = selectedNodeIdsForClone();
             const copiedNodes = ids.map(id => nodes.find(n => n.id === id)).filter(Boolean);
             if(!copiedNodes.length) return;
             const idSet = new Set(copiedNodes.map(n => n.id));
@@ -3152,6 +3341,7 @@
                     copy.inputNodeIds = copy.inputNodeIds.map(id => idMap.get(id)).filter(Boolean);
                 }
                 if(copy.sourceNodeId) copy.sourceNodeId = idMap.get(copy.sourceNodeId) || '';
+                normalizeMemberIdsForCopy(copy, idMap);
             });
             const newConnections = (nodeClipboard.connections || []).map(conn => ({
                 ...conn,
@@ -3167,7 +3357,7 @@
             scheduleSave();
         }
         function duplicateSelectedSmartNodes(){
-            const ids = selectedNodeIds();
+            const ids = selectedNodeIdsForClone();
             const sourceNodes = ids.map(id => nodes.find(n => n.id === id)).filter(Boolean);
             if(!sourceNodes.length) return;
             pushUndo();
@@ -3180,6 +3370,7 @@
             copies.forEach(copy => {
                 if(Array.isArray(copy.inputNodeIds)) copy.inputNodeIds = copy.inputNodeIds.map(id => idMap.get(id)).filter(Boolean);
                 if(copy.sourceNodeId) copy.sourceNodeId = idMap.get(copy.sourceNodeId) || '';
+                normalizeMemberIdsForCopy(copy, idMap);
             });
             const idSet = new Set(sourceNodes.map(n => n.id));
             const copiedConnections = (canvas?.connections || []).filter(c => idSet.has(c.from) && idSet.has(c.to));
@@ -3192,8 +3383,27 @@
             render();
             scheduleSave();
         }
+        function nodeIdsForMoveStart(node){
+            if(!node) return [];
+            const baseIds = selectedIds.includes(node.id) ? selectedIds.slice() : [node.id];
+            const ids = new Set(baseIds);
+            const includeGroupMembers = group => {
+                if(!isSmartFrameGroup(group)) return;
+                groupMemberIds(group).forEach(id => ids.add(id));
+            };
+            if(isSmartFrameGroup(node)){
+                includeGroupMembers(node);
+            } else {
+                groupsForNodeId(node.id).forEach(group => {
+                    if(baseIds.includes(group.id)){
+                        includeGroupMembers(group);
+                    }
+                });
+            }
+            return [...ids].filter(id => nodes.some(n => n.id === id));
+        }
         function cutSelectedSmartNodes(){
-            const ids = selectedNodeIds();
+            const ids = selectedNodeIdsForClone();
             if(!ids.length) return;
             copySelectedNodes();
             pushUndo();
@@ -3202,6 +3412,7 @@
             if(canvas) canvas.connections = (canvas.connections || []).filter(c => !idSet.has(c.from) && !idSet.has(c.to));
             nodes.forEach(node => {
                 if(Array.isArray(node.inputNodeIds)) node.inputNodeIds = node.inputNodeIds.filter(inputId => !idSet.has(inputId));
+                if(isSmartFrameGroup(node) && Array.isArray(node.memberIds)) node.memberIds = node.memberIds.filter(memberId => !idSet.has(memberId));
             });
             clearSelection();
             render();
@@ -3229,6 +3440,50 @@
             selectedImage = {nodeId:'', index:-1};
             render();
             scheduleSave();
+        }
+        function createFrameGroupFromSelection(){
+            const ids = groupableSelectedNodeIds();
+            const selected = ids.map(id => nodes.find(n => n.id === id)).filter(Boolean);
+            if(selected.length < 2){ toast('请先框选至少 2 个未打组节点'); return; }
+            const bounds = groupFrameBoundsForMembers(ids);
+            if(!bounds) return;
+            pushUndo();
+            const group = {
+                id:uid('group'),
+                type:'smart-group',
+                x:bounds.x,
+                y:bounds.y,
+                w:Math.max(160, bounds.width),
+                h:Math.max(120, bounds.height),
+                title:`图片节点 ${selected.length}`,
+                customTitle:false,
+                memberIds:ids.slice(),
+                created_at:Date.now()
+            };
+            nodes.push(group);
+            sanitizeFrameGroups();
+            selectedId = '';
+            selectedIds = [...ids, group.id];
+            selectedImage = {nodeId:'', index:-1};
+            render();
+            scheduleSave();
+            toast('已打组');
+        }
+        function ungroupSelectedFrameGroups(){
+            const targets = selectedFrameGroups();
+            if(!targets.length) return false;
+            const memberIds = Array.from(new Set(targets.flatMap(groupMemberIds))).filter(id => nodes.some(n => n.id === id));
+            const targetIds = new Set(targets.map(group => group.id));
+            pushUndo();
+            nodes = nodes.filter(node => !targetIds.has(node.id));
+            selectedId = '';
+            selectedIds = memberIds.length > 1 ? memberIds : [];
+            if(memberIds.length === 1) selectedId = memberIds[0];
+            selectedImage = {nodeId:'', index:-1};
+            render();
+            scheduleSave();
+            toast('已解除编组');
+            return true;
         }
         function moveSelectedLayer(mode){
             const ids = selectedNodeIds();
@@ -3304,8 +3559,12 @@
                 if(action === 'send-chat') return await sendSelectedImageToChat();
                 if(action === 'save-asset') return await saveSelectedImageToAssetLibrary();
                 if(action === 'params') return await openSmartImageParams(target);
-                if(action === 'group' || action === 'merge') return groupSelectedNodes();
-                if(action === 'ungroup') return splitGroupNode(node);
+                if(action === 'group') return createFrameGroupFromSelection();
+                if(action === 'merge') return mergeSelectedNodesIntoImageGroup();
+                if(action === 'ungroup') {
+                    if(ungroupSelectedFrameGroups()) return;
+                    return splitGroupNode(node);
+                }
                 if(action === 'toggle-hidden') return toggleSelectedNodeFlag('hidden');
                 if(action === 'toggle-locked') return toggleSelectedNodeFlag('locked');
                 if(action === 'flip-x') return flipSelectedNodes('x');
@@ -3324,7 +3583,7 @@
             }
         }
         function duplicateForAltDrag(node){
-            const ids = (isNodeSelected(node.id) ? selectedNodeIds() : [node.id]);
+            const ids = (isNodeSelected(node.id) ? nodeIdsForMoveStart(node) : [node.id]);
             const sourceNodes = ids.map(id => nodes.find(n => n.id === id)).filter(Boolean);
             if(!sourceNodes.length) return node;
             pushUndo();
@@ -3337,6 +3596,7 @@
             copies.forEach(copy => {
                 if(Array.isArray(copy.inputNodeIds)) copy.inputNodeIds = copy.inputNodeIds.map(id => idMap.get(id)).filter(Boolean);
                 if(copy.sourceNodeId) copy.sourceNodeId = idMap.get(copy.sourceNodeId) || '';
+                normalizeMemberIdsForCopy(copy, idMap);
             });
             const idSet = new Set(sourceNodes.map(n => n.id));
             const copiedConnections = (canvas.connections || []).filter(c => idSet.has(c.from) && idSet.has(c.to));
@@ -3356,7 +3616,11 @@
             return {x:event.clientX - rect.left, y:event.clientY - rect.top};
         }
         function renderConnections(){
-            const conns = (canvas?.connections || []).map((conn, index) => ({...conn, index})).filter(c => nodes.some(n => n.id === c.from) && nodes.some(n => n.id === c.to));
+            const conns = (canvas?.connections || []).map((conn, index) => ({...conn, index})).filter(c => {
+                const fromNode = nodes.find(n => n.id === c.from);
+                const toNode = nodes.find(n => n.id === c.to);
+                return fromNode && toNode && !isSmartFrameGroup(fromNode) && !isSmartFrameGroup(toNode);
+            });
             const paths = conns.map(conn => {
                 const fromNode = nodes.find(n => n.id === conn.from);
                 const toNode = nodes.find(n => n.id === conn.to);
@@ -3449,7 +3713,16 @@
                 ${llmParams}
             </div>`;
         }
+        function nodeTitleLabelHtml(node, mode='floating'){
+            const text = nodeTitleText(node);
+            const icon = nodeTitleIcon(node);
+            const cls = mode === 'group' ? 'smart-group-label' : mode === 'head' ? 'node-title' : 'node-name-label';
+            return `<div class="${cls}" data-node-title="${escapeHtml(node.id)}" title="双击修改名称"><i data-lucide="${escapeHtml(icon)}"></i><span>${escapeHtml(text)}</span></div>`;
+        }
         function nodeBodyHtml(node, layout){
+            if(isSmartFrameGroup(node)){
+                return nodeTitleLabelHtml(node, 'group');
+            }
             if(node.type === 'smart-prompt') return promptNodeBodyHtml(node);
             if(node.type === 'smart-loop') return `<div class="loop-node-placeholder"><i data-lucide="repeat-2"></i><span>循环节点</span><small>后续接入批量循环逻辑</small></div>`;
             const imgs = node.images || [];
@@ -3508,28 +3781,28 @@
             const previousWorldHtml = world.innerHTML;
             try {
             const composerEl = composer;
-            const nodesHtml = nodes.map(node => {
+            const renderNodes = nodes.slice().sort((a, b) => (isSmartFrameGroup(a) ? 0 : 1) - (isSmartFrameGroup(b) ? 0 : 1));
+            const nodesHtml = renderNodes.map(node => {
                 const imgs = node.images || [];
-                const title = node.type === 'smart-prompt' ? 'Prompt' : node.type === 'smart-loop' ? 'Loop' : (node.historyForNodeId ? 'Group' : (imgs.length > 1 ? 'Group' : 'Image'));
+                const isFrameGroup = isSmartFrameGroup(node);
                 const scale = nodeScale(node);
                 const layout = imageLayout(imgs, scale, node);
                 const isPrompt = node.type === 'smart-prompt';
                 const isLoop = node.type === 'smart-loop';
-                const isImageNode = node.type === 'smart-image' || !node.type;
+                const isImageNode = !isFrameGroup && (node.type === 'smart-image' || !node.type);
                 const hasImageRunState = Boolean(node.pending || node.running || node.runError || node.runStartedAt || node.runFinishedAt);
                 const isEmpty = isImageNode && imgs.length === 0 && !hasImageRunState;
                 const isGroup = isImageNode && imgs.length > 1;
                 const isPending = isImageNode && imgs.length === 0 && Boolean(node.pending || node.running);
-                const body = nodeBodyHtml(node, layout);
-                const deleteBtn = isNodeSelected(node.id) ? `<button class="mini-x node-delete" type="button" title="${escapeHtml(tr('smart.deleteNode'))}"><i data-lucide="trash-2"></i></button>` : '';
-                return `<div class="image-node ${isEmpty ? 'empty-node' : ''} ${isGroup ? 'group-node' : ''} ${isPrompt ? 'prompt-smart-node' : ''} ${isLoop ? 'loop-smart-node' : ''} ${node.runError ? 'node-error' : ''} ${isNodeSelected(node.id) ? 'selected' : ''} ${(dragState?.groupIds?.includes(node.id) || dragState?.id === node.id) ? 'dragging' : ''} ${node.running ? 'node-running' : ''} ${isPending ? 'node-pending' : ''} ${node.hidden ? 'node-hidden' : ''} ${node.locked ? 'node-locked' : ''}" data-id="${escapeHtml(node.id)}" style="left:${node.x || 0}px;top:${node.y || 0}px;width:${layout.width}px;height:${layout.height}px">
-                    <div class="node-head"><div class="node-title">${title}</div><div class="node-actions">${deleteBtn}</div></div>
+            const body = nodeBodyHtml(node, layout);
+            const deleteBtn = isNodeSelected(node.id) ? `<button class="mini-x node-delete" type="button" title="${escapeHtml(tr('smart.deleteNode'))}"><i data-lucide="trash-2"></i></button>` : '';
+            return `<div class="image-node ${isFrameGroup ? 'smart-frame-group' : ''} ${isEmpty ? 'empty-node' : ''} ${isGroup ? 'group-node' : ''} ${isPrompt ? 'prompt-smart-node' : ''} ${isLoop ? 'loop-smart-node' : ''} ${node.runError ? 'node-error' : ''} ${isNodeSelected(node.id) ? 'selected' : ''} ${(dragState?.groupIds?.includes(node.id) || dragState?.id === node.id) ? 'dragging' : ''} ${node.running ? 'node-running' : ''} ${isPending ? 'node-pending' : ''} ${node.hidden ? 'node-hidden' : ''} ${node.locked ? 'node-locked' : ''}" data-id="${escapeHtml(node.id)}" style="left:${node.x || 0}px;top:${node.y || 0}px;width:${layout.width}px;height:${layout.height}px">
+                    ${!isFrameGroup ? (isPrompt || isLoop || isEmpty ? `<div class="node-head">${nodeTitleLabelHtml(node, 'head')}<div class="node-actions">${deleteBtn}</div></div>` : nodeTitleLabelHtml(node, 'floating')) : ''}
                     ${runTimePillHtml(node)}
                     <div class="node-body">${body}</div>
-                    <div class="node-hint">${escapeHtml(node.runError || (isPending ? tr('smart.hintPending') : (imgs.length > 1 ? tr('smart.hintMulti') : imgs.length ? tr('smart.hintSingle') : tr('smart.hintEmpty'))))}</div>
-                    ${imgs.length || hasImageRunState || isPrompt ? '<div class="node-resize-handle" data-resize="1"></div>' : ''}
-                    <div class="node-port port-in" data-port="in" title="杈撳叆"></div>
-                    <div class="node-port port-out" data-port="out" title="杈撳嚭"></div>
+                    ${!isFrameGroup ? `<div class="node-hint">${escapeHtml(node.runError || (isPending ? tr('smart.hintPending') : (imgs.length > 1 ? tr('smart.hintMulti') : imgs.length ? tr('smart.hintSingle') : tr('smart.hintEmpty'))))}</div>` : ''}
+                    ${!isFrameGroup && (imgs.length || hasImageRunState || isPrompt) ? '<div class="node-resize-handle" data-resize="1"></div>' : ''}
+                    ${!isFrameGroup ? '<div class="node-port port-in" data-port="in" title="输入"></div><div class="node-port port-out" data-port="out" title="输出"></div>' : ''}
                 </div>`;
             }).join('');
             const connectionsHtml = renderConnections();
@@ -3542,6 +3815,7 @@
             updateComposer();
             renderMinimap();
             updateSmartImageToolbar();
+            updateSmartSelectionToolbar();
             if(window.lucide) lucide.createIcons();
             measureSmartNodeImages();
             refreshRunTimerPills();
@@ -3684,6 +3958,57 @@
             const runEl = el.querySelector('.prompt-node-run');
             if(runEl) runEl.onclick = e => { e.preventDefault(); e.stopPropagation(); runPromptLLMNode(node.id); };
         }
+        function commitNodeTitleEdit(label, node, input, commit=true){
+            if(!label || !node || !input) return;
+            const previous = nodeTitleText(node);
+            const next = String(input.value || '').trim();
+            if(commit && next && next !== previous){
+                node.title = next.slice(0, 80);
+                node.customTitle = true;
+                scheduleSave();
+            }
+            label.classList.remove('editing');
+            render();
+        }
+        function beginNodeTitleEdit(label, node){
+            if(!label || !node) return;
+            label.classList.add('editing');
+            const input = document.createElement('input');
+            input.className = 'node-title-input';
+            input.value = nodeTitleText(node);
+            input.maxLength = 80;
+            label.innerHTML = '';
+            label.appendChild(input);
+            requestAnimationFrame(() => {
+                input.focus();
+                input.select();
+            });
+            input.addEventListener('mousedown', e => { e.stopPropagation(); });
+            input.addEventListener('click', e => { e.stopPropagation(); });
+            input.addEventListener('dblclick', e => { e.stopPropagation(); });
+            input.addEventListener('keydown', e => {
+                e.stopPropagation();
+                if(e.key === 'Enter') {
+                    e.preventDefault();
+                    commitNodeTitleEdit(label, node, input, true);
+                } else if(e.key === 'Escape') {
+                    e.preventDefault();
+                    commitNodeTitleEdit(label, node, input, false);
+                }
+            });
+            input.addEventListener('blur', () => commitNodeTitleEdit(label, node, input, true));
+        }
+        function bindNodeTitleEditors(el, node){
+            el.querySelectorAll('[data-node-title]').forEach(label => {
+                label.addEventListener('mousedown', e => e.stopPropagation());
+                label.addEventListener('click', e => e.stopPropagation());
+                label.addEventListener('dblclick', e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    beginNodeTitleEdit(label, node);
+                });
+            });
+        }
         function bindScrollableText(el){
             if(!el || el.dataset.scrollBound === '1') return;
             el.dataset.scrollBound = '1';
@@ -3754,6 +4079,7 @@
             if(!portDragState) return;
             const fromNode = nodes.find(n => n.id === portDragState.fromId);
             if(!fromNode) return;
+            if(isSmartFrameGroup(fromNode)) return;
             const fr = nodeRect(fromNode);
             const isOut = portDragState.fromPort === 'out';
             const fx = isOut ? fr.x + fr.width : fr.x;
@@ -3780,6 +4106,8 @@
                 const nodeEl = portEl?.closest?.('.image-node') || hitEl?.closest?.('.image-node');
                 let id = '', port = '';
                 if(nodeEl && nodeEl.dataset.id && nodeEl.dataset.id !== drag.fromId){
+                    const targetNode = nodes.find(n => n.id === nodeEl.dataset.id);
+                    if(isSmartFrameGroup(targetNode)) return {targetId:'', targetPort:'', hit:hitEl};
                     id = nodeEl.dataset.id;
                     if(portEl){
                         port = portEl.dataset.port;
@@ -3826,6 +4154,7 @@
             world.querySelectorAll('.image-node').forEach(el => {
                 const id = el.dataset.id;
                 const nodeForControls = nodes.find(n => n.id === id);
+                if(nodeForControls) bindNodeTitleEditors(el, nodeForControls);
                 if(nodeForControls?.type === 'smart-prompt') bindPromptNodeControls(el, nodeForControls);
                 el.onclick = e => {
                     e.stopPropagation();
@@ -3955,14 +4284,14 @@
                     port.addEventListener('dblclick', e => { e.stopPropagation(); });
                 });
                 el.onmousedown = e => {
-                    if(e.button !== 0 || e.target.closest('.mini-x, .node-resize-handle, .thumb-item, .node-port, .prompt-node-control, .prompt-node-pill, textarea, select, input, button')) return;
+                    if(e.button !== 0 || e.target.closest('.mini-x, .node-resize-handle, .thumb-item, .node-port, .prompt-node-control, .prompt-node-pill, [data-node-title], textarea, select, input, button')) return;
                     e.preventDefault(); e.stopPropagation();
                     let node = nodes.find(n => n.id === id);
                     if(!node) return;
                     if(node.locked){ toast('节点已锁定'); return; }
                     if(e.altKey) node = duplicateForAltDrag(node);
                     if(!isNodeSelected(node.id)) selectOnlyNode(node.id);
-                    const dragIds = selectedIds.includes(node.id) ? selectedIds.slice() : [node.id];
+                    const dragIds = nodeIdsForMoveStart(node);
                     const group = dragIds.map(dragId => {
                         const n = nodes.find(x => x.id === dragId);
                         return n ? {id:n.id, ox:Number(n.x) || 0, oy:Number(n.y) || 0} : null;
@@ -3978,6 +4307,7 @@
             const cx = x + w/2, cy = y + h/2;
             const excluded = new Set([draggedId, ...(excludeIds || [])]);
             for(const n of nodes){
+                if(isSmartFrameGroup(n)) continue;
                 if(excluded.has(n.id)) continue;
                 const r = nodeRect(n);
                 if(cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height) return n;
@@ -4001,6 +4331,7 @@
             if(canvas) canvas.connections = (canvas.connections || []).filter(c => c.from !== id && c.to !== id);
             nodes.forEach(node => {
                 if(Array.isArray(node.inputNodeIds)) node.inputNodeIds = node.inputNodeIds.filter(inputId => inputId !== id);
+                if(isSmartFrameGroup(node) && Array.isArray(node.memberIds)) node.memberIds = node.memberIds.filter(memberId => memberId !== id);
             });
             if(selectedId === id) selectedId = '';
             selectedIds = selectedIds.filter(selected => selected !== id);
@@ -4027,7 +4358,7 @@
             if(node.locked){ toast('节点已锁定'); return; }
             pushUndo();
             node.images = (node.images || []).filter((_, index) => index !== imageIndex);
-            if(node.images.length <= 1) node.title = 'Image';
+            if(node.images.length <= 1) refreshDefaultNodeTitle(node);
             if(selectedImage.nodeId === id) selectedImage = {nodeId:id, index:Math.min(selectedImage.index, node.images.length - 1)};
             if(selectedImage.index < 0) selectedImage = {nodeId:'', index:-1};
             render();
@@ -4783,7 +5114,7 @@
                     name:file.name,
                     grid:{...layout, row:rects[i]?.row || 0, col:rects[i]?.col || 0, w:rects[i]?.w || 1, h:rects[i]?.h || 1}
                 })));
-                outputNode.title = 'Grid';
+                if(!outputNode.customTitle) outputNode.title = 'Grid';
                 closeImageEditor(); render(); scheduleSave();
             }
         }
@@ -4801,8 +5132,8 @@
         }
         function savePromptDraftForCurrent(){
             if(promptInput?.dataset?.promptLocked === '1') return;
-            const subject = activeComposerSubject?.id ? activeComposerSubject : selectedNode();
-            if(!subject) return;
+            const subject = activeComposerSubject?.id ? activeComposerSubject : (composer?.classList.contains('open') ? selectedNode() : null);
+            if(!subject || subject.type !== 'smart-image') return;
             if(promptInput?.dataset?.preserveDraftOnce === '1' && subject.promptDraftHtml){
                 delete promptInput.dataset.preserveDraftOnce;
                 return;
@@ -4825,11 +5156,28 @@
                 setPromptText('');
             }
         }
+        function updateComposerExpandButton(){
+            if(!composerExpandBtn) return;
+            composerExpandBtn.innerHTML = `<i data-lucide="${composerExpanded ? 'minimize-2' : 'expand'}"></i>`;
+            composerExpandBtn.title = composerExpanded ? '收起提示词框' : '放大提示词框';
+            composerExpandBtn.setAttribute('aria-label', composerExpandBtn.title);
+            if(window.lucide) lucide.createIcons();
+        }
+        function setComposerExpanded(expanded){
+            composerExpanded = Boolean(expanded);
+            composer.classList.toggle('composer-expanded', composerExpanded);
+            updateComposerExpandButton();
+            updateComposer();
+            requestAnimationFrame(() => promptInput?.focus());
+        }
         function updateComposer(){
             const node = selectedNode();
             composer.classList.toggle('open', !!node);
             if(!node || node.type !== 'smart-image'){
                 composer.classList.remove('open');
+                composer.classList.remove('composer-expanded');
+                composerExpanded = false;
+                updateComposerExpandButton();
                 if(cascadeRunBtn) cascadeRunBtn.style.display = 'none';
                 savePromptDraftForCurrent();
                 activeComposerSubject = null;
@@ -4842,7 +5190,7 @@
             const subject = node;
             const composerKey = `${node.id}:node`;
             const switchedNode = lastComposerNodeId !== composerKey;
-            if(switchedNode) savePromptDraftForCurrent();
+            if(switchedNode && activeComposerSubject?.id && activeComposerSubject.id !== subject.id) savePromptDraftForCurrent();
             lastComposerNodeId = composerKey;
             activeComposerSubject = subject;
             const hasPromptInput = promptInputNodesFor(node).length > 0;
@@ -4858,10 +5206,21 @@
             const rect = nodeRect(node);
             const gap = 14;
             const visibleWorldW = Math.max(540, shell.clientWidth / safeScale(viewport.scale) - 56);
-            const cardW = Math.round(Math.max(640, Math.min(760, visibleWorldW)));
+            const cardW = composerExpanded
+                ? Math.round(Math.max(860, Math.min(1400, shell.clientWidth / safeScale(viewport.scale) - 96)))
+                : Math.round(Math.max(640, Math.min(760, visibleWorldW)));
             composer.style.width = `${cardW}px`;
-            composer.style.left = `${rect.x + rect.width / 2 - cardW / 2}px`;
-            composer.style.top = `${rect.y + rect.height + gap}px`;
+            if(composerExpanded){
+                const viewX = -viewport.x / safeScale(viewport.scale);
+                const viewY = -viewport.y / safeScale(viewport.scale);
+                const viewW = shell.clientWidth / safeScale(viewport.scale);
+                const viewH = shell.clientHeight / safeScale(viewport.scale);
+                composer.style.left = `${viewX + (viewW - cardW) / 2}px`;
+                composer.style.top = `${viewY + Math.max(32, Math.min(72, viewH * 0.06))}px`;
+            } else {
+                composer.style.left = `${rect.x + rect.width / 2 - cardW / 2}px`;
+                composer.style.top = `${rect.y + rect.height + gap}px`;
+            }
             const ph = Math.max(60, Math.min(380, Number(settings.promptH) || 124));
             promptInput.style.setProperty('--prompt-h', `${ph}px`);
             renderInputThumbsRow(node);
@@ -4975,7 +5334,8 @@
                     undoSuppressed = false;
                 }
                 node.images = [...(node.images || []), ...uploaded];
-                if(node.images.length > 1){ node.title = 'Group'; delete node.w; delete node.h; }
+                if(node.images.length > 1){ refreshDefaultNodeTitle(node); delete node.w; delete node.h; }
+                else refreshDefaultNodeTitle(node);
                 if(node.images.length === 1){ delete node.w; delete node.h; }
                 selectedId = node.id;
                 render();
@@ -5100,6 +5460,9 @@
         }
         function addConnection(fromId, toId, kind='flow'){
             if(!fromId || !toId || fromId === toId) return;
+            const from = nodes.find(n => n.id === fromId);
+            const to = nodes.find(n => n.id === toId);
+            if(isSmartFrameGroup(from) || isSmartFrameGroup(to)) return;
             canvas.connections = canvas.connections || [];
             if(canvas.connections.some(c => c.from === fromId && c.to === toId && (c.kind || 'flow') === kind)) return;
             canvas.connections.push({from:fromId, to:toId, kind});
@@ -5108,6 +5471,7 @@
             const from = nodes.find(n => n.id === fromId);
             const to = nodes.find(n => n.id === toId);
             if(!from || !to || from.id === to.id) return false;
+            if(isSmartFrameGroup(from) || isSmartFrameGroup(to)) return false;
             to.inputNodeIds = Array.from(new Set([...(to.inputNodeIds || []), from.id]));
             addConnection(from.id, to.id, 'input');
             return true;
@@ -5478,7 +5842,10 @@
                 name,
                 kind: asset?.kind || asset?.type || ''
             }]);
-            if(name) node.title = name;
+            if(name) {
+                node.title = name;
+                node.customTitle = true;
+            }
             return true;
         }
         function collectPromptParts(){
@@ -5650,8 +6017,10 @@
             pendingNode.runElapsedMs = Math.max(0, pendingNode.runFinishedAt - Number(pendingNode.runStartedAt || pendingNode.runFinishedAt));
             pendingNode.runTimerHidden = false;
             pendingNode.outputKind = kind;
-            if(imgs.length > 1) pendingNode.title = kind === 'video' ? 'Videos' : 'Group';
-            else pendingNode.title = kind === 'video' ? 'Video' : 'Image';
+            if(!pendingNode.customTitle) {
+                if(imgs.length > 1) pendingNode.title = kind === 'video' ? 'Videos' : 'Group';
+                else pendingNode.title = defaultNodeTitle(pendingNode);
+            }
             delete pendingNode.w;
             delete pendingNode.h;
             const metaTarget = pendingNode._runMetaTargetId ? nodes.find(n => n.id === pendingNode._runMetaTargetId) : pendingNode;
@@ -5884,11 +6253,11 @@
                 outputNode.runElapsedMs = Math.max(0, outputNode.runFinishedAt - Number(outputNode.runStartedAt || outputNode.runFinishedAt));
                 outputNode.outputKind = result.kind;
                 if(outputNode.images.length > 1) {
-                    outputNode.title = result.kind === 'video' ? 'Videos' : 'Group';
+                    if(!outputNode.customTitle) outputNode.title = result.kind === 'video' ? 'Videos' : 'Group';
                     delete outputNode.w;
                     delete outputNode.h;
                 } else {
-                    outputNode.title = result.kind === 'video' ? 'Video' : 'Image';
+                    refreshDefaultNodeTitle(outputNode);
                 }
                 if(historyGroup){
                     const pos = historyGroupPositionForNode(outputNode);
@@ -5920,7 +6289,7 @@
                 group.x = pos.x;
                 group.y = pos.y;
                 group.type = 'smart-image';
-                group.title = 'Group';
+                if(!group.customTitle) group.title = 'Group';
                 addConnection(node.id, group.id, 'history');
                 return group;
             }
@@ -5947,7 +6316,7 @@
             const group = ensureHistoryGroupForNode(node);
             if(!group) return null;
             group.images = [...(group.images || []).map(img => stripImageGenerationMeta(img)), ...archived];
-            group.title = 'Group';
+            if(!group.customTitle) group.title = 'Group';
             delete group.w;
             delete group.h;
             return group;
@@ -5966,7 +6335,7 @@
             node.images = additions;
             delete node.w;
             delete node.h;
-            node.title = node.images.length > 1 ? 'Group' : 'Image';
+            refreshDefaultNodeTitle(node);
             if(historyGroup){
                 const pos = historyGroupPositionForNode(node);
                 historyGroup.x = pos.x;
@@ -6597,10 +6966,18 @@
             const b = screenToWorld(event);
             const minX = Math.min(a.x, b.x), minY = Math.min(a.y, b.y);
             const maxX = Math.max(a.x, b.x), maxY = Math.max(a.y, b.y);
-            const ids = nodes.filter(node => {
+            const baseIds = nodes.filter(node => {
+                if(isSmartFrameGroup(node)) return false;
                 const r = nodeRect(node);
                 return r.x < maxX && r.x + r.width > minX && r.y < maxY && r.y + r.height > minY;
             }).map(n => n.id);
+            const baseSet = new Set(baseIds);
+            const ids = baseIds.slice();
+            nodes.forEach(node => {
+                if(!isSmartFrameGroup(node)) return;
+                const members = groupMemberIds(node);
+                if(members.length && members.every(id => baseSet.has(id))) ids.push(node.id);
+            });
             setNodeSelection(ids);
             selectionState = null;
             selectionJustFinished = true;
@@ -6608,7 +6985,7 @@
             render();
             setTimeout(() => { selectionJustFinished = false; }, 0);
         }
-        function groupSelectedNodes(){
+        function mergeSelectedNodesIntoImageGroup(){
             const ids = selectedIds.length ? selectedIds.slice() : (selectedId ? [selectedId] : []);
             const selected = ids.map(id => nodes.find(n => n.id === id)).filter(n => n && (n.images || []).length);
             if(selected.length < 2){ toast(tr('smart.toastNeedGroup')); return; }
@@ -6638,7 +7015,7 @@
             if(!(source.images || []).length || !(target.images || []).length) return false;
             const sourceImages = (source.images || []).map(img => stripImageGenerationMeta({...img}));
             target.images = [...(target.images || []).map(img => stripImageGenerationMeta(img)), ...sourceImages];
-            target.title = 'Group';
+            if(!target.customTitle) target.title = 'Group';
             delete target.w;
             delete target.h;
             canvas.connections = (canvas.connections || []).map(c => {
@@ -6682,22 +7059,31 @@
         shell.addEventListener('mousedown', e => {
             if(!zoomPreviewState) return;
             if(e.button !== 0) return;
-            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
+            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
             e.preventDefault();
             e.stopPropagation();
         }, true);
         shell.addEventListener('click', e => {
             if(!zoomPreviewState) return;
             if(e.button !== 0) return;
-            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
+            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
             e.preventDefault();
             e.stopPropagation();
             exitZoomPreview(screenToWorld(e));
         }, true);
         shell.onmousedown = e => {
-            if(zoomPreviewState && e.button === 0 && !e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
-            if(e.target.closest('.image-node,.composer,.smart-back,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
+            if(zoomPreviewState && e.button === 0 && !e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            if(e.target.closest('.composer,.smart-back,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
             closeCreateMenu();
+            if(e.button === 1){
+                e.preventDefault();
+                didPan = false;
+                panState = {button:e.button, startX:e.clientX, startY:e.clientY, ox:viewport.x, oy:viewport.y};
+                shell.classList.add('panning');
+                shell.classList.add('middle-panning');
+                return;
+            }
+            if(e.target.closest('.image-node')) return;
             if(e.button === 0){
                 e.preventDefault();
                 didPan = false;
@@ -6705,16 +7091,17 @@
                 updateSelectionBox(e);
                 return;
             }
-            if(e.button !== 1) return;
-            e.preventDefault();
-            didPan = false;
-            panState = {button:e.button, startX:e.clientX, startY:e.clientY, ox:viewport.x, oy:viewport.y};
-            shell.classList.add('panning');
-            shell.classList.add('middle-panning');
         };
         shell.oncontextmenu = e => {
-            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
+            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
             e.preventDefault();
+            e.stopPropagation();
+            closeCreateMenu();
+            closeSmartEnhanceMenu();
+            smartImageToolbar?.classList.remove('open');
+            smartImageToolbar?.setAttribute('aria-hidden', 'true');
+            smartSelectionToolbar?.classList.remove('open');
+            smartSelectionToolbar?.setAttribute('aria-hidden', 'true');
             if(e.target.closest('.image-node')) return;
             if(selectedImageTarget()) openSmartImageParams(selectedImageTarget());
             else openSmartContextMenu(e);
@@ -6752,6 +7139,8 @@
                 const nodeEl = portEl?.closest?.('.image-node') || hitEl?.closest?.('.image-node');
                 let targetId = '', targetPort = '';
                 if(nodeEl && nodeEl.dataset.id && nodeEl.dataset.id !== portDragState.fromId){
+                    const targetNode = nodes.find(n => n.id === nodeEl.dataset.id);
+                    if(isSmartFrameGroup(targetNode)) return;
                     targetId = nodeEl.dataset.id;
                     if(portEl){
                         targetPort = portEl.dataset.port;
@@ -6842,7 +7231,7 @@
                             applyNodeMetaToImage(img, source);
                             source.images.splice(thumbDragState.imgIndex, 1);
                             if(source.images.length <= 1){
-                                source.title = 'Image';
+                                refreshDefaultNodeTitle(source);
                                 delete source.w; delete source.h;
                                 inheritNodeMetaFromImage(source);
                             }
@@ -6882,7 +7271,7 @@
             });
             if(assetLibraryOpen){
                 const hit = document.elementFromPoint(e.clientX, e.clientY);
-                if(hit && assetPanel.contains(hit)){
+                if(hit && assetPanel.contains(hit) && !isSmartFrameGroup(node)){
                     setAssetDragOver(true);
                     clearDropHighlight();
                     render();
@@ -6945,7 +7334,7 @@
                 let stateChanged = false;
                 const hit = document.elementFromPoint(e.clientX, e.clientY);
                 const droppedOnAssetPanel = assetLibraryOpen && hit && assetPanel.contains(hit);
-                if(droppedOnAssetPanel && draggedNode && (draggedNode.images || []).length){
+                if(droppedOnAssetPanel && !isSmartFrameGroup(draggedNode) && draggedNode && (draggedNode.images || []).length){
                     const imagesToSave = (draggedNode.images || []).filter(img => img?.url);
                     imagesToSave.forEach(img => addUrlToAssetLibrary(img.url, img.name || draggedNode.title || 'image'));
                     (dragState.group || [{id:dragState.id, ox:dragState.ox, oy:dragState.oy}]).forEach(item => {
@@ -6960,7 +7349,7 @@
                     scheduleSave();
                     return;
                 }
-                if(draggedNode && (draggedNode.images || []).length && (dragState.ctrlGroup || (dragState.group || []).length <= 1)){
+                if(!isSmartFrameGroup(draggedNode) && draggedNode && (draggedNode.images || []).length && (dragState.ctrlGroup || (dragState.group || []).length <= 1)){
                     const r = nodeRect(draggedNode);
                     const target = rectOverlapNode(draggedNode.id, r.x, r.y, r.width, r.height, dragState.groupIds);
                     if(target && (target.images || []).length && (dragState.ctrlGroup || (target.images || []).length > 1)){
@@ -6999,7 +7388,6 @@
         };
         shell.addEventListener('wheel', e => {
             if(e.target.closest('.composer,.smart-back,.image-edit-modal,.asset-panel,.asset-toggle,.smart-param-modal')) return;
-            if(!e.altKey) return;
             e.preventDefault();
             const rect = shell.getBoundingClientRect();
             const sx = e.clientX - rect.left;
@@ -7080,7 +7468,7 @@
             }
             if((e.ctrlKey || e.metaKey) && key === 'e' && !isEditableTarget(e.target)){
                 e.preventDefault();
-                groupSelectedNodes();
+                mergeSelectedNodesIntoImageGroup();
                 return;
             }
             if((e.ctrlKey || e.metaKey) && e.shiftKey && key === 'h' && !isEditableTarget(e.target)){
@@ -7095,7 +7483,12 @@
             }
             if((e.ctrlKey || e.metaKey) && e.shiftKey && key === 'g' && !isEditableTarget(e.target)){
                 e.preventDefault();
-                splitGroupNode(selectedNode());
+                if(!ungroupSelectedFrameGroups()) splitGroupNode(selectedNode());
+                return;
+            }
+            if((e.ctrlKey || e.metaKey) && key === 'enter' && composer?.classList.contains('open')){
+                e.preventDefault();
+                setComposerExpanded(!composerExpanded);
                 return;
             }
             if((e.ctrlKey || e.metaKey) && key === 'v' && !isEditableTarget(e.target) && nodeClipboard?.nodes?.length){
@@ -7117,15 +7510,22 @@
             }
             if((e.key === 'Delete' || e.key === 'Backspace') && (selectedId || selectedIds.length) && !isEditableTarget(e.target)){
                 e.preventDefault();
-                const ids = selectedIds.length ? selectedIds.slice() : [selectedId];
+                const ids = selectedNodeIdsForClone();
                 pushUndo();
-                ids.forEach(id => { undoSuppressed = true; deleteNode(id); undoSuppressed = false; });
+                const idSet = new Set(ids);
+                nodes = nodes.filter(node => !idSet.has(node.id));
+                if(canvas) canvas.connections = (canvas.connections || []).filter(c => !idSet.has(c.from) && !idSet.has(c.to));
+                nodes.forEach(node => {
+                    if(Array.isArray(node.inputNodeIds)) node.inputNodeIds = node.inputNodeIds.filter(inputId => !idSet.has(inputId));
+                    if(isSmartFrameGroup(node) && Array.isArray(node.memberIds)) node.memberIds = node.memberIds.filter(memberId => !idSet.has(memberId));
+                });
+                clearSelection();
                 render();
                 scheduleSave();
             }
             if(e.ctrlKey && String(e.key).toLowerCase() === 'g' && !isEditableTarget(e.target)){
                 e.preventDefault();
-                groupSelectedNodes();
+                createFrameGroupFromSelection();
             }
         });
         engineSelect.onchange = () => { settings.engine = engineSelect.value; syncApiKindToggleVisibility(); renderDynamicParams(); scheduleSave(); };
@@ -7152,6 +7552,7 @@
         const promptResize = document.getElementById('promptResize');
         if(promptResize){
             promptResize.addEventListener('mousedown', e => {
+                if(composerExpanded) return;
                 if(e.button !== 0) return;
                 e.preventDefault(); e.stopPropagation();
                 promptResizeState = {
@@ -7162,6 +7563,12 @@
         }
         runBtn.onclick = runGeneration;
         cascadeRunBtn.onclick = runSmartCascade;
+        composerExpandBtn?.addEventListener('mousedown', e => e.stopPropagation());
+        composerExpandBtn?.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            setComposerExpanded(!composerExpanded);
+        });
         fileInput.onchange = () => {
             handleFiles(fileInput.files, uploadTargetId || selectedId);
             uploadTargetId = '';
@@ -7292,6 +7699,17 @@
             event.stopPropagation();
             const btn = event.target.closest('[data-smart-tool]');
             if(btn) handleSmartTool(btn.dataset.smartTool);
+        });
+        smartSelectionToolbar?.addEventListener('mousedown', event => event.stopPropagation());
+        smartSelectionToolbar?.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            const btn = event.target.closest('[data-smart-selection-tool]');
+            if(!btn) return;
+            const action = btn.dataset.smartSelectionTool;
+            if(action === 'group') createFrameGroupFromSelection();
+            if(action === 'ungroup') ungroupSelectedFrameGroups();
+            if(action === 'duplicate') duplicateSelectedSmartNodes();
         });
         smartEnhanceMenu?.addEventListener('mousedown', event => event.stopPropagation());
         smartEnhanceMenu?.addEventListener('click', event => {

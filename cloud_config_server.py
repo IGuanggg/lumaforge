@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 from email.message import EmailMessage
 from typing import Dict, Any
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -35,7 +35,7 @@ AVATAR_TYPES = {
 TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_TOKEN_TTL_SECONDS", str(30 * 24 * 60 * 60)))
 RESET_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_RESET_TOKEN_TTL_SECONDS", str(30 * 60)))
 EMAIL_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_EMAIL_TOKEN_TTL_SECONDS", str(24 * 60 * 60)))
-CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "2.0.14").strip() or "2.0.14"
+CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "2.0.15").strip() or "2.0.15"
 CLOUD_PUBLIC_URL = os.getenv("CLOUD_PUBLIC_URL", "").strip().rstrip("/")
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
@@ -2955,7 +2955,7 @@ def media_download(sha256: str, user=Depends(current_user)):
 
 
 @app.post("/api/media/upload")
-async def media_upload(request: Request, file: UploadFile = File(...), metadata: str = "", user=Depends(current_user)):
+async def media_upload(request: Request, file: UploadFile = File(...), metadata: str = Form(default=""), user=Depends(current_user)):
     settings = require_backup_settings()
     raw = await file.read()
     if not raw:
@@ -2978,7 +2978,41 @@ async def media_upload(request: Request, file: UploadFile = File(...), metadata:
     with db() as conn:
         existing = conn.execute("SELECT * FROM user_media WHERE user_id = ? AND sha256 = ?", (user["id"], sha)).fetchone()
     if existing:
-        return {"ok": True, "skipped": True, "item": media_row_to_dict(existing)}
+        ts = now_ms()
+        with db() as conn:
+            conn.execute(
+                """
+                UPDATE user_media
+                SET
+                    title=COALESCE(NULLIF(?, ''), title),
+                    media_type=COALESCE(NULLIF(?, ''), media_type),
+                    content_type=COALESCE(NULLIF(?, ''), content_type),
+                    width=CASE WHEN ? > 0 THEN ? ELSE width END,
+                    height=CASE WHEN ? > 0 THEN ? ELSE height END,
+                    source_type=COALESCE(NULLIF(?, ''), source_type),
+                    prompt=COALESCE(NULLIF(?, ''), prompt),
+                    model=COALESCE(NULLIF(?, ''), model),
+                    updated_at=?
+                WHERE user_id = ? AND sha256 = ?
+                """,
+                (
+                    title,
+                    media_type,
+                    content_type,
+                    width,
+                    width,
+                    height,
+                    height,
+                    str(meta.get("source_type") or "")[:80],
+                    str(meta.get("prompt") or "")[:4000],
+                    str(meta.get("model") or "")[:300],
+                    ts,
+                    user["id"],
+                    sha,
+                ),
+            )
+            row = conn.execute("SELECT * FROM user_media WHERE user_id = ? AND sha256 = ?", (user["id"], sha)).fetchone()
+        return {"ok": True, "skipped": True, "metadata_updated": True, "item": media_row_to_dict(row)}
 
     object_key = media_object_key(user["id"], sha, file.filename or title, settings)
     client = backup_s3_client(settings)
