@@ -17,8 +17,8 @@
         })();
     </script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260528-smart-canvas-reconcile1"></script>
-    <script src="/static/i18n.js?v=20260528-smart-canvas-reconcile1"></script>
+    <script src="/static/theme.js?v=20260529-v2014-canvas-polish1"></script>
+    <script src="/static/i18n.js?v=20260529-v2014-canvas-polish1"></script>
     <style>
 :root {
             --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.9); --card:#fff;
@@ -42,8 +42,9 @@
         button,input,select,textarea { font:inherit; }
         button { border:0; cursor:pointer; }
         button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline:0; box-shadow:0 0 0 4px rgba(37,99,235,.16); }
-        .shell { position:relative; width:100vw; height:100vh; overflow:hidden; background-color:var(--page); background-image:radial-gradient(var(--grid) 1px, transparent 1px); background-size:24px 24px; cursor:grab; }
+        .shell { position:relative; width:100vw; height:100vh; overflow:hidden; background-color:var(--page); background-image:radial-gradient(var(--grid) 1px, transparent 1px); background-size:24px 24px; cursor:default; }
         .shell.panning { cursor:grabbing; }
+        .shell.middle-panning { cursor:grabbing; }
         .shell.zoom-preview { cursor:crosshair; }
         .world { position:absolute; left:0; top:0; width:6000px; height:4000px; transform-origin:0 0; }
         .smart-back { position:absolute; left:22px; top:22px; z-index:20; height:40px; padding:0 14px; border-radius:999px; display:flex; align-items:center; gap:8px; color:var(--text); background:var(--panel); border:1px solid var(--line); box-shadow:0 16px 40px var(--shadow); backdrop-filter:blur(16px); font-size:12px; font-weight:850; cursor:pointer; }
@@ -531,6 +532,7 @@
         .image-node.node-locked { outline:1px dashed rgba(100,116,139,.52); outline-offset:3px; }
         .toast { position:absolute; top:24px; right:24px; z-index:60; max-width:360px; padding:10px 13px; border-radius:14px; background:var(--panel); border:1px solid var(--line); color:var(--text); box-shadow:0 16px 44px var(--shadow); font-size:12px; font-weight:800; opacity:0; transform:translateY(-8px); pointer-events:none; transition:.18s ease; }
         .toast.show { opacity:1; transform:translateY(0); }
+        .smart-status-bar { position:absolute; left:50%; bottom:18px; z-index:22; transform:translateX(-50%); padding:7px 16px; border-radius:999px; background:var(--panel); border:1px solid var(--line); color:var(--muted); font-size:11px; font-weight:700; white-space:nowrap; pointer-events:none; box-shadow:0 6px 18px var(--shadow); backdrop-filter:blur(12px); opacity:.82; }
         .selection-box { position:absolute; z-index:18; border:1px solid var(--strong); background:rgba(15,23,42,.08); border-radius:10px; pointer-events:none; display:none; }
         .theme-dark .selection-box { background:rgba(248,250,252,.1); }
         .composer-actions { grid-area:run; display:flex; justify-content:flex-end; gap:6px; }
@@ -743,6 +745,7 @@
             <div class="asset-hover-name"></div>
         </div>
         <div id="selectionBox" class="selection-box"></div>
+        <div id="smartStatusBar" class="smart-status-bar" data-i18n="smart.hintControls"></div>
         <div id="smartParamModal" class="smart-param-modal" onclick="closeSmartParamModal()">
             <div class="smart-param-panel" onclick="event.stopPropagation()">
                 <div id="smartParamMedia" class="smart-param-media"></div>
@@ -754,6 +757,10 @@
                     <div id="smartParamContent"></div>
                     <div class="smart-param-actions">
                         <button class="smart-param-action primary" type="button" onclick="copySmartParamPrompt()"><i data-lucide="copy"></i><span>复制提示词</span></button>
+                        <button class="smart-param-action" type="button" onclick="copySmartParamAll()"><i data-lucide="clipboard-copy"></i><span>复制全部参数</span></button>
+                        <button class="smart-param-action" type="button" onclick="reuseSmartParam()"><i data-lucide="recycle"></i><span>复用参数</span></button>
+                        <button class="smart-param-action" type="button" onclick="regenerateFromSmartParam()"><i data-lucide="sparkles"></i><span>重新生成</span></button>
+                        <button class="smart-param-action" type="button" onclick="downloadSmartParamImage()"><i data-lucide="download"></i><span>下载图片</span></button>
                         <button class="smart-param-action" type="button" onclick="closeSmartParamModal()"><span>关闭</span></button>
                     </div>
                 </div>
@@ -1093,7 +1100,7 @@
         }
         function backToCanvasList(){
             savePromptDraftForCurrent();
-            const target = `/static/canvas.html?list=smart&v=20260526-asset-reliability1`;
+            const target = `/static/canvas.html?list=smart&v=20260529-v2014-canvas-polish1`;
             try {
                 if(window.parent && window.parent !== window){
                     window.parent.localStorage?.setItem('studio_active_page', 'smart-canvas');
@@ -1189,6 +1196,33 @@
             setNodeSelection(ids);
             toast(`已选择 ${ids.length} 个节点`);
             render();
+        }
+        function selectedComposerHasDraft(){
+            const node = selectedNode();
+            if(!node || node.type !== 'smart-image' || !composer?.classList.contains('open')) return false;
+            persistActiveComposerDraft();
+            return Boolean(
+                promptPlainText()
+                || String(node.promptDraftText || '').trim()
+                || String(node.promptDraftHtml || '').replace(/<br\s*\/?>/gi, '').trim()
+            );
+        }
+        function isBlankCanvasActionTarget(target){
+            if(!target) return false;
+            if(target.closest?.('.image-node,.composer,.smart-back,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return false;
+            return target === shell || target === world || Boolean(target.closest?.('#world, .connection-layer'));
+        }
+        function handleBlankCanvasAction(event){
+            if(selectionJustFinished || didPan || !isBlankCanvasActionTarget(event?.target)) return false;
+            if(document.getElementById('imageEditModal')?.classList.contains('open')) return false;
+            closeCreateMenu();
+            if(selectedComposerHasDraft()){
+                scheduleSave();
+                return true;
+            }
+            clearSelection();
+            render();
+            return true;
         }
         function selectedImageTarget(){
             const explicitNode = nodes.find(n => n.id === selectedImage.nodeId);
@@ -1689,6 +1723,40 @@
                 return;
             }
             navigator.clipboard?.writeText(text).then(() => toast('提示词已复制')).catch(() => toast('复制失败'));
+        }
+        function copySmartParamAll(){
+            const el = document.getElementById('smartParamContent');
+            if(!el){ toast('没有参数可复制'); return; }
+            const text = el.innerText || el.textContent || '';
+            navigator.clipboard?.writeText(text).then(() => toast('全部参数已复制')).catch(() => toast('复制失败'));
+        }
+        function reuseSmartParam(){
+            const target = smartParamTarget;
+            if(!target) return;
+            const node = nodes.find(n => n.id === target.nodeId);
+            if(!node) return;
+            closeSmartParamModal();
+            selectOnlyNode(node.id);
+            render();
+            toast('已选中节点，可修改参数后重新运行');
+        }
+        function regenerateFromSmartParam(){
+            const target = smartParamTarget;
+            if(!target) return;
+            const node = nodes.find(n => n.id === target.nodeId);
+            if(!node) return;
+            closeSmartParamModal();
+            selectOnlyNode(node.id);
+            render();
+            setTimeout(() => {
+                const runBtn = document.getElementById('runBtn');
+                if(runBtn) runBtn.click();
+            }, 120);
+        }
+        function downloadSmartParamImage(){
+            const target = smartParamTarget;
+            if(!target?.url) return;
+            downloadSmartUrl(target.url, 'smart-image.png');
         }
         function createSamePendingOutput(sourceNode, meta){
             const sourceRect = nodeRect(sourceNode);
@@ -2850,7 +2918,7 @@
             try { localStorage.setItem(SMART_CANVAS_ID_KEY, id); } catch(e) {}
             const url = new URL(window.location.href);
             url.searchParams.set('id', id);
-            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260526-asset-reliability1');
+            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260529-v2014-canvas-polish1');
             history.replaceState(null, '', url.toString());
         }
         async function ensureSmartCanvasId(){
@@ -6630,32 +6698,35 @@
             if(zoomPreviewState && e.button === 0 && !e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
             if(e.target.closest('.image-node,.composer,.smart-back,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
             closeCreateMenu();
-            if(e.button === 0 && e.ctrlKey){
+            if(e.button === 0){
                 e.preventDefault();
                 didPan = false;
                 selectionState = {startScreen:{x:e.clientX, y:e.clientY}, startWorld:screenToWorld(e)};
                 updateSelectionBox(e);
                 return;
             }
-            if(e.button !== 0 && e.button !== 1) return;
+            if(e.button !== 1) return;
             e.preventDefault();
             didPan = false;
             panState = {button:e.button, startX:e.clientX, startY:e.clientY, ox:viewport.x, oy:viewport.y};
             shell.classList.add('panning');
+            shell.classList.add('middle-panning');
+        };
+        shell.oncontextmenu = e => {
+            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-context-menu')) return;
+            e.preventDefault();
+            if(e.target.closest('.image-node')) return;
+            if(selectedImageTarget()) openSmartImageParams(selectedImageTarget());
+            else openSmartContextMenu(e);
         };
         shell.ondblclick = e => {
-            if(didPan || e.target.closest('.image-node,.composer,.smart-back,.image-edit-modal,.smart-param-modal,.create-menu,.smart-image-toolbar,.smart-context-menu')) return;
+            if(didPan || !isBlankCanvasActionTarget(e.target)) return;
             if(document.getElementById('imageEditModal')?.classList.contains('open')) return;
             e.preventDefault();
             openCreateMenu(e);
         };
         shell.onclick = e => {
-            if(selectionJustFinished) return;
-            if(didPan || e.target.closest('.image-node,.composer,.smart-back,.image-edit-modal,.smart-param-modal,.create-menu,.smart-image-toolbar,.smart-context-menu')) return;
-            if(document.getElementById('imageEditModal')?.classList.contains('open')) return;
-            closeCreateMenu();
-            clearSelection();
-            render();
+            handleBlankCanvasAction(e);
         };
         minimap?.addEventListener('mousedown', e => {
             if(e.button !== 0) return;
@@ -6792,7 +6863,7 @@
             if(panState){
                 const dx = e.clientX - panState.startX;
                 const dy = e.clientY - panState.startY;
-                if(Math.abs(dx) + Math.abs(dy) > 3) didPan = true;
+                if(Math.abs(dx) + Math.abs(dy) > 8) didPan = true;
                 viewport.x = panState.ox + dx;
                 viewport.y = panState.oy + dy;
                 applyViewport();
@@ -6858,9 +6929,12 @@
                 thumbDragState = null;
             }
             if(panState) {
+                const wasPan = didPan;
+                if(!wasPan && panState.button !== 1) handleBlankCanvasAction(e);
                 panState = null;
                 shell.classList.remove('panning');
-                scheduleSave();
+                shell.classList.remove('middle-panning');
+                if(wasPan) scheduleSave();
                 setTimeout(() => { didPan = false; }, 0);
             }
             if(smartMinimapDrag){
@@ -6924,7 +6998,8 @@
             }
         };
         shell.addEventListener('wheel', e => {
-            if(e.target.closest('.composer,.smart-back,.image-edit-modal,.asset-panel,.asset-toggle')) return;
+            if(e.target.closest('.composer,.smart-back,.image-edit-modal,.asset-panel,.asset-toggle,.smart-param-modal')) return;
+            if(!e.altKey) return;
             e.preventDefault();
             const rect = shell.getBoundingClientRect();
             const sx = e.clientX - rect.left;
@@ -7173,18 +7248,21 @@
             if(!event.target.closest('.smart-control')) closeAllSmartPopovers();
             event.stopPropagation();
         });
+        let isComposing = false;
+        promptInput.addEventListener('compositionstart', () => { isComposing = true; });
+        promptInput.addEventListener('compositionend', () => {
+            isComposing = false;
+            savePromptDraftForCurrent();
+            scheduleSave();
+        });
         promptInput.addEventListener('input', maybeOpenMentionPicker);
         promptInput.addEventListener('input', () => {
             delete promptInput.dataset.preserveDraftOnce;
-            savePromptDraftForCurrent();
+            if(!isComposing) savePromptDraftForCurrent();
             renderInputThumbsRow(selectedNode());
             scheduleSave();
         });
         promptInput.addEventListener('blur', () => {
-            savePromptDraftForCurrent();
-            scheduleSave();
-        });
-        promptInput.addEventListener('compositionend', () => {
             savePromptDraftForCurrent();
             scheduleSave();
         });

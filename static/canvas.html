@@ -18,8 +18,8 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260526-asset-reliability1"></script>
-    <script src="/static/i18n.js?v=20260526-asset-reliability1"></script>
+    <script src="/static/theme.js?v=20260529-v2014-canvas-polish1"></script>
+    <script src="/static/i18n.js?v=20260529-v2014-canvas-polish1"></script>
     <style>
 :root { --ease:cubic-bezier(.4,0,.2,1); --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.92); --card:rgba(255,255,255,.96); --card-solid:#fff; --soft:#f8fafc; --soft-2:#f1f5f9; --line:#e8edf3; --line-2:#cbd5e1; --text:#111827; --muted:#64748b; --faint:#94a3b8; --shadow:rgba(15,23,42,.08); --strong:#111827; --strong-text:#fff; }
         .theme-dark { --page:#0b1020; --grid:rgba(148,163,184,.16); --panel:rgba(17,24,39,.9); --card:rgba(15,23,42,.96); --card-solid:#111827; --soft:#1e293b; --soft-2:#263449; --line:#334155; --line-2:#64748b; --text:#f8fafc; --muted:#cbd5e1; --faint:#94a3b8; --shadow:rgba(0,0,0,.28); --strong:#f8fafc; --strong-text:#0f172a; }
@@ -184,7 +184,8 @@
         .theme-dark .agent-review-item { background:rgba(15,23,42,.62); }
         .theme-dark .agent-review-meter { background:rgba(148,163,184,.18); }
         .theme-dark .agent-log { background:rgba(15,23,42,.55); }
-        .board { position:absolute; inset:0; cursor:grab; background-color:var(--page); background-image:radial-gradient(var(--grid) 1px, transparent 1px); background-size:24px 24px; }
+        .board { position:absolute; inset:0; cursor:default; background-color:var(--page); background-image:radial-gradient(var(--grid) 1px, transparent 1px); background-size:24px 24px; }
+        .board.panning { cursor:grabbing; }
         body.canvas-knife .board,
         body.canvas-knife .node,
         body.canvas-knife .link-hit { cursor:crosshair !important; }
@@ -294,7 +295,7 @@
         .image-node .node-body { min-height:0; }
         .image-node.has-image .node-body,
         .image-node.has-image .image-preview-wrap,
-        .image-node.has-image img { cursor:grab; }
+        .image-node.has-image img { cursor:move; }
         .image-node.has-image .node-body:active,
         .image-node.has-image .image-preview-wrap:active,
         .image-node.has-image img:active { cursor:grabbing; }
@@ -870,7 +871,7 @@
             .gate-list { grid-template-columns:repeat(3, minmax(0, 1fr)); }
         }
     </style>
-    <link rel="stylesheet" href="/static/theme.css?v=20260526-asset-reliability1">
+    <link rel="stylesheet" href="/static/theme.css?v=20260529-v2014-canvas-polish1">
 </head>
 <body>
     <div id="shell" class="shell no-canvas">
@@ -1024,7 +1025,7 @@
                 <div id="nodes"></div>
             </div>
         </div>
-        <div class="hint editor-only" data-i18n="canvas.hint">拖拽画布移动，Ctrl 框选多选，拖动选中节点可一起移动。图片/提示词节点右下端口拖线到生成节点。</div>
+        <div class="hint editor-only" data-i18n="canvas.hint">中键拖动画布，左键框选/选择，Ctrl+A 全选节点，右键打开节点属性或菜单。图片/提示词节点右下端口拖线到生成节点。</div>
         <div id="outputLightbox" class="output-lightbox" onclick="closeOutputLightbox()">
             <div id="outputLightboxShell" class="output-lightbox-shell" onclick="event.stopPropagation()">
             <div id="outputPreview" class="output-preview">
@@ -1259,6 +1260,7 @@
         const logModal = document.getElementById('logModal');
         const logList = document.getElementById('logList');
         const errorModal = document.getElementById('errorModal');
+        const CANVAS_BUILD_ID = '20260529-v2014-canvas-polish1';
         const CANVAS_LIST_MODE = (() => {
             try {
                 const mode = new URLSearchParams(window.location.search).get('list') || '';
@@ -1266,6 +1268,10 @@
             } catch(e) {
                 return 'all';
             }
+        })();
+        const DIRECT_CANVAS_ID = (() => {
+            try { return new URLSearchParams(window.location.search).get('id') || ''; }
+            catch(e) { return ''; }
         })();
         function isSmartListMode(){
             return CANVAS_LIST_MODE === 'smart';
@@ -1310,6 +1316,26 @@
         let linkCreateState = null;
         let internalDrag = false;
         let selected = new Set();
+        function isSelectionModifier(event){
+            return Boolean(event?.ctrlKey || event?.metaKey);
+        }
+        function selectNodeForPointer(node, event){
+            if(!node) return;
+            if(isSelectionModifier(event)){
+                if(selected.has(node.id)) selected.delete(node.id);
+                else selected.add(node.id);
+                return;
+            }
+            if(!selected.has(node.id)){
+                selected.clear();
+                selected.add(node.id);
+            }
+        }
+        function selectAllCanvasNodes(){
+            if(!canvas || !nodes.length) return;
+            selected = new Set(nodes.map(node => node.id));
+            refreshSelectionVisuals();
+        }
         let saveTimer = null;
         let creatingCanvas = false;
         let createCanvasKind = 'classic';
@@ -3070,7 +3096,7 @@
         }
         function openSmartCanvasPage(id){
             if(!id) return;
-            window.location.href = `/static/smart-canvas.html?id=${encodeURIComponent(id)}&v=20260526-asset-reliability1`;
+            window.location.href = `/static/smart-canvas.html?id=${encodeURIComponent(id)}&v=${encodeURIComponent(CANVAS_BUILD_ID)}`;
         }
         function toggleEmojiPicker(id, event){
             event?.preventDefault();
@@ -5646,10 +5672,6 @@
             el.dataset.id = node.id;
             el.onclick = (e) => {
                 e.stopPropagation();
-                if(isNodeControl(e.target)) return;
-                if(e.ctrlKey || e.metaKey) selected.has(node.id) ? selected.delete(node.id) : selected.add(node.id);
-                else if(!selected.has(node.id)) { selected.clear(); selected.add(node.id); }
-                refreshSelectionVisuals();
             };
             el.oncontextmenu = e => {
                 if(!CANVAS_GENERATOR_TYPES.includes(node.type) && node.type !== 'output') return;
@@ -5689,6 +5711,8 @@
                             openEditor(e);
                             return;
                         }
+                        selectNodeForPointer(node, e);
+                        refreshSelectionVisuals();
                         startNodeDrag(e, node);
                     };
                     body.ondragover = e => {
@@ -5809,6 +5833,8 @@
             });
             el.onmousedown = e => {
                 if(e.button !== 0 || !isNodeDragSurface(e.target)) return;
+                selectNodeForPointer(node, e);
+                refreshSelectionVisuals();
                 startNodeDrag(e, node);
             };
             const canInput = ['generator','comfy','output','llm','msgen','video'].includes(node.type) || (node.type === 'loop' && node.imageInput);
@@ -5816,7 +5842,12 @@
             if(canInput) el.insertAdjacentHTML('beforeend', `<div class="port in" title="${tr('canvas.connectHere')}"></div>`);
             if(canOutput) el.insertAdjacentHTML('beforeend', `<div class="port out" title="${tr('canvas.dragConnect')}"></div>`);
             el.insertAdjacentHTML('beforeend', `<div class="resize-handle" title="${tr('canvas.resize')}"></div>`);
-            el.querySelector('.node-head').onmousedown = e => { if(e.button === 0) startNodeDrag(e, node); };
+            el.querySelector('.node-head').onmousedown = e => {
+                if(e.button !== 0) return;
+                selectNodeForPointer(node, e);
+                refreshSelectionVisuals();
+                startNodeDrag(e, node);
+            };
             el.querySelector('.resize-handle').onmousedown = e => { if(e.button === 0 && !e.shiftKey) startNodeResize(e, node); };
             el.ondragstart = e => { e.preventDefault(); e.stopPropagation(); };
             const out = el.querySelector('.port.out');
@@ -9349,6 +9380,11 @@
             if(startKnifeDrag(e)) return;
             e.preventDefault();
             e.stopPropagation();
+            if(node && !selected.has(node.id) && !isSelectionModifier(e)){
+                selected.clear();
+                selected.add(node.id);
+                refreshSelectionVisuals();
+            }
             let dragTarget = node;
             if(e.altKey){
                 const copy = cloneNode(node, 0, 0);
@@ -9559,6 +9595,7 @@
             }
             dragNode = null;
             dragBoard = null;
+            board?.classList.remove('panning');
             resizeNode = null;
             llmPaneDrag = null;
             knifeActive = false;
@@ -9911,25 +9948,29 @@
             const tag = target?.tagName;
             return tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable || target?.closest?.('select, option');
         }
+        function isBlankBoardTarget(target){
+            if(!target) return false;
+            if(target === board || target === world || target === nodesEl || target === linksEl) return true;
+            if(target.closest?.('.node, .port, .resize-handle, .selection-hub, .create-menu, .link-create-menu, .node-input-menu, .node-output-menu, .image-node-menu, .asset-dock, .canvas-toolbar')) return false;
+            return Boolean(target.closest?.('#world, #nodes, #links'));
+        }
 
         board.onmousedown = e => {
             if(!canvas) return;
-            if(e.button !== 0) return;
             if(startKnifeDrag(e)) return;
             // Dismiss any open native select dropdown
             if(document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
-            if(e.target !== board && e.target !== world && e.target !== nodesEl && e.target !== linksEl) return;
+            if(!isBlankBoardTarget(e.target)) return;
             closeCreateMenu();
-            if(e.ctrlKey || e.metaKey){
+            if(e.button === 0){
                 e.preventDefault();
                 startSelection(e);
                 return;
             }
-            if(selected.size){
-                selected.clear();
-                refreshSelectionVisuals();
-            }
+            if(e.button !== 1) return;
+            e.preventDefault();
             dragBoard = {sx:e.clientX, sy:e.clientY, ox:viewport.x, oy:viewport.y};
+            board.classList.add('panning');
             window.onmousemove = e2 => { viewport.x = dragBoard.ox + e2.clientX - dragBoard.sx; viewport.y = dragBoard.oy + e2.clientY - dragBoard.sy; applyViewport(); };
             window.onmouseup = endDrag;
         };
@@ -9947,7 +9988,7 @@
         board.ondblclick = null;
         board.oncontextmenu = e => {
             if(!canvas) return;
-            if(e.target !== board && e.target !== world && e.target !== nodesEl && e.target !== linksEl) return;
+            if(!isBlankBoardTarget(e.target)) return;
             e.preventDefault();
             e.stopPropagation();
             openCreateMenu(e.clientX, e.clientY);
@@ -10025,6 +10066,13 @@
             }
             if(e.key === 'Escape' && outputLightbox.classList.contains('open')) { closeOutputLightbox(); return; }
             if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') { e.preventDefault(); groupSelectedImages(); }
+            if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
+                const tag = document.activeElement?.tagName;
+                if(tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+                e.preventDefault();
+                selectAllCanvasNodes();
+                return;
+            }
             if((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
                 // 在输入框/可编辑元素里时，让浏览器原生 Ctrl+C 工作
                 const tag = document.activeElement?.tagName;
@@ -10095,6 +10143,10 @@
             applyTheme(localStorage.getItem('studio_theme') || localStorage.getItem(CANVAS_THEME_KEY) || 'light');
             if(window.StudioI18n) StudioI18n.apply();
             document.title = tr('canvas.title');
+            if(isSmartListMode() && DIRECT_CANVAS_ID){
+                window.location.replace(`/static/smart-canvas.html?id=${encodeURIComponent(DIRECT_CANVAS_ID)}&v=${encodeURIComponent(CANVAS_BUILD_ID)}`);
+                return;
+            }
             initOutputCompareEvents();
             initOutputPreviewZoomEvents();
             applyViewport();

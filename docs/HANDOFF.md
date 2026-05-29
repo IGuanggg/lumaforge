@@ -17,8 +17,8 @@ Last updated: 2026-05-28
 
 ## Current State
 
-- Current local app version in code: 2.0.13
-- Current build id: 20260528-smart-canvas-stability1
+- Current local app version in code: 2.0.14
+- Current build id: 20260529-v2014-canvas-polish1
 - Main local URL: http://localhost:3010/
 - Main app file: main.py
 - Desktop launcher: desktop_launcher.py
@@ -114,11 +114,11 @@ The update process must replace program files only. It must not overwrite user d
 
 ## Current User Request / Next Target
 
-Current planned version: 2.0.13
+Current planned version: 2.0.14
 
 Goal:
 
-v2.0.13 smart canvas interaction stability: input draft persistence across node switches, Ctrl+A multi-select with batch drag, render crash protection with previous-frame fallback, sidebar scroll isolation, continue SSL cert and update validation hardening.
+v2.0.14 smart canvas interaction polish: unified mouse interaction (left=select/marquee, middle=pan, right=properties), stable multi-select batch drag, input draft composition guard, enhanced params panel with copy-all/reuse/regenerate/download, Alt+wheel zoom boundary, status bar hint, cache-bust hardening.
 
 The user specifically asked for:
 

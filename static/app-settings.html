@@ -402,16 +402,16 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.0.13 智能画布交互稳定性修复</div>
-                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示，用来提醒这次智能画布交互加固和渲染防护。</div>
+                        <div class="welcome-title">v2.0.14 智能画布交互精修 + 桌面体验稳定版</div>
+                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示，用来提醒这次智能画布鼠标交互统一、多选移动稳定、输入草稿保护和属性面板增强。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
                 </div>
                 <div class="welcome-list">
-                    <div class="welcome-item"><i data-lucide="text-cursor-input" class="w-4 h-4"></i><span>修复智能画布输入框切换节点后草稿丢失</span></div>
-                    <div class="welcome-item"><i data-lucide="group" class="w-4 h-4"></i><span>Ctrl/Cmd+A 全选、多节点选择与批量移动</span></div>
-                    <div class="welcome-item"><i data-lucide="shield-check" class="w-4 h-4"></i><span>智能画布渲染防空白保护</span></div>
-                    <div class="welcome-item"><i data-lucide="monitor" class="w-4 h-4"></i><span>侧栏滚轮隔离，避免缩放干扰</span></div>
+                    <div class="welcome-item"><i data-lucide="mouse-pointer-click" class="w-4 h-4"></i><span>鼠标交互统一：左键选择/框选，中键拖动画布，右键打开属性</span></div>
+                    <div class="welcome-item"><i data-lucide="group" class="w-4 h-4"></i><span>多选与批量移动稳定，Ctrl+A 全选</span></div>
+                    <div class="welcome-item"><i data-lucide="text-cursor-input" class="w-4 h-4"></i><span>输入草稿不丢，中文输入法保护</span></div>
+                    <div class="welcome-item"><i data-lucide="scroll-text" class="w-4 h-4"></i><span>节点生成参数面板增强：复制全部、复用、重新生成、下载</span></div>
                 </div>
                 <div class="welcome-actions">
                     <button class="action-btn primary" id="welcome-run-diagnostics-btn" type="button"><i data-lucide="stethoscope" class="w-4 h-4"></i><span>运行诊断</span></button>
@@ -840,13 +840,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.0.13' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.0.14' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.0.13';
+            const version = appInfo?.version || '2.0.14';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }
@@ -1536,7 +1536,7 @@
                 const staticHealth = info.static_health || {};
                 const updateCapability = info.update_capability || {};
                 const checks = [
-                    {label:'当前版本', ok:info.version === '2.0.13', detail:info.version || '-'},
+                    {label:'当前版本', ok:info.version === '2.0.14', detail:info.version || '-'},
                     {label:'前端依赖', ok:!!staticHealth.ok, detail:staticHealth.ok ? `${Number(staticHealth.checked_count || 0)} 项完整` : `缺失 ${Number(staticHealth.missing_count || 0)} 项`},
                     {label:'素材文件', ok:Number(assets.missing_count || 0) === 0, detail:`缺失 ${Number(assets.missing_count || 0)} 个`},
                     {label:'缩略图', ok:Number(assets.thumb_missing_count || 0) === 0, detail:`待重建 ${Number(assets.thumb_missing_count || 0)} 个`, warnOnly:true},
