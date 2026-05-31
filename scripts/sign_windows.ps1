@@ -1,6 +1,6 @@
 ﻿#!/usr/bin/env pwsh
 # LumaForge Windows Code Signing Script
-# Usage: .\scripts\sign_windows.ps1
+# Usage: .\scripts\sign_windows.ps1 -Version 2.0.18
 #
 # Environment variables:
 #   WINDOWS_SIGN_CERT_PATH      - Path to .pfx certificate file
@@ -8,6 +8,8 @@
 #   WINDOWS_SIGN_TIMESTAMP_URL  - Timestamp server (default: http://timestamp.digicert.com)
 
 param(
+    [string]$Version = "2.0.18",
+    [string[]]$Files = @(),
     [string]$CertPath = $env:WINDOWS_SIGN_CERT_PATH,
     [string]$CertPassword = $env:WINDOWS_SIGN_CERT_PASSWORD,
     [string]$TimestampUrl = $env:WINDOWS_SIGN_TIMESTAMP_URL
@@ -65,15 +67,17 @@ Write-Host "[sign] Using signtool: $signtool"
 Write-Host "[sign] Certificate: $CertPath"
 Write-Host "[sign] Timestamp: $TimestampUrl"
 
-$files = @(
-    "dist\LumaForge\LumaForge.exe",
-    "dist\LumaForge\LumaForgeUpdater.exe",
-    "releases\LumaForge-Setup-2.0.15.exe"
-)
+if (-not $Files -or $Files.Count -eq 0) {
+    $Files = @(
+        "dist\LumaForge\LumaForge.exe",
+        "dist\LumaForge\LumaForgeUpdater.exe",
+        "releases\LumaForge-Setup-$Version.exe"
+    )
+}
 
 $signed = 0
 $failed = 0
-foreach ($file in $files) {
+foreach ($file in $Files) {
     if (-not (Test-Path $file)) {
         Write-Host "[sign] Skip (not found): $file"
         continue
@@ -93,3 +97,4 @@ Write-Host "[sign] Done. Signed $signed file(s)."
 if ($failed -gt 0) {
     exit 1
 }
+

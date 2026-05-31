@@ -24,8 +24,8 @@
         })();
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
-    <script src="/static/theme.js?v=20260529-v2015-smart-canvas-hardening1"></script>
-    <script src="/static/i18n.js?v=20260529-v2015-smart-canvas-hardening1"></script>
+    <script src="/static/theme.js?v=20260529-v2017-smart-storyboard-workbench1"></script>
+    <script src="/static/i18n.js?v=20260529-v2017-smart-storyboard-workbench1"></script>
     <style>
 /* 本地 Tailwind 工具类兜底：CDN 慢/未就绪时也能立刻给图标尺寸，避免首屏左侧栏空白 */
         .w-1\.5 { width: 0.375rem; }
@@ -264,57 +264,6 @@
             transition: background 0.3s, border-color 0.3s;
         }
 
-        .stage > .nano-monitor {
-            position:fixed;
-            top:36px;
-            right:40px;
-            z-index:80;
-            width:auto;
-            min-width:168px;
-            height:36px;
-            justify-content:center;
-            pointer-events:none;
-        }
-
-        .stage > .nano-monitor .divider {
-            max-width:1px;
-            opacity:1;
-        }
-
-        .stage > .nano-monitor .stat-group:last-child {
-            max-width:78px;
-            opacity:1;
-        }
-
-        .stage > .nano-monitor .label-nano {
-            max-width:48px;
-            opacity:.5;
-        }
-
-        .stage.is-canvas-page > .nano-monitor {
-            position:fixed;
-            top:auto;
-            right:auto;
-            bottom:18px;
-            left:50%;
-            transform:translateX(-50%);
-            min-width:190px;
-            height:38px;
-            font-weight:900;
-            box-shadow:0 14px 34px rgba(15,23,42,.12);
-        }
-
-        .stage.is-canvas-page.canvas-output-preview-open > .nano-monitor {
-            top:18px;
-            bottom:auto;
-            left:50%;
-            transform:translateX(-50%) scale(.92);
-            opacity:.72;
-            min-width:176px;
-            height:34px;
-            box-shadow:0 10px 26px rgba(15,23,42,.1);
-        }
-
         body.canvas-compact-nav .sidebar,
         body.canvas-compact-nav .sidebar:hover {
             width: 84px;
@@ -326,18 +275,13 @@
             transition-delay: 0s;
         }
 
-        body.canvas-compact-nav .sidebar:hover .side-pill,
-        body.canvas-compact-nav .sidebar:hover .nano-monitor {
+        body.canvas-compact-nav .sidebar:hover .side-pill {
             width: 44px;
             justify-content: center;
         }
 
         body.canvas-compact-nav .sidebar:hover .nav-text,
-        body.canvas-compact-nav .sidebar:hover .side-pill-text,
-        body.canvas-compact-nav .sidebar:hover .nano-monitor .divider,
-        body.canvas-compact-nav .sidebar:hover .nano-monitor .stat-group:last-child,
-        body.canvas-compact-nav .sidebar:hover .nano-monitor .label-nano,
-        body.canvas-compact-nav .sidebar:hover .nano-monitor #online-val {
+        body.canvas-compact-nav .sidebar:hover .side-pill-text {
             max-width: 0;
             opacity: 0;
         }
@@ -363,46 +307,6 @@
             pointer-events: auto;
         }
 
-        /* 侧栏状态监视器 */
-        .nano-monitor {
-            position: relative;
-            width:44px;
-            height:36px;
-            flex:0 0 36px;
-            z-index: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            background: var(--monitor-bg);
-            backdrop-filter: blur(12px);
-            padding: 0 11px;
-            border-radius: 999px;
-            border: 1px solid var(--monitor-border);
-            box-shadow: 0 4px 20px var(--monitor-shadow);
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            overflow:hidden;
-            transition: width 0.3s var(--fluid-ease) 0.5s, justify-content 0.3s var(--fluid-ease) 0.5s, background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
-        }
-
-        .sidebar:hover .nano-monitor {
-            width:170px;
-            justify-content:center;
-            transition-delay:0s;
-        }
-
-        .nano-monitor.is-busy {
-            background: var(--monitor-bg);
-            color: var(--text);
-            border-color: var(--monitor-border);
-            box-shadow: 0 6px 24px var(--monitor-shadow);
-        }
-
-        .nano-monitor.api-ok .pulse-dot { background:#10b981; box-shadow:0 0 0 4px rgba(16,185,129,.12); }
-        .nano-monitor.api-warn .pulse-dot { background:#f59e0b; box-shadow:0 0 0 4px rgba(245,158,11,.13); }
-        .nano-monitor.api-fail .pulse-dot { background:#ef4444; box-shadow:0 0 0 4px rgba(239,68,68,.13); }
-        .nano-monitor.api-none .pulse-dot { background:#94a3b8; box-shadow:0 0 0 4px rgba(148,163,184,.12); }
-
         .stat-group {
             display: flex;
             align-items: center;
@@ -416,48 +320,10 @@
             white-space:nowrap;
         }
 
-        .nano-monitor.is-busy .stat-group {
-            color: var(--text);
-        }
-
         .divider {
             width: 1px;
             height: 12px;
             background: var(--divider);
-        }
-
-        .nano-monitor .divider,
-        .nano-monitor .stat-group:last-child,
-        .nano-monitor .label-nano,
-        .nano-monitor #online-val {
-            max-width:0;
-            opacity:0;
-            overflow:hidden;
-            transition:max-width 0.25s var(--fluid-ease) 0.5s, opacity 0.2s 0.5s;
-        }
-
-        .sidebar:hover .nano-monitor .divider {
-            max-width:1px;
-            opacity:1;
-            transition-delay:0.1s;
-        }
-
-        .sidebar:hover .nano-monitor .stat-group:last-child {
-            max-width:78px;
-            opacity:1;
-            transition-delay:0.1s;
-        }
-
-        .sidebar:hover .nano-monitor .label-nano {
-            max-width:48px;
-            opacity:0.5;
-            transition-delay:0.1s;
-        }
-
-        .sidebar:hover .nano-monitor #online-val {
-            max-width:52px;
-            opacity:1;
-            transition-delay:0.1s;
         }
 
         .is-busy .divider {
@@ -496,70 +362,12 @@
             font-weight: 900;
         }
 
-        .api-status-popover {
-            position: fixed;
-            left: 92px;
-            bottom: 24px;
-            z-index: 120;
-            width: min(380px, calc(100vw - 116px));
-            max-height: min(520px, calc(100vh - 48px));
-            display: none;
-            flex-direction: column;
-            gap: 10px;
-            padding: 14px;
-            border-radius: 18px;
-            border: 1px solid var(--border);
-            background: var(--sidebar-bg);
-            color: var(--text);
-            box-shadow: 0 24px 70px rgba(15,23,42,.18);
-            backdrop-filter: blur(18px);
-            overflow: hidden;
-        }
-
-        @keyframes studio-popover-in {
-            from { opacity:0; transform:translateY(10px) scale(.985); }
-            to { opacity:1; transform:translateY(0) scale(1); }
-        }
         @keyframes studio-toast-in {
             from { opacity:0; transform:translateY(8px) scale(.98); }
             to { opacity:1; transform:translateY(0) scale(1); }
         }
-        @keyframes studio-dot-breathe {
-            0%, 100% { transform:scale(1); filter:saturate(1); }
-            50% { transform:scale(1.18); filter:saturate(1.2); }
-        }
-
-        .api-status-popover.open { display: flex; animation:studio-popover-in .18s var(--fluid-ease); transform-origin:left bottom; }
-        .api-status-popover[data-state="ok"] .api-status-title .pulse-dot { background:#10b981; box-shadow:0 0 0 4px rgba(16,185,129,.12); }
-        .api-status-popover[data-state="warn"] .api-status-title .pulse-dot { background:#f59e0b; box-shadow:0 0 0 4px rgba(245,158,11,.13); }
-        .api-status-popover[data-state="fail"] .api-status-title .pulse-dot { background:#ef4444; box-shadow:0 0 0 4px rgba(239,68,68,.13); }
-        .api-status-popover[data-state="none"] .api-status-title .pulse-dot { background:#94a3b8; box-shadow:0 0 0 4px rgba(148,163,184,.12); }
-        .api-status-popover.open .pulse-dot,
-        .nano-monitor .pulse-dot { animation:studio-dot-breathe 2.4s ease-in-out infinite; }
-        .api-status-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-        .api-status-title { display:flex; align-items:center; gap:8px; min-width:0; font-size:13px; font-weight:950; }
-        .api-status-title .pulse-dot { width:8px; height:8px; flex:0 0 auto; }
-        .api-status-actions { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
-        .api-status-btn { height:28px; padding:0 10px; border-radius:999px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:11px; font-weight:850; display:inline-flex; align-items:center; gap:6px; }
-        .api-status-btn:hover { border-color:var(--text); transform:translateY(-1px); }
-        .api-status-btn:active { transform:translateY(0) scale(.98); }
-        .api-status-btn:focus-visible,
         .nav-item:focus-visible,
         .side-pill:focus-visible { outline:0; box-shadow:0 0 0 4px var(--focus-ring); }
-        .api-status-btn:disabled { opacity:.55; cursor:wait; }
-        .api-status-summary { border:1px solid var(--border); background:var(--bg); border-radius:14px; padding:10px 11px; color:var(--muted); font-size:11.5px; font-weight:800; line-height:1.45; }
-        .api-status-list { min-height:0; overflow:auto; display:flex; flex-direction:column; gap:7px; padding-right:2px; }
-        .api-status-row { display:grid; grid-template-columns:10px minmax(0, 1fr) auto; gap:9px; align-items:center; border:1px solid var(--border); background:var(--bg); border-radius:13px; padding:9px 10px; transition:transform .14s var(--ui-ease), border-color .14s var(--ui-ease), box-shadow .14s var(--ui-ease); }
-        .api-status-row[data-provider-id] { cursor:pointer; }
-        .api-status-row[data-provider-id]:hover { border-color:var(--text); transform:translateY(-1px); box-shadow:0 10px 24px rgba(15,23,42,.08); }
-        .api-status-dot { width:8px; height:8px; border-radius:999px; background:#94a3b8; }
-        .api-status-row.ok .api-status-dot { background:#10b981; box-shadow:0 0 0 4px rgba(16,185,129,.12); }
-        .api-status-row.fail .api-status-dot { background:#ef4444; box-shadow:0 0 0 4px rgba(239,68,68,.12); }
-        .api-status-row.none .api-status-dot { background:#94a3b8; box-shadow:0 0 0 4px rgba(148,163,184,.12); }
-        .api-status-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:900; color:var(--text); }
-        .api-status-msg { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:2px; color:var(--muted); font-size:10.5px; font-weight:700; }
-        .api-status-meta { color:var(--muted); font-size:10.5px; font-weight:850; white-space:nowrap; }
-        .api-status-empty { border:1px dashed var(--border); border-radius:14px; background:var(--bg); color:var(--muted); text-align:center; padding:18px 12px; font-size:12px; font-weight:800; line-height:1.5; }
         .studio-toast-stack { position:fixed; right:24px; bottom:24px; z-index:240; display:flex; flex-direction:column; align-items:flex-end; gap:8px; pointer-events:none; }
         .studio-toast { position:relative; overflow:hidden; max-width:min(380px, calc(100vw - 48px)); padding:11px 14px 11px 16px; border-radius:14px; border:1px solid var(--border); background:var(--sidebar-bg); color:var(--text); box-shadow:0 18px 46px rgba(15,23,42,.18); backdrop-filter:blur(18px); font-size:12px; line-height:1.45; font-weight:850; animation:studio-toast-in .18s var(--fluid-ease); transition:opacity .18s var(--ui-ease), transform .18s var(--ui-ease); }
         .studio-toast::before { content:""; position:absolute; left:0; top:8px; bottom:8px; width:3px; border-radius:999px; background:#94a3b8; }
@@ -571,21 +379,12 @@
         .studio-toast.warn::before { background:#f59e0b; }
 
         @media (max-width:760px) {
-            .api-status-popover {
-                left: 12px;
-                right: 12px;
-                bottom: 18px;
-                width: auto;
-            }
             .studio-toast-stack { left:12px; right:12px; bottom:14px; align-items:stretch; }
             .studio-toast { max-width:none; }
         }
 
         @media (prefers-reduced-motion: reduce) {
-            .api-status-popover.open,
-            .studio-toast,
-            .api-status-popover.open .pulse-dot,
-            .nano-monitor .pulse-dot {
+            .studio-toast {
                 animation:none !important;
             }
         }
@@ -1223,15 +1022,6 @@
                     </svg>
                     <span class="nav-text" data-i18n="nav.imageEdit">图片编辑</span>
                 </div>
-                <div class="nav-item" onclick="switchUI(this, 'angle')">
-                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
-                    </svg>
-                    <span class="nav-text" data-i18n="nav.angle">角度控制</span>
-                </div>
-
                 <!-- 分隔线 -->
                 <div style="width:32px;height:1px;background:var(--border);margin:8px auto;transition:background 0.3s;"></div>
 
@@ -1320,43 +1110,16 @@
                     </svg>
                     <span class="side-pill-text" data-i18n="common.appSettings">应用设置</span>
                 </button>
-                <div class="nano-monitor api-none" id="nano-monitor" title="API 状态为手动检测，点击打开面板后可手动检测">
-                    <div class="stat-group">
-                        <div class="pulse-dot"></div>
-                        <div class="spinner-nano"></div>
-                        <span class="label-nano">API</span>
-                        <span id="online-val">0/0</span>
-                    </div>
-                    <div class="divider"></div>
-                    <div class="stat-group">
-                        <span class="label-nano">QUEUE</span>
-                        <span id="queue-val">0</span>
-                    </div>
-                </div>
             </div>
 
         </aside>
-        <div id="api-status-popover" class="api-status-popover" data-state="none" aria-hidden="true">
-            <div class="api-status-head">
-                <div class="api-status-title">
-                    <span class="pulse-dot"></span>
-                    <span id="api-status-title">API 状态</span>
-                </div>
-                <div class="api-status-actions">
-                    <button id="api-status-refresh" class="api-status-btn" type="button">手动检测</button>
-                    <button id="api-status-close" class="api-status-btn" type="button">关闭</button>
-                </div>
-            </div>
-            <div id="api-status-summary" class="api-status-summary">API 状态已改为手动检测，点击“手动检测”才会请求后端。</div>
-            <div id="api-status-list" class="api-status-list"></div>
-        </div>
         <div id="studio-toast-stack" class="studio-toast-stack" aria-live="polite"></div>
         <script>
             /* 在侧栏 DOM 解析完后立即把 active 类移到当前页对应的入口，避免首屏先在文生图上闪一下 */
             (function(){
                 try {
                     var pageId = localStorage.getItem('studio_active_page') || 'smart-canvas';
-                    if(pageId === 'online' || pageId === 'zimage') pageId = 'smart-canvas';
+                    if(pageId === 'online' || pageId === 'zimage' || pageId === 'angle') pageId = 'smart-canvas';
                     if(pageId) {
                         document.querySelectorAll('.nav-item.active, .side-pill.active').forEach(function(n){
                             n.classList.remove('active');
@@ -1372,7 +1135,6 @@
             <iframe id="frame-zimage" data-src="/static/online.html" scrolling="yes"></iframe>
             <iframe id="frame-enhance" data-src="/static/enhance.html" scrolling="yes"></iframe>
             <iframe id="frame-klein" data-src="/static/klein.html" scrolling="yes"></iframe>
-            <iframe id="frame-angle" data-src="/static/angle.html" scrolling="yes"></iframe>
             <iframe id="frame-gpt-chat" data-src="/static/gpt-chat.html" scrolling="yes"></iframe>
             <iframe id="frame-smart-canvas" data-src="/static/canvas.html?list=smart" class="active" scrolling="yes"></iframe>
             <iframe id="frame-canvas" data-src="/static/canvas.html" scrolling="yes"></iframe>
@@ -1615,14 +1377,10 @@
         const ACCOUNT_AVATAR_MAX_BYTES = 5 * 1024 * 1024;
         const DEFAULT_PAGE_ID = 'smart-canvas';
         const HIDDEN_UNTIL_3_PAGE_IDS = ['zimage','online'];
-        const PAGE_IDS = ['zimage','enhance','klein','angle','gpt-chat','smart-canvas','canvas','assets','api-settings','comfyui-settings','app-settings'];
-        const APP_BUILD_ID = '20260529-v2015-smart-canvas-hardening1';
-        const API_LIVENESS_CACHE_KEY = 'studio_api_liveness_manual_cache_v2';
-        let appStatus = { online_count: 0, api_ok_count: 0, api_total: 0, api_failed_count: 0, api_state: 'none', api_message: 'API 状态未检测，点击手动检测才会请求后端', queue_text: '0', busy: false };
+        const PAGE_IDS = ['zimage','enhance','klein','gpt-chat','smart-canvas','canvas','assets','api-settings','comfyui-settings','app-settings'];
+        const APP_BUILD_ID = '20260529-v2017-smart-storyboard-workbench1';
+        let appStatus = { online_count: 0, queue_text: '0', busy: false };
         let accountState = { logged_in:false, email:'', email_verified:false, display_name:'', avatar_url:'', base_url:'', custom_cloud:false };
-        let apiLivenessState = null;
-        let apiLivenessLoading = false;
-        let apiLivenessBootstrapped = false;
 
         function showStudioToast(message, type = 'info', timeout = 2200) {
             const stack = document.getElementById('studio-toast-stack');
@@ -2253,7 +2011,6 @@
             document.querySelectorAll('iframe').forEach(frame => {
                 try { frame.contentWindow?.postMessage({ type:'providers-changed' }, '*'); } catch(e) {}
             });
-            markApiLivenessStale();
         }
 
         function filenameFromDisposition(disposition, fallback) {
@@ -2294,7 +2051,7 @@
         try {
             const apiChannel = new BroadcastChannel('studio-api');
             apiChannel.onmessage = event => {
-                if(event.data?.type === 'providers-changed') markApiLivenessStale();
+                if(event.data?.type === 'providers-changed') return;
             };
         } catch(e) {}
 
@@ -2448,6 +2205,12 @@
                 showStudioToast(event.data.message || event.data.text || '', event.data.level || event.data.kind || 'info');
                 return;
             }
+            if(event.data?.type === 'canvas-status') {
+                const text = String(event.data.text || '');
+                if(/failed|失败|错误|异常/i.test(text)) showStudioToast(text, 'error');
+                else if(/saved|synced|已保存|同步完成/i.test(text)) appStatus.canvas_status = text;
+                return;
+            }
             if(event.data?.type === 'canvas-output-preview') {
                 document.querySelector('.stage')?.classList.toggle('canvas-output-preview-open', !!event.data.open);
                 return;
@@ -2584,36 +2347,11 @@
         document.addEventListener('DOMContentLoaded', () => {
             applyRememberedAccount();
             loadAccountState();
-            document.getElementById('nano-monitor')?.addEventListener('click', event => {
-                event.stopPropagation();
-                toggleApiStatusPopover();
-            });
-            document.getElementById('api-status-refresh')?.addEventListener('click', event => {
-                event.stopPropagation();
-                syncApiLiveness(true);
-            });
-            document.getElementById('api-status-close')?.addEventListener('click', event => {
-                event.stopPropagation();
-                toggleApiStatusPopover(false);
-            });
-            document.getElementById('api-status-list')?.addEventListener('click', event => {
-                const row = event.target?.closest?.('.api-status-row[data-provider-id]');
-                const providerId = row?.dataset?.providerId || '';
-                if(providerId) openApiSettingsForProvider(providerId);
-            });
         }, { once:true });
         document.addEventListener('keydown', event => {
             if(event.key === 'Escape') {
                 closeAccountCenter();
-                toggleApiStatusPopover(false);
             }
-        });
-        document.addEventListener('click', event => {
-            const popover = document.getElementById('api-status-popover');
-            const monitor = document.getElementById('nano-monitor');
-            if(!popover?.classList.contains('open')) return;
-            if(popover.contains(event.target) || monitor?.contains(event.target)) return;
-            toggleApiStatusPopover(false);
         });
         document.getElementById('account-overlay')?.addEventListener('click', event => {
             if(event.target?.id === 'account-overlay') closeAccountCenter();
@@ -2629,204 +2367,10 @@
             document.querySelectorAll('iframe').forEach(sendAppStatusToFrame);
         }
 
-        function escapeApiHtml(value) {
-            return String(value == null ? '' : value).replace(/[&<>"']/g, ch => ({
-                '&':'&amp;',
-                '<':'&lt;',
-                '>':'&gt;',
-                '"':'&quot;',
-                "'":'&#39;'
-            }[ch]));
-        }
-
-        function apiRowState(item) {
-            if(item?.enabled === false) return 'none';
-            if(item?.ok === true) return 'ok';
-            if(item?.ok === null || item?.ok === undefined) return 'none';
-            return 'fail';
-        }
-
-        function apiRowMeta(item) {
-            if(item?.enabled === false) return '禁用';
-            if(item?.ok === true) {
-                if(Number(item.latency_ms) > 0) return `${Number(item.latency_ms)}ms`;
-                if(Number(item.model_count) > 0) return `${Number(item.model_count)} 模型`;
-                return '可用';
-            }
-            if(Number(item?.status) > 0) return `HTTP ${Number(item.status)}`;
-            return '异常';
-        }
-
-        function openApiSettingsForProvider(providerId) {
-            const cleanId = String(providerId || '').trim();
-            if(!cleanId) return;
-            toggleApiStatusPopover(false);
-            const frame = document.getElementById('frame-api-settings');
-            const query = `/static/api-settings.html?provider=${encodeURIComponent(cleanId)}`;
-            if(frame) frame.src = withBuildId(query);
-            switchUI(pageTrigger('api-settings'), 'api-settings');
-            showStudioToast('已打开对应 API 平台设置', 'success');
-        }
-
-        function renderApiStatusPopover() {
-            const popover = document.getElementById('api-status-popover');
-            const title = document.getElementById('api-status-title');
-            const summary = document.getElementById('api-status-summary');
-            const list = document.getElementById('api-status-list');
-            if(!popover || !summary || !list) return;
-            const data = apiLivenessState || {};
-            const state = ['ok','warn','fail','none'].includes(data.state) ? data.state : 'none';
-            const providers = Array.isArray(data.providers) ? data.providers : [];
-            popover.dataset.state = state;
-            if(title) title.textContent = `API 状态 ${Number(data.ok_count || 0)}/${Number(data.total || 0)}`;
-            const checkedAt = Number(data.checked_at || 0);
-            const checkedText = checkedAt ? ` · ${new Date(checkedAt * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}` : '';
-            const refreshText = apiLivenessLoading ? ' · 正在刷新' : checkedText;
-            summary.textContent = `${data.message || 'API 状态未检测，点击“手动检测”才会请求后端'}${refreshText}`;
-            if(apiLivenessLoading && !providers.length) {
-                list.innerHTML = '<div class="api-status-empty">正在检测 API 平台，请稍等。</div>';
-                return;
-            }
-            if(!providers.length) {
-                list.innerHTML = '<div class="api-status-empty">API 状态为手动检测；需要时点击上方“手动检测”。</div>';
-                return;
-            }
-            list.innerHTML = providers.map(item => {
-                const rowState = apiRowState(item);
-                const name = item.name || item.id || '未命名平台';
-                const message = item.message || (item.enabled === false ? '已禁用' : '未返回检测信息');
-                return `
-                    <div class="api-status-row ${rowState}" data-provider-id="${escapeApiHtml(item.id || '')}" title="打开 API 设置：${escapeApiHtml(name)}">
-                        <span class="api-status-dot"></span>
-                        <div>
-                            <div class="api-status-name">${escapeApiHtml(name)}</div>
-                            <div class="api-status-msg">${escapeApiHtml(message)}</div>
-                        </div>
-                        <div class="api-status-meta">${escapeApiHtml(apiRowMeta(item))}</div>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        function toggleApiStatusPopover(force) {
-            const popover = document.getElementById('api-status-popover');
-            if(!popover) return;
-            const next = typeof force === 'boolean' ? force : !popover.classList.contains('open');
-            if(next) renderApiStatusPopover();
-            popover.classList.toggle('open', next);
-            popover.setAttribute('aria-hidden', next ? 'false' : 'true');
-        }
-
-        function applyApiLiveness(data) {
-            const monitor = document.getElementById('nano-monitor');
-            const apiVal = document.getElementById('online-val');
-            const state = data?.state || 'none';
-            const okCount = Number(data?.ok_count || 0);
-            const total = Number(data?.total || 0);
-            const failedCount = Number(data?.failed_count || 0);
-            apiLivenessState = data || null;
-            appStatus.api_ok_count = okCount;
-            appStatus.api_total = total;
-            appStatus.api_failed_count = failedCount;
-            appStatus.api_state = state;
-            appStatus.api_message = data?.message || 'API 状态未知';
-            if(apiVal) apiVal.innerText = total ? `${okCount}/${total}` : '0/0';
-            if(monitor) {
-                monitor.classList.remove('api-ok', 'api-warn', 'api-fail', 'api-none');
-                monitor.classList.add(`api-${state}`);
-                const details = (data?.providers || [])
-                    .filter(item => item.enabled !== false)
-                    .map(item => `${item.name || item.id}: ${item.ok ? '成功' : item.message || '失败'}`)
-                    .slice(0, 5)
-                    .join(' | ');
-                monitor.title = details ? `${appStatus.api_message} · ${details}` : appStatus.api_message;
-            }
-            renderApiStatusPopover();
-            broadcastAppStatus();
-        }
-
-        function loadCachedApiLiveness() {
-            try {
-                const raw = localStorage.getItem(API_LIVENESS_CACHE_KEY);
-                if(!raw) return null;
-                const data = JSON.parse(raw);
-                if(!data || typeof data !== 'object' || !Array.isArray(data.providers)) return null;
-                const age = Date.now() / 1000 - Number(data.checked_at || 0);
-                if(!Number.isFinite(age) || age > 24 * 3600) return null;
-                return data;
-            } catch(e) {
-                return null;
-            }
-        }
-
-        function saveCachedApiLiveness(data) {
-            try {
-                if(data && Array.isArray(data.providers)) {
-                    localStorage.setItem(API_LIVENESS_CACHE_KEY, JSON.stringify(data));
-                }
-            } catch(e) {}
-        }
-
-        function markApiLivenessStale() {
-            if(apiLivenessState) {
-                apiLivenessState = {
-                    ...apiLivenessState,
-                    message: 'API 配置已变更，点击“手动检测”刷新状态'
-                };
-            } else {
-                apiLivenessState = {
-                    state:'none',
-                    ok_count:0,
-                    total:0,
-                    failed_count:0,
-                    message:'API 状态未检测，点击“手动检测”才会请求后端',
-                    providers:[]
-                };
-            }
-            applyApiLiveness(apiLivenessState);
-        }
-
-        async function syncApiLiveness(force = false) {
-            if(!force) return;
-            const refreshBtn = document.getElementById('api-status-refresh');
-            if(force && refreshBtn) refreshBtn.disabled = true;
-            apiLivenessLoading = true;
-            renderApiStatusPopover();
-            try {
-                const res = await fetch('/api/providers/liveness', { cache:'no-store' });
-                const data = await res.json();
-                if(!res.ok) throw new Error(data.detail || 'API 状态检测失败');
-                apiLivenessLoading = false;
-                saveCachedApiLiveness(data);
-                applyApiLiveness(data);
-                if(force) showStudioToast(data.message || 'API 状态已刷新', data.state === 'fail' ? 'error' : data.state === 'warn' ? 'warn' : 'success');
-            } catch(e) {
-                apiLivenessLoading = false;
-                if(apiLivenessState && !force) {
-                    renderApiStatusPopover();
-                    broadcastAppStatus();
-                } else {
-                    applyApiLiveness({ state:'fail', ok_count:0, total:appStatus.api_total || 0, failed_count:appStatus.api_total || 0, message:e.message || 'API 状态检测失败', providers:[] });
-                }
-                if(force) showStudioToast(e.message || 'API 状态检测失败', 'error');
-            } finally {
-                if(force && refreshBtn) refreshBtn.disabled = false;
-            }
-        }
-
-        function bootstrapApiLiveness() {
-            if(apiLivenessBootstrapped) return;
-            apiLivenessBootstrapped = true;
-            const cached = loadCachedApiLiveness();
-            if(cached) applyApiLiveness(cached);
-            else markApiLivenessStale();
-        }
-
         async function syncStatus() {
             try {
                 const res = await fetch(`/api/queue_status?client_id=${CID}`);
                 const data = await res.json();
-                const monitor = document.getElementById('nano-monitor');
                 const queueVal = document.getElementById('queue-val');
                 const logoDot = document.getElementById('logo-dot');
                 const total = data.total || 0;
@@ -2834,11 +2378,9 @@
                 appStatus.busy = pos > 0;
                 appStatus.queue_text = pos > 0 ? `${pos}/${total}` : (total > 0 ? String(total) : '0');
                 if (pos > 0) {
-                    if(monitor) monitor.classList.add('is-busy');
                     if(queueVal) queueVal.innerText = appStatus.queue_text;
                     if(logoDot) logoDot.style.backgroundColor = '#3b82f6';
                 } else {
-                    if(monitor) monitor.classList.remove('is-busy');
                     if(queueVal) queueVal.innerText = appStatus.queue_text;
                     if(logoDot) logoDot.style.backgroundColor = 'var(--text)';
                 }
@@ -2869,7 +2411,6 @@
             };
             setInterval(syncStatus, 2000);
             syncStatus();
-            bootstrapApiLiveness();
         }
 
         // --- 夜间模式 ---
@@ -2977,3 +2518,4 @@
 </body>
 
 </html>
+

@@ -6,7 +6,7 @@
 
 #define MyAppName "LumaForge"
 #define MyAppNameCN "光绘工坊"
-#define MyAppVersion "2.0.15"
+#define MyAppVersion "2.0.18"
 #define MyAppPublisher "IGuanggg"
 #define MyAppURL "https://github.com/IGuanggg/lumaforge"
 #define MyAppExeName "LumaForge.exe"
@@ -62,3 +62,4 @@ Type: filesandordirs; Name: "{app}\static"
 Type: filesandordirs; Name: "{app}\workflows"
 Type: files; Name: "{app}\LumaForge.exe"
 Type: files; Name: "{app}\LumaForgeUpdater.exe"
+

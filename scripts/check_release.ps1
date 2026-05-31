@@ -1,5 +1,5 @@
-param(
-    [string]$Version = "2.0.15"
+﻿param(
+    [string]$Version = "2.0.18"
 )
 
 $ErrorActionPreference = "Stop"
@@ -67,3 +67,4 @@ Write-Host "[5/5] Checking runtime data is not staged..."
 Assert-NotStagedRuntimeData
 
 Write-Host "Release check passed for LumaForge $Version."
+

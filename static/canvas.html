@@ -214,6 +214,7 @@
         .node.selected { outline:2px solid var(--strong); outline-offset:2px; }
         .node-head { height:42px; flex:0 0 42px; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:0 12px; border-bottom:1px solid var(--line); border-radius:21px 21px 0 0; overflow:hidden; cursor:move; }
         .node-title { font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
+        .node-title-input { min-width:0; flex:1; height:26px; border:1px solid var(--line); border-radius:8px; padding:0 8px; color:var(--text); background:var(--soft); font-size:12px; font-weight:850; outline:none; }
         /* 一键运行级联状态徽章 */
         .node-run-status { display:inline-flex; align-items:center; gap:4px; padding:2px 7px; border-radius:6px; font-size:10px; font-weight:800; letter-spacing:.04em; }
         .node-run-status.queued { background:#e5e7eb; color:#6b7280; }
@@ -520,9 +521,14 @@
         .menu-btn:hover { background:#f8fafc; color:#111827; }
         .menu-btn:disabled { opacity:.45; cursor:not-allowed; pointer-events:none; }
         .output-node-menu { width:260px; }
+        .node-action-menu { width:276px; }
         .output-node-menu .menu-btn { white-space:nowrap; }
         .output-node-menu .menu-btn i { flex:0 0 auto; }
         .output-node-menu .menu-btn span { white-space:nowrap; }
+        .node-menu-title { padding:7px 10px 2px; color:var(--text); font-size:12px; line-height:1.35; font-weight:950; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .node-menu-meta { padding:0 10px 6px; color:var(--faint); font-size:10px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .node-menu-input { width:calc(100% - 20px); height:34px; margin:5px 10px 8px; border:1px solid var(--line); border-radius:10px; padding:0 10px; color:var(--text); background:var(--soft); font-size:12px; font-weight:800; outline:none; }
+        .node-menu-input:focus { border-color:var(--strong); background:var(--card); }
         .menu-section-title { padding:7px 10px 4px; color:var(--faint); font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.08em; }
         .menu-divider { height:1px; margin:6px 0; background:var(--line); }
         .node-port-menu { width:auto; min-width:136px; padding:7px; border-radius:16px; }
@@ -1437,6 +1443,7 @@
         const MANAGED_CHAT_MODELS_KEY = 'canvas_chat_models_ordered';
         const CANVAS_THEME_KEY = 'canvas_theme';
         const CANVAS_NODE_DEFAULTS_KEY = 'canvas_node_defaults_v1';
+        const CANVAS_NODE_DRAFTS_KEY = 'lumaforge_canvas_node_drafts_v1';
         const DEFAULT_VIDEO_MODELS = [
             // Veo
             'veo2', 'veo2-fast', 'veo2-pro',
@@ -1476,6 +1483,61 @@
             if(!type || !patch) return;
             canvasNodeDefaults = {...(canvasNodeDefaults || {}), [type]: {...defaultsForNode(type), ...patch}};
             saveCanvasNodeDefaults();
+        }
+        function loadCanvasNodeDrafts(){
+            try {
+                const parsed = JSON.parse(localStorage.getItem(CANVAS_NODE_DRAFTS_KEY) || '{}');
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch(e) {
+                return {};
+            }
+        }
+        function writeCanvasNodeDrafts(drafts){
+            try { localStorage.setItem(CANVAS_NODE_DRAFTS_KEY, JSON.stringify(drafts || {})); } catch(e) {}
+        }
+        function draftCanvasKey(canvasId=canvas?.id){
+            return String(canvasId || '__no_canvas__');
+        }
+        function saveNodeDraft(nodeId, field, value){
+            if(!canvas?.id || !nodeId || !field) return;
+            const drafts = loadCanvasNodeDrafts();
+            const ckey = draftCanvasKey();
+            drafts[ckey] = drafts[ckey] || {};
+            drafts[ckey][nodeId] = drafts[ckey][nodeId] || {};
+            drafts[ckey][nodeId][field] = {value:String(value ?? ''), updatedAt:Date.now()};
+            writeCanvasNodeDrafts(drafts);
+        }
+        function clearCanvasNodeDrafts(canvasId=canvas?.id){
+            if(!canvasId) return;
+            const drafts = loadCanvasNodeDrafts();
+            if(drafts[draftCanvasKey(canvasId)]){
+                delete drafts[draftCanvasKey(canvasId)];
+                writeCanvasNodeDrafts(drafts);
+            }
+        }
+        function applyCanvasNodeDrafts(canvasId=canvas?.id){
+            if(!canvasId || !Array.isArray(nodes)) return;
+            const draftSet = loadCanvasNodeDrafts()[draftCanvasKey(canvasId)];
+            if(!draftSet || typeof draftSet !== 'object') return;
+            let changed = false;
+            nodes.forEach(node => {
+                const item = draftSet[node.id];
+                if(!item || typeof item !== 'object') return;
+                ['text','userInput','chatInput','systemPrompt','variablePrompt','name','title'].forEach(field => {
+                    if(!item[field]) return;
+                    const value = String(item[field].value ?? '');
+                    const current = String(node[field] ?? '');
+                    if(value !== current){
+                        node[field] = value;
+                        changed = true;
+                    }
+                });
+            });
+            if(changed) {
+                localCanvasDirty = true;
+                setStatus('Draft restored');
+                setTimeout(saveCanvas, 0);
+            }
         }
         function preferredListValue(list, value, fallback=''){
             const clean = String(value || '').trim();
@@ -2658,6 +2720,17 @@
         function setStatus(text){
             document.getElementById('saveState').textContent = text;
             if(gateStatus) gateStatus.textContent = text;
+            notifyCanvasStatus(text);
+        }
+        function notifyCanvasStatus(text){
+            try {
+                window.parent?.postMessage({
+                    type:'canvas-status',
+                    text:String(text || ''),
+                    canvas_id:canvas?.id || '',
+                    title:canvas?.title || ''
+                }, '*');
+            } catch(e) {}
         }
         function refreshGateViewControls(){
             canvasGate.classList.toggle('trash-mode', trashMode);
@@ -2826,6 +2899,7 @@
                 canvas.updated_at = Number(canvas.updated_at || Date.now());
                 lastCanvasUpdatedAt = canvas.updated_at;
                 localCanvasDirty = Boolean(saveCanvasAgain);
+                if(!saveCanvasAgain) clearCanvasNodeDrafts(canvas.id);
                 if(currentCanvasTime) currentCanvasTime.textContent = formatCanvasTime(canvas.updated_at);
                 setStatus('Saved');
                 loadCanvasList(false);
@@ -3221,6 +3295,7 @@
                 viewport = canvas.viewport || {x:0, y:0, scale:1};
                 lastCanvasUpdatedAt = Number(canvas.updated_at || 0);
                 localCanvasDirty = false;
+                applyCanvasNodeDrafts(canvas.id);
                 nodes.forEach(n => { if(n.running) n.running = false; });
                 sanitizeConnections();
                 pruneMissingComfyWorkflows();
@@ -3248,6 +3323,7 @@
                 viewport = canvas.viewport || {x:0, y:0, scale:1};
                 lastCanvasUpdatedAt = Number(canvas.updated_at || Date.now());
                 localCanvasDirty = false;
+                applyCanvasNodeDrafts(canvas.id);
                 nodes.forEach(n => { if(n.running) n.running = false; });
                 sanitizeConnections();
                 pruneMissingComfyWorkflows();
@@ -4336,6 +4412,203 @@
             refreshIcons();
             return true;
         }
+        function nodeTypeLabel(node){
+            if(!node) return 'Node';
+            if(node.type === 'image') return 'Image';
+            if(node.type === 'prompt') return 'Prompt';
+            if(node.type === 'loop') return tr('canvas.loopNode');
+            if(node.type === 'promptGroup') return 'Prompts';
+            if(node.type === 'group') return 'Group';
+            if(node.type === 'output') return 'Output';
+            if(node.type === 'llm') return 'LLM';
+            if(node.type === 'comfy') return 'ComfyUI';
+            if(node.type === 'msgen') return tr('canvas.modelscopeGenerate');
+            if(node.type === 'video') return tr('canvas.videoGenerateNode');
+            if(node.type === 'generator') return tr('canvas.apiGenerate');
+            return 'Node';
+        }
+        function nodeDisplayName(node){
+            if(!node) return 'Node';
+            if(node.type === 'image') return node.name || node.title || nodeTypeLabel(node);
+            return node.title || node.name || nodeTypeLabel(node);
+        }
+        function setNodeDisplayName(nodeId, value){
+            const node = nodes.find(n => n.id === nodeId);
+            if(!node) return;
+            const name = String(value || '').trim() || nodeTypeLabel(node);
+            if(node.type === 'image') node.name = name;
+            node.title = name;
+            saveNodeDraft(node.id, 'title', node.title);
+            if(node.type === 'image') saveNodeDraft(node.id, 'name', node.name);
+            render();
+            scheduleSave();
+        }
+        function startNodeTitleEdit(nodeId, event=null){
+            event?.preventDefault?.();
+            event?.stopPropagation?.();
+            const node = nodes.find(n => n.id === nodeId);
+            const titleEl = nodesEl.querySelector(`.node[data-id="${CSS.escape(nodeId)}"] .node-title`);
+            if(!node || !titleEl) return;
+            const input = document.createElement('input');
+            input.className = 'node-title-input';
+            input.value = nodeDisplayName(node);
+            input.setAttribute('aria-label', 'Node name');
+            const commit = () => setNodeDisplayName(nodeId, input.value);
+            input.onmousedown = e => e.stopPropagation();
+            input.onclick = e => e.stopPropagation();
+            input.onkeydown = e => {
+                if(e.key === 'Enter') {
+                    e.preventDefault();
+                    input.blur();
+                } else if(e.key === 'Escape') {
+                    e.preventDefault();
+                    render();
+                }
+            };
+            input.onblur = commit;
+            titleEl.replaceWith(input);
+            input.focus();
+            input.select();
+        }
+        function nodeParamPayload(node){
+            if(!node) return {};
+            const skip = new Set(['x','y','w','h','running','runStatus','_pending','_agentActive','_agentFailed','_agentIdx','_cascadeFailed','_cascadeIdx']);
+            const data = {};
+            Object.entries(node).forEach(([key, value]) => {
+                if(skip.has(key)) return;
+                if(typeof value === 'function') return;
+                data[key] = value;
+            });
+            if(['generator','msgen','comfy','video','llm'].includes(node.type)){
+                const connected = node.type === 'llm'
+                    ? llmInputText(node)
+                    : orderedSources(node, generatorSources(node)).map(src => src.prompt || '').filter(Boolean).join('\n\n');
+                const refs = node.type === 'llm'
+                    ? llmInputImages(node).map((url, i) => ({url, name:`image-${i + 1}`}))
+                    : orderedSources(node, generatorSources(node)).flatMap(src => src.refs || []);
+                data.connected_prompt = connected;
+                data.input_images = refs.map(ref => ({name:ref.name || '', url:ref.url || '', role:ref.role || ''}));
+            }
+            return data;
+        }
+        function selectedMenuNode(){
+            const ids = [...selected];
+            if(ids.length !== 1) return null;
+            return nodes.find(n => n.id === ids[0]) || null;
+        }
+        function openNodeActionMenu(nodeId, clientX, clientY){
+            const node = nodes.find(n => n.id === nodeId);
+            if(!node) return false;
+            createMenu.classList.remove('open');
+            closeLinkCreateMenu();
+            imageNodeMenu.classList.add('node-action-menu');
+            imageNodeMenu.classList.toggle('output-node-menu', node.type === 'output');
+            if(!selected.has(node.id)){
+                selected.clear();
+                selected.add(node.id);
+                refreshSelectionVisuals();
+            }
+            const runnable = ['generator','msgen','comfy','llm','video'].includes(node.type);
+            const hasPrompt = node.type === 'prompt' && String(node.text || '').trim();
+            const canPortMenu = CANVAS_GENERATOR_TYPES.includes(node.type);
+            const imageUrl = node.type === 'image' ? String(node.url || '') : '';
+            const imageCount = node.type === 'output' ? (node.images || []).map(outputUrlValue).filter(url => url && !isVideoUrl(url)).length : 0;
+            const downloadableCount = node.type === 'output' ? outputDownloadableImageUrls(node).length : 0;
+            imageNodeMenu.innerHTML = `
+                <div class="node-menu-title" title="${escapeAttr(nodeDisplayName(node))}">${escapeHtml(nodeDisplayName(node))}</div>
+                <div class="node-menu-meta">${escapeHtml(nodeTypeLabel(node))} · ${escapeHtml(node.id)}</div>
+                <input class="node-menu-input" data-node-name="${escapeAttr(node.id)}" value="${escapeAttr(nodeDisplayName(node))}" placeholder="节点名称">
+                <button class="menu-btn" data-node-rename="${escapeAttr(node.id)}"><i data-lucide="pencil" class="w-4 h-4"></i><span>重命名</span></button>
+                <button class="menu-btn" data-node-copy-params="${escapeAttr(node.id)}"><i data-lucide="copy" class="w-4 h-4"></i><span>复制参数</span></button>
+                ${hasPrompt ? `<button class="menu-btn" data-node-copy-prompt="${escapeAttr(node.id)}"><i data-lucide="text-cursor-input" class="w-4 h-4"></i><span>复制提示词</span></button>` : ''}
+                ${runnable ? `<button class="menu-btn" data-node-rerun="${escapeAttr(node.id)}"><i data-lucide="refresh-cw" class="w-4 h-4"></i><span>重新生成 / 运行</span></button>` : ''}
+                ${canPortMenu ? `<button class="menu-btn" data-node-ports="${escapeAttr(node.id)}"><i data-lucide="unplug" class="w-4 h-4"></i><span>添加输入 / 输出</span></button>` : ''}
+                ${node.type === 'image' ? `<div class="menu-divider"></div><button class="menu-btn" data-image-replace="${escapeAttr(node.id)}"><i data-lucide="image-plus" class="w-4 h-4"></i><span>替换图片</span></button>${imageUrl ? `<button class="menu-btn" data-node-copy-url="${escapeAttr(node.id)}"><i data-lucide="link" class="w-4 h-4"></i><span>复制图片地址</span></button>` : ''}` : ''}
+                ${node.type === 'output' ? `
+                    <div class="menu-divider"></div>
+                    <div class="menu-section-title">${tr('canvas.outputGroupActions')}</div>
+                    <button class="menu-btn" data-output-convert="${escapeAttr(node.id)}" ${imageCount ? '' : 'disabled'}><i data-lucide="replace" class="w-4 h-4"></i><span>${tr('canvas.outputConvertToInputGroup')}</span></button>
+                    <button class="menu-btn" data-output-copy="${escapeAttr(node.id)}" ${imageCount ? '' : 'disabled'}><i data-lucide="copy-plus" class="w-4 h-4"></i><span>${tr('canvas.outputCopyToInputGroup')}</span></button>
+                    <div class="menu-divider"></div>
+                    <div class="menu-section-title">${tr('canvas.outputFileActions')}</div>
+                    <button class="menu-btn" data-output-download="${escapeAttr(node.id)}" ${downloadableCount ? '' : 'disabled'}><i data-lucide="download" class="w-4 h-4"></i><span>${tr('canvas.outputDownloadAllImages')}</span></button>
+                ` : ''}
+            `;
+            const menuWidth = node.type === 'output' ? 276 : 276;
+            imageNodeMenu.style.left = `${Math.max(10, Math.min(window.innerWidth - menuWidth - 10, clientX))}px`;
+            imageNodeMenu.style.top = `${Math.max(10, Math.min(window.innerHeight - 360, clientY))}px`;
+            imageNodeMenu.classList.add('open');
+            const nameInput = imageNodeMenu.querySelector('[data-node-name]');
+            const commitName = () => setNodeDisplayName(node.id, nameInput?.value || '');
+            if(nameInput){
+                nameInput.onmousedown = e => e.stopPropagation();
+                nameInput.onclick = e => e.stopPropagation();
+                nameInput.onkeydown = e => {
+                    if(e.key === 'Enter') {
+                        e.preventDefault();
+                        commitName();
+                        closeImageNodeMenu();
+                    }
+                    if(e.key === 'Escape') closeImageNodeMenu();
+                };
+                nameInput.onchange = commitName;
+            }
+            imageNodeMenu.querySelector('[data-node-rename]')?.addEventListener('click', e => {
+                e.stopPropagation();
+                commitName();
+                closeImageNodeMenu();
+            });
+            imageNodeMenu.querySelector('[data-node-copy-params]')?.addEventListener('click', async e => {
+                e.stopPropagation();
+                await copyTextToClipboard(JSON.stringify(nodeParamPayload(node), null, 2));
+                setStatus('Node params copied');
+                closeImageNodeMenu();
+            });
+            imageNodeMenu.querySelector('[data-node-copy-prompt]')?.addEventListener('click', async e => {
+                e.stopPropagation();
+                await copyTextToClipboard(node.text || '');
+                setStatus('Prompt copied');
+                closeImageNodeMenu();
+            });
+            imageNodeMenu.querySelector('[data-node-rerun]')?.addEventListener('click', e => {
+                e.stopPropagation();
+                closeImageNodeMenu();
+                runCanvasGenerate(node.id);
+            });
+            imageNodeMenu.querySelector('[data-node-ports]')?.addEventListener('click', e => {
+                e.stopPropagation();
+                closeImageNodeMenu();
+                openGeneratorNodeMenu(node.id, clientX, clientY);
+            });
+            imageNodeMenu.querySelector('[data-image-replace]')?.addEventListener('click', e => {
+                e.stopPropagation();
+                closeImageNodeMenu();
+                pickImageForNode(node.id);
+            });
+            imageNodeMenu.querySelector('[data-node-copy-url]')?.addEventListener('click', async e => {
+                e.stopPropagation();
+                await copyTextToClipboard(imageUrl);
+                setStatus('Image URL copied');
+                closeImageNodeMenu();
+            });
+            imageNodeMenu.querySelector('[data-output-convert]')?.addEventListener('click', e => {
+                e.stopPropagation();
+                convertOutputNodeToInputGroup(node.id);
+                closeImageNodeMenu();
+            });
+            imageNodeMenu.querySelector('[data-output-copy]')?.addEventListener('click', e => {
+                e.stopPropagation();
+                copyOutputNodeToInputGroup(node.id);
+                closeImageNodeMenu();
+            });
+            imageNodeMenu.querySelector('[data-output-download]')?.addEventListener('click', e => {
+                e.stopPropagation();
+                downloadOutputNodeImages(node.id);
+                closeImageNodeMenu();
+            });
+            refreshIcons();
+            return true;
+        }
         function openGeneratorNodeMenu(nodeId, clientX, clientY){
             const node = nodes.find(n => n.id === nodeId);
             if(!node || !CANVAS_GENERATOR_TYPES.includes(node.type)) return false;
@@ -4391,65 +4664,15 @@
             linkCreateState = null;
         }
         function openImageNodeMenu(nodeId, clientX, clientY){
-            const node = nodes.find(n => n.id === nodeId);
-            if(!node || node.type !== 'image') return;
-            closeCreateMenu();
-            imageNodeMenu.innerHTML = `<button class="menu-btn" data-image-replace="${escapeAttr(nodeId)}"><i data-lucide="image-plus" class="w-4 h-4"></i><span>替换</span></button>`;
-            imageNodeMenu.style.left = `${clientX}px`;
-            imageNodeMenu.style.top = `${clientY}px`;
-            imageNodeMenu.classList.add('open');
-            imageNodeMenu.querySelector('[data-image-replace]').onclick = e => {
-                e.stopPropagation();
-                closeImageNodeMenu();
-                pickImageForNode(nodeId);
-            };
-            refreshIcons();
+            return openNodeActionMenu(nodeId, clientX, clientY);
         }
         function openOutputNodeMenu(nodeId, clientX, clientY){
-            const node = nodes.find(n => n.id === nodeId);
-            if(!node || node.type !== 'output') return;
-            closeCreateMenu();
-            const imageCount = (node.images || []).map(outputUrlValue).filter(url => url && !isVideoUrl(url)).length;
-            const downloadableCount = outputDownloadableImageUrls(node).length;
-            imageNodeMenu.classList.add('output-node-menu');
-            imageNodeMenu.innerHTML = `
-                <div class="menu-section-title">${tr('canvas.outputGroupActions')}</div>
-                <button class="menu-btn" data-output-convert="${escapeAttr(nodeId)}" ${imageCount ? '' : 'disabled'}><i data-lucide="replace" class="w-4 h-4"></i><span>${tr('canvas.outputConvertToInputGroup')}</span></button>
-                <button class="menu-btn" data-output-copy="${escapeAttr(nodeId)}" ${imageCount ? '' : 'disabled'}><i data-lucide="copy-plus" class="w-4 h-4"></i><span>${tr('canvas.outputCopyToInputGroup')}</span></button>
-                <div class="menu-divider"></div>
-                <div class="menu-section-title">${tr('canvas.outputFileActions')}</div>
-                <button class="menu-btn" data-output-download="${escapeAttr(nodeId)}" ${downloadableCount ? '' : 'disabled'}><i data-lucide="download" class="w-4 h-4"></i><span>${tr('canvas.outputDownloadAllImages')}</span></button>
-            `;
-            const menuWidth = 260;
-            imageNodeMenu.style.left = `${Math.max(10, Math.min(window.innerWidth - menuWidth - 10, clientX))}px`;
-            imageNodeMenu.style.top = `${clientY}px`;
-            imageNodeMenu.classList.add('open');
-            const convertBtn = imageNodeMenu.querySelector('[data-output-convert]');
-            if(convertBtn){
-                convertBtn.onclick = e => {
-                    e.stopPropagation();
-                    convertOutputNodeToInputGroup(nodeId);
-                    closeImageNodeMenu();
-                };
-            }
-            imageNodeMenu.querySelector('[data-output-copy]').onclick = e => {
-                e.stopPropagation();
-                copyOutputNodeToInputGroup(nodeId);
-                closeImageNodeMenu();
-            };
-            const downloadBtn = imageNodeMenu.querySelector('[data-output-download]');
-            if(downloadBtn){
-                downloadBtn.onclick = e => {
-                    e.stopPropagation();
-                    downloadOutputNodeImages(nodeId);
-                    closeImageNodeMenu();
-                };
-            }
-            refreshIcons();
+            return openNodeActionMenu(nodeId, clientX, clientY);
         }
         function closeImageNodeMenu(){
             imageNodeMenu.classList.remove('open');
             imageNodeMenu.classList.remove('output-node-menu');
+            imageNodeMenu.classList.remove('node-action-menu');
             imageNodeMenu.innerHTML = '';
         }
         function outputImageUrls(node){
@@ -5660,6 +5883,46 @@
         function isNodeDragSurface(target){
             return !isNodeControl(target) && !target.closest('.port, .resize-handle, .output-img-wrap');
         }
+        function commitActiveNodeEditor(){
+            const active = document.activeElement;
+            if(!active || active === document.body) return;
+            if(!isEditableTarget(active)) return;
+            const nodeEl = active.closest?.('.node[data-id]');
+            const node = nodeEl ? nodes.find(n => n.id === nodeEl.dataset.id) : null;
+            if(!node) return;
+            if(node.type === 'prompt' && active.tagName === 'TEXTAREA'){
+                node.text = active.value;
+                saveNodeDraft(node.id, 'text', node.text);
+                scheduleSave();
+                syncGeneratorInputs();
+                refreshGeneratorInputViews();
+                return;
+            }
+            if(node.type === 'llm' && active.classList?.contains('llm-input-output')){
+                node.userInput = active.value;
+                saveNodeDraft(node.id, 'userInput', node.userInput);
+                scheduleSave();
+                return;
+            }
+            if(node.type === 'llm' && active.classList?.contains('llm-chat-input')){
+                node.chatInput = active.value;
+                saveNodeDraft(node.id, 'chatInput', node.chatInput);
+                scheduleSave();
+                return;
+            }
+            if(node.type === 'llm' && active.classList?.contains('llm-system')){
+                node.systemPrompt = active.value;
+                saveNodeDraft(node.id, 'systemPrompt', node.systemPrompt);
+                scheduleSave();
+            }
+        }
+        function commitAndBlurActiveNodeEditor(){
+            const active = document.activeElement;
+            commitActiveNodeEditor();
+            if(active && active !== document.body && isEditableTarget(active)) {
+                try { active.blur(); } catch(e) {}
+            }
+        }
         function renderNode(node){
             const el = document.createElement('div');
             const size = defaultNodeSize(node.type);
@@ -5674,13 +5937,11 @@
                 e.stopPropagation();
             };
             el.oncontextmenu = e => {
-                if(!CANVAS_GENERATOR_TYPES.includes(node.type) && node.type !== 'output') return;
                 e.preventDefault();
                 e.stopPropagation();
-                if(node.type === 'output') openOutputNodeMenu(node.id, e.clientX, e.clientY);
-                else openGeneratorNodeMenu(node.id, e.clientX, e.clientY);
+                openNodeActionMenu(node.id, e.clientX, e.clientY);
             };
-            const title = node.type === 'image' ? 'Image' : node.type === 'prompt' ? 'Prompt' : node.type === 'loop' ? tr('canvas.loopNode') : node.type === 'promptGroup' ? 'Prompts' : node.type === 'group' ? 'Group' : node.type === 'output' ? 'Output' : node.type === 'llm' ? 'LLM' : node.type === 'comfy' ? 'ComfyUI' : node.type === 'msgen' ? tr('canvas.modelscopeGenerate') : node.type === 'video' ? tr('canvas.videoGenerateNode') : tr('canvas.apiGenerate');
+            const title = nodeDisplayName(node);
             // 失败徽章只在一键运行模式中显示，单节点失败已通过 alert 提示
             const showStatus = ['generator','msgen','comfy','llm','video'].includes(node.type) && node.runStatus
                 && (node.runStatus !== 'failed' || node._cascadeFailed || node._agentFailed || node._agentActive);
@@ -5691,7 +5952,7 @@
                 const idx = node._agentIdx || node._cascadeIdx || '';
                 return `<span class="node-run-status ${node.runStatus}${node._agentActive ? ' agent' : ''}"><span class="dot"></span>${escapeHtml(label)}${idx?' '+idx:''}</span>`;
             })() : '';
-            el.innerHTML = `<div class="node-head"><span class="node-title">${title}</span><div style="display:flex;align-items:center;gap:8px">${statusHtml}<button onclick="deleteNode('${node.id}', event)" class="text-gray-300 hover:text-red-500"><i data-lucide="x" class="w-4 h-4"></i></button></div></div>`;
+            el.innerHTML = `<div class="node-head"><span class="node-title" title="双击重命名">${escapeHtml(title)}</span><div style="display:flex;align-items:center;gap:8px">${statusHtml}<button onclick="deleteNode('${node.id}', event)" class="text-gray-300 hover:text-red-500"><i data-lucide="x" class="w-4 h-4"></i></button></div></div>`;
             const body = document.createElement('div');
             body.className = 'node-body';
             if(node.type === 'image') {
@@ -5790,6 +6051,7 @@
                 bindScrollableText(textarea);
                 textarea.oninput = e => {
                     node.text = e.target.value;
+                    saveNodeDraft(node.id, 'text', node.text);
                     refreshPromptCounter(body, node.text);
                     scheduleSave();
                     syncGeneratorInputs();
@@ -5844,10 +6106,15 @@
             el.insertAdjacentHTML('beforeend', `<div class="resize-handle" title="${tr('canvas.resize')}"></div>`);
             el.querySelector('.node-head').onmousedown = e => {
                 if(e.button !== 0) return;
+                if(e.target.closest('.node-title') && e.detail >= 2) return;
                 selectNodeForPointer(node, e);
                 refreshSelectionVisuals();
                 startNodeDrag(e, node);
             };
+            const titleEl = el.querySelector('.node-title');
+            if(titleEl){
+                titleEl.ondblclick = e => startNodeTitleEdit(node.id, e);
+            }
             el.querySelector('.resize-handle').onmousedown = e => { if(e.button === 0 && !e.shiftKey) startNodeResize(e, node); };
             el.ondragstart = e => { e.preventDefault(); e.stopPropagation(); };
             const out = el.querySelector('.port.out');
@@ -6236,6 +6503,7 @@
             if(variable) {
                 variable.oninput = e => {
                     node.variablePrompt = loopEditorText(variable);
+                    saveNodeDraft(node.id, 'variablePrompt', node.variablePrompt);
                     refreshPreview();
                     scheduleSave();
                     syncGeneratorInputs();
@@ -6248,6 +6516,7 @@
                     e.stopPropagation();
                     btn.closest('.loop-token-chip')?.remove();
                     node.variablePrompt = loopEditorText(variable);
+                    saveNodeDraft(node.id, 'variablePrompt', node.variablePrompt);
                     refreshPreview();
                     scheduleSave();
                     syncGeneratorInputs();
@@ -6352,7 +6621,7 @@
             };
             wrap.querySelector('.llm-sys-toggle').onclick = e => { e.stopPropagation(); node.showSystem = !node.showSystem; render(); scheduleSave(); };
             const sysEl = wrap.querySelector('.llm-system');
-            if(sysEl){ sysEl.oninput = e => { node.systemPrompt = e.target.value; scheduleSave(); }; bindScrollableText(sysEl); }
+            if(sysEl){ sysEl.oninput = e => { node.systemPrompt = e.target.value; saveNodeDraft(node.id, 'systemPrompt', node.systemPrompt); scheduleSave(); }; bindScrollableText(sysEl); }
             wrap.querySelectorAll('[data-mode]').forEach(btn => {
                 btn.classList.toggle('active', mode === btn.dataset.mode);
                 btn.onclick = e => { e.stopPropagation(); node.mode = btn.dataset.mode; rememberLLMDefaults(node); render(); scheduleSave(); };
@@ -6393,7 +6662,7 @@
             const inputEl = container.querySelector('.llm-input-output');
             bindScrollableText(inputEl);
             if(!isReadonly){
-                inputEl.oninput = e => { node.userInput = e.target.value; };
+                inputEl.oninput = e => { node.userInput = e.target.value; saveNodeDraft(node.id, 'userInput', node.userInput); scheduleSave(); };
             }
             bindScrollableText(container.querySelector('.llm-result-output'));
             container.querySelector('.llm-pane-resizer').onmousedown = e => startLLMPaneResize(e, node);
@@ -6423,7 +6692,7 @@
             bindScrollableText(container.querySelector('.llm-chat-log'));
             bindScrollableText(container.querySelector('.llm-chat-input'));
             const chatInputEl = container.querySelector('.llm-chat-input');
-            chatInputEl.oninput = e => { node.chatInput = e.target.value; scheduleSave(); };
+            chatInputEl.oninput = e => { node.chatInput = e.target.value; saveNodeDraft(node.id, 'chatInput', node.chatInput); scheduleSave(); };
             chatInputEl.onkeydown = e => {
                 if(e.key === 'Enter' && !e.shiftKey && !e.isComposing){
                     e.preventDefault();
@@ -7545,6 +7814,7 @@
         async function runGenerator(genId, opts={}){
             const gen = nodes.find(n => n.id === genId);
             if(!gen || (gen.running && !opts.cascade)) return;
+            commitActiveNodeEditor();
             const sources = orderedSources(gen, generatorSources(gen));
             const prompt = sources.map(s => s.prompt).filter(Boolean).join('\n\n');
             const refs = sources.flatMap(s => s.refs || []);
@@ -7565,6 +7835,7 @@
             const beforeOutputs = new Set((gen.generatedOutputs || []).map(outputUrlValue).filter(Boolean));
             const currentRunImages = () => (gen.generatedOutputs || []).map(outputUrlValue).filter(Boolean).filter(url => !beforeOutputs.has(url));
             if(!opts.cascade){ gen.running = true; }
+            setStatus('Generating...');
             try {
                 for(let attempt = 0; attempt < 2; attempt++){
                     try {
@@ -7585,6 +7856,7 @@
                             refreshRunNodes(gen, out);
                             scheduleSave();
                             await saveCanvas();
+                            setStatus('Waiting for image result...');
                             const statuses = await Promise.all(taskInfos.map(task => pollCanvasImageTask(task.task_id)));
                             if(statuses.includes('failed')) throw new Error(gen.runError || tr('canvas.generationFailed'));
                             return {images:currentRunImages(), prompt:payload.prompt, originalPrompt, safetyRewritten, out};
@@ -7599,6 +7871,7 @@
                             addGenerationLog({run:safetyRewritten ? {...run, prompt:safetyRewritten, originalPrompt, safetyRewritten:true} : run, outputs:images, runMs:0});
                             refreshRunNodes(gen, null);
                             scheduleSave();
+                            setStatus('Generated');
                             return {images, prompt:payload.prompt, originalPrompt, safetyRewritten, out:null};
                         }
                     } catch(err) {
@@ -7608,6 +7881,7 @@
                         if(opts.safetyRewrite && attempt === 0 && prompt && looksLikePromptSafetyError(err)){
                             gen.runStatus = 'running';
                             gen.runError = '检测到可能的提示词审核拦截，正在安全改写后重试';
+                            setStatus('Rewriting prompt...');
                             refreshRunNodes(gen, out);
                             scheduleSave();
                             if(typeof opts.onSafetyRewriteStart === 'function') opts.onSafetyRewriteStart(err);
@@ -7636,6 +7910,7 @@
                 gen.running = false;
                 refreshRunNodes(gen, out);
                 scheduleSave();
+                setStatus('Generation failed');
                 if(opts.cascade) throw err;
                 showErrorModal(err.message || tr('canvas.generationFailed'), tr('canvas.apiFailed'));
             }
@@ -7643,6 +7918,7 @@
         async function runGeneratorLegacy(genId, opts={}){
             const gen = nodes.find(n => n.id === genId);
             if(!gen || (gen.running && !opts.cascade)) return;
+            commitActiveNodeEditor();
             const sources = orderedSources(gen, generatorSources(gen));
             const prompt = sources.map(s => s.prompt).filter(Boolean).join('\n\n');
             const refs = sources.flatMap(s => s.refs || []);
@@ -7658,6 +7934,7 @@
                 setTimeout(() => { gen.running = false; refreshRunNodes(gen, out); }, 2000);
             }
             else refreshRunNodes(gen, out);
+            setStatus('Generating...');
             try {
                 const payload = {
                     prompt: prompt || 'Edit the reference images.',
@@ -7681,12 +7958,14 @@
                 gen.runStatus = 'done'; gen.runError = '';
                 refreshRunNodes(gen, out);
                 scheduleSave();
+                setStatus('Generated');
             } catch(err) {
                 const metas = collectRunMetas(out, pendingIds);
                 addGenerationLog({run, outputs:[], runMs:Math.max(...metas.map(m => m.runMs || 0), 0), error:err.message || String(err)});
                 if(out) out._pending = (out._pending||[]).filter(p => !pendingIds.includes(p.id));
                 gen.runStatus = 'failed'; gen.runError = err.message || String(err);
                 refreshRunNodes(gen, out);
+                setStatus('Generation failed');
                 if(opts.cascade) throw err;
                 showErrorModal(err.message || tr('canvas.generationFailed'), tr('canvas.apiFailed'));
             }
@@ -7694,6 +7973,7 @@
         async function runVideoNode(nodeId, opts={}){
             const node = nodes.find(n => n.id === nodeId);
             if(!node || (node.running && !opts.cascade)) return;
+            commitActiveNodeEditor();
             const sources = orderedSources(node, generatorSources(node));
             const prompt = sources.map(s => s.prompt).filter(Boolean).join('\n\n');
             const refs = sources.flatMap(s => s.refs || []);
@@ -7706,6 +7986,7 @@
             if(out) out._pending = [...(out._pending || []), makePending(pendingId, run)];
             if(!opts.cascade){ node.running = true; refreshRunNodes(node, out); }
             else refreshRunNodes(node, out);
+            setStatus('Generating video...');
             try {
                 const result = await fetch('/api/canvas-video', {
                     method:'POST',
@@ -7735,12 +8016,14 @@
                 node.runStatus = 'done'; node.runError = '';
                 refreshRunNodes(node, out);
                 scheduleSave();
+                setStatus('Video generated');
             } catch(err) {
                 const meta = collectRunMeta(out, pendingId);
                 addGenerationLog({run, outputs:[], runMs:meta.runMs || 0, error:err.message || String(err)});
                 if(out) out._pending = (out._pending || []).filter(p => p.id !== pendingId);
                 node.runStatus = 'failed'; node.runError = err.message || String(err);
                 refreshRunNodes(node, out);
+                setStatus('Video generation failed');
                 if(opts.cascade) throw err;
                 alert(err.message || tr('canvas.videoFailed'));
             } finally {
@@ -7795,6 +8078,7 @@
         async function runComfyNode(nodeId, opts={}){
             const node = nodes.find(n => n.id === nodeId);
             if(!node || (node.running && !opts.cascade)) return;
+            commitActiveNodeEditor();
             const sources = orderedSources(node, generatorSources(node));
             const prompt = sources.map(s => s.prompt).filter(Boolean).join('\n\n');
             const refs = sources.flatMap(s => s.refs || []);
@@ -7814,6 +8098,7 @@
                 setTimeout(() => { node.running = false; refreshRunNodes(node, out); }, 2000);
             }
             else refreshRunNodes(node, out);
+            setStatus('Running ComfyUI...');
             try {
                 let images = [];
                 if(mode === 'text'){
@@ -7935,12 +8220,14 @@
                 node.runStatus = 'done'; node.runError = '';
                 refreshRunNodes(node, out);
                 scheduleSave();
+                setStatus('Generated');
             } catch(err) {
                 const meta = collectRunMeta(out, pendingId);
                 addGenerationLog({run, outputs:[], runMs:meta.runMs || 0, error:err.message || String(err)});
                 if(out) out._pending = (out._pending||[]).filter(p => p.id !== pendingId);
                 node.runStatus = 'failed'; node.runError = err.message || String(err);
                 refreshRunNodes(node, out);
+                setStatus('ComfyUI failed');
                 if(opts.cascade) throw err;
                 alert(err.message || actionFailed('canvas.comfyGenerate'));
             }
@@ -7972,22 +8259,26 @@
         async function runLLMNode(nodeId, opts={}){
             const node = nodes.find(n => n.id === nodeId);
             if(!node || (node.running && !opts.cascade)) return;
+            commitActiveNodeEditor();
             const input = llmInputText(node) || node.userInput || '';
             if(!input){
                 if(opts.cascade) throw new Error('LLM 缺少提示词输入');
                 alert(tr('canvas.needPromptToLLM')); return;
             }
             if(!opts.cascade){ node.running = true; refreshNodes([node.id]); }
+            setStatus('Running LLM...');
             try {
                 node.outputText = await callCanvasLLM(node, input, []);
                 if(!opts.cascade) node.running = false;
                 node.runStatus = 'done'; node.runError = '';
                 refreshNodes([node.id]);
                 scheduleSave();
+                setStatus('LLM done');
             } catch(err) {
                 if(!opts.cascade) node.running = false;
                 node.runStatus = 'failed'; node.runError = err.message || String(err);
                 refreshNodes([node.id]);
+                setStatus('LLM failed');
                 if(opts.cascade) throw err;
                 alert(err.message || 'LLM 运行失败');
             }
@@ -8246,7 +8537,9 @@
             const target = nodes.find(n => n.id === nodeId);
             if(!target) return;
             if(target.running){ alert('当前节点正在运行'); return; }
+            commitActiveNodeEditor();
             cascadeRunningIds.add(nodeId);
+            setStatus('Running workflow...');
             const order = computeCascadeOrder(nodeId);
             refreshNodes(cascadeUiNodeIds(nodeId, order));
             if(!order.length){ alert('没有可运行的生成节点'); return; }
@@ -8304,8 +8597,10 @@
                     node.runError = err.message || String(err);
                     node._cascadeFailed = true;
                     refreshNodes(cascadeUiNodeIds(nodeId, order));
+                    setStatus('Workflow failed');
                     return;
                 }
+                setStatus('Workflow done');
                 setTimeout(() => {
                     order.forEach(id => {
                         const n = nodes.find(x => x.id === id);
@@ -8357,6 +8652,7 @@
                             if(n2){ n2.runStatus = ''; n2._cascadeIdx = ''; }
                         }
                         refreshNodes(cascadeUiNodeIds(nodeId, order.slice(i)));
+                        setStatus('Workflow failed');
                         return;
                     }
                 }
@@ -8366,6 +8662,7 @@
             cascadeStopIds.delete(nodeId);
             cascadeSerialIds.delete(nodeId);
             refreshNodes(cascadeUiNodeIds(nodeId, order));
+            setStatus('Workflow done');
             // 全部完成：3 秒后清除状态徽章
             setTimeout(() => {
                 order.forEach(id => {
@@ -8482,6 +8779,7 @@
         async function runLLMChat(nodeId){
             const node = nodes.find(n => n.id === nodeId);
             if(!node || node.running) return;
+            commitActiveNodeEditor();
             const message = (node.chatInput || '').trim();
             if(!message) return;
             node.messages = node.messages || [];
@@ -8490,6 +8788,7 @@
             node.chatInput = '';
             node.running = true;
             refreshNodes([node.id]);
+            setStatus('Sending LLM message...');
             try {
                 const text = await callCanvasLLM(node, message, history);
                 node.messages.push({role:'assistant', content:text});
@@ -8497,9 +8796,11 @@
                 node.running = false;
                 refreshNodes([node.id]);
                 scheduleSave();
+                setStatus('LLM done');
             } catch(err) {
                 node.running = false;
                 refreshNodes([node.id]);
+                setStatus('LLM failed');
                 alert(err.message || 'LLM 运行失败');
             }
         }
@@ -8810,6 +9111,7 @@
             addGenerationLog({run:meta.run, outputs:images, runMs:meta.runMs || 0});
             refreshRunNodes(gen, out);
             scheduleSave();
+            setStatus('Generated');
         }
         function failCanvasImageTask(taskId, message){
             const found = findPendingTask(taskId);
@@ -8827,6 +9129,7 @@
             addGenerationLog({run, outputs:[], runMs, error:message || tr('canvas.generationFailed')});
             refreshRunNodes(gen, out);
             scheduleSave();
+            setStatus('Generation failed');
         }
         function resumeCanvasImageTasks(){
             nodes.filter(n => n.type === 'output').forEach(out => {
@@ -9247,9 +9550,9 @@
         }
 
         function startSelection(e){
+            commitAndBlurActiveNodeEditor();
             e.preventDefault();
             e.stopPropagation();
-            if(document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
             selectDrag = {sx:e.clientX, sy:e.clientY, x:e.clientX, y:e.clientY};
             document.body.classList.add('canvas-selecting');
             selectionBox.style.display = 'block';
@@ -9958,8 +10261,7 @@
         board.onmousedown = e => {
             if(!canvas) return;
             if(startKnifeDrag(e)) return;
-            // Dismiss any open native select dropdown
-            if(document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+            commitAndBlurActiveNodeEditor();
             if(!isBlankBoardTarget(e.target)) return;
             closeCreateMenu();
             if(e.button === 0){
@@ -9991,6 +10293,11 @@
             if(!isBlankBoardTarget(e.target)) return;
             e.preventDefault();
             e.stopPropagation();
+            const menuNode = selectedMenuNode();
+            if(menuNode){
+                openNodeActionMenu(menuNode.id, e.clientX, e.clientY);
+                return;
+            }
             openCreateMenu(e.clientX, e.clientY);
         };
         board.addEventListener('mousedown', e => {

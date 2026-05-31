@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$Version = "2.0.15"
+$Version = "2.0.18"
 
 Write-Host "[1/8] Cleaning dist and build..."
 Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
@@ -32,7 +32,7 @@ Copy-Item "dist\LumaForgeUpdater.exe" "dist\LumaForge\LumaForgeUpdater.exe" -For
 Write-Host "  OK: dist\LumaForge\LumaForgeUpdater.exe"
 
 Write-Host "[4/8] Attempting code signing for desktop executables..."
-& "$PSScriptRoot\sign_windows.ps1"
+& "$PSScriptRoot\sign_windows.ps1" -Version $Version -Files @("dist\LumaForge\LumaForge.exe", "dist\LumaForge\LumaForgeUpdater.exe")
 
 Write-Host "[5/8] Creating zip..."
 $zipName = "releases\LumaForge-$Version-desktop.zip"
@@ -57,7 +57,7 @@ if ($iscc) {
 }
 
 Write-Host "[7/8] Attempting code signing for installer..."
-& "$PSScriptRoot\sign_windows.ps1"
+& "$PSScriptRoot\sign_windows.ps1" -Version $Version -Files @("releases\LumaForge-Setup-$Version.exe")
 
 Write-Host "[8/8] Build summary:"
 Write-Host ""
@@ -69,3 +69,4 @@ Get-ChildItem releases\LumaForge* | ForEach-Object {
     Write-Host "  Release: $($_.Name) ($([math]::Round($_.Length/1MB, 1)) MB)"
     Write-Host "    SHA256: $hash"
 }
+

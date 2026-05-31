@@ -43,6 +43,7 @@ releases/
 logs/
 cache/
 updates/
+.codex-uvicorn.pid
 
 # OS
 Thumbs.db

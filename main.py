@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.15")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260529-v2015-smart-canvas-hardening1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.18")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260531-v2018-smart-canvas-release1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -1556,6 +1556,9 @@ class DownloadUrlRequest(BaseModel):
     url: str = Field(min_length=1, max_length=5000)
     filename: str = Field(default="", max_length=220)
 
+class CanvasAssetsCheckRequest(BaseModel):
+    urls: List[str] = []
+
 class CanvasAssetsDownloadRequest(BaseModel):
     urls: List[str] = []
     filename: str = Field(default="canvas-assets.zip", max_length=220)
@@ -2819,7 +2822,7 @@ def apimart_size_resolution(size):
     pixels = width * height
     if long_edge >= 3000 or pixels > 4_500_000:
         resolution = "4k"
-    elif long_edge >= 1800 or pixels > 1_800_000:
+    elif long_edge >= 2300 or pixels > 3_000_000:
         resolution = "2k"
     else:
         resolution = "1k"
@@ -3703,6 +3706,77 @@ def update_state_payload():
         "update_state_file": UPDATE_STATE_FILE,
     }
 
+def _probe_writable_dir(path: str, create: bool = True):
+    try:
+        if create:
+            os.makedirs(path, exist_ok=True)
+        if not os.path.isdir(path):
+            return {"ok": False, "path": path, "detail": "directory missing"}
+        probe = os.path.join(path, f".lumaforge-write-test-{uuid.uuid4().hex}.tmp")
+        with open(probe, "w", encoding="utf-8") as f:
+            f.write("ok")
+        os.remove(probe)
+        return {"ok": True, "path": path, "detail": "writable"}
+    except Exception as exc:
+        return {"ok": False, "path": path, "detail": str(exc)}
+
+def app_update_preflight_payload():
+    capability = desktop_update_capability()
+    is_frozen = getattr(sys, "frozen", False)
+    app_dir = desktop_program_dir()
+    protected_dirs = [
+        {"name": name, "path": os.path.join(RUNTIME_DIR, name), "protected": True}
+        for name in sorted(UPDATE_PROTECT_DIRS)
+    ]
+    checks = []
+    def add_check(check_id: str, label: str, ok: bool, detail: str = "", blocking: bool = True):
+        checks.append({
+            "id": check_id,
+            "label": label,
+            "ok": bool(ok),
+            "detail": detail,
+            "blocking": bool(blocking),
+        })
+    add_check("update_url", "Update source", bool(APP_UPDATE_CHECK_URL), APP_UPDATE_CHECK_URL or "not configured", True)
+    add_check("capability", "Update capability", bool(capability.get("supported")), capability.get("mode") or capability.get("reason") or "", True)
+    if is_frozen:
+        updater_path = capability.get("updater_path") or desktop_updater_path()
+        add_check("desktop_updater", "Desktop updater", bool(updater_path and os.path.isfile(updater_path)), updater_path or "LumaForgeUpdater.exe missing", True)
+    else:
+        add_check("source_mode", "Source mode", os.path.isfile(os.path.join(BASE_DIR, "main.py")), BASE_DIR, True)
+    for check_id, label, path in [
+        ("updates_dir", "Updates directory", UPDATE_DIR),
+        ("downloads_dir", "Download cache", UPDATE_DOWNLOADS_DIR),
+        ("staging_dir", "Staging directory", UPDATE_STAGING_DIR),
+        ("backups_dir", "Version backup directory", UPDATE_BACKUPS_DIR),
+        ("data_dir", "Local data directory", DATA_DIR),
+        ("assets_dir", "Assets directory", ASSETS_DIR),
+    ]:
+        probe = _probe_writable_dir(path)
+        add_check(check_id, label, probe["ok"], f"{probe['path']} - {probe['detail']}", check_id not in {"assets_dir"})
+    app_probe = _probe_writable_dir(app_dir, create=False)
+    add_check("app_dir_write", "Program directory write", app_probe["ok"], f"{app_probe['path']} - {app_probe['detail']}", not is_frozen)
+    add_check("protected_dirs", "Protected data folders", True, ", ".join(sorted(UPDATE_PROTECT_DIRS)), False)
+    blocking = [item for item in checks if item.get("blocking") and not item.get("ok")]
+    warnings = [item for item in checks if not item.get("blocking") and not item.get("ok")]
+    return {
+        "ok": not blocking,
+        "blocking_count": len(blocking),
+        "warning_count": len(warnings),
+        "current_version": APP_VERSION,
+        "build_id": APP_BUILD_ID,
+        "mode": capability.get("mode"),
+        "app_dir": app_dir,
+        "runtime_dir": RUNTIME_DIR,
+        "data_dir": DATA_DIR,
+        "assets_dir": ASSETS_DIR,
+        "updates_dir": UPDATE_DIR,
+        "protected_dirs": protected_dirs,
+        "checks": checks,
+        "blocking": blocking,
+        "warnings": warnings,
+    }
+
 def _is_zip_download_url(url: str) -> bool:
     """Check if a URL points to a .zip download (by inspecting the URL path, ignoring query params)."""
     try:
@@ -3960,6 +4034,7 @@ async def app_update_check():
     latest = normalized["latest_version"]
     is_newer = bool(latest and version_tuple(latest) > version_tuple(APP_VERSION))
     capability = desktop_update_capability()
+    preflight = app_update_preflight_payload()
     auto_update_supported = bool(capability.get("supported"))
     reason = str(capability.get("reason") or "")
     selected = normalized.get("selected_asset")
@@ -3987,6 +4062,7 @@ async def app_update_check():
         "auto_update_supported": auto_update_supported,
         "auto_update_reason": reason,
         "update_mode": capability.get("mode"),
+        "preflight": preflight,
         "raw": data,
     }
 
@@ -3994,6 +4070,11 @@ async def app_update_check():
 @app.get("/api/app/update-state")
 async def app_update_state():
     return update_state_payload()
+
+
+@app.get("/api/app/update-preflight")
+async def app_update_preflight():
+    return app_update_preflight_payload()
 
 
 def _safe_extract_zip(zip_path: str, dest_dir: str):
@@ -4590,6 +4671,26 @@ async def app_save_as(payload: DownloadUrlRequest):
         "size_bytes": len(raw),
         "content_type": content_type or "application/octet-stream",
     }
+
+@app.post("/api/canvas-assets/check")
+async def check_canvas_assets(payload: CanvasAssetsCheckRequest):
+    urls = []
+    for url in payload.urls or []:
+        if isinstance(url, str) and url.strip() and url.strip() not in urls:
+            urls.append(url.strip())
+    exists = {}
+    details = {}
+    for url in urls[:1000]:
+        local_path = output_file_from_url(url)
+        ok = bool(local_path and os.path.isfile(local_path) and os.path.getsize(local_path) > 0)
+        exists[url] = ok
+        details[url] = {
+            "exists": ok,
+            "size": os.path.getsize(local_path) if ok else 0,
+            "path": local_path or "",
+        }
+    missing = [url for url, ok in exists.items() if not ok]
+    return {"ok": True, "exists": exists, "missing": missing, "details": details}
 
 @app.post("/api/canvas-assets/download")
 async def download_canvas_assets(payload: CanvasAssetsDownloadRequest):
@@ -6259,10 +6360,17 @@ async def probe_provider_liveness_guarded(provider: dict):
         }
 
 @app.get("/api/providers/liveness")
-async def api_providers_liveness():
+async def api_providers_liveness(provider_id: str = ""):
     providers = load_api_providers()
-    enabled = [p for p in providers if p.get("enabled", True)]
-    details = await asyncio.gather(*[probe_provider_liveness_guarded(p) for p in providers]) if providers else []
+    target_id = (provider_id or "").strip()
+    if target_id:
+        probe_targets = [p for p in providers if p.get("id") == target_id]
+        if not probe_targets:
+            raise HTTPException(status_code=404, detail="API platform not found")
+    else:
+        probe_targets = providers
+    enabled = [p for p in probe_targets if p.get("enabled", True)]
+    details = await asyncio.gather(*[probe_provider_liveness_guarded(p) for p in probe_targets]) if probe_targets else []
     ok_count = sum(1 for item in details if item.get("enabled") and item.get("ok") is True)
     failed_count = sum(1 for item in details if item.get("enabled") and item.get("ok") is False)
     total = len(enabled)
@@ -6287,6 +6395,7 @@ async def api_providers_liveness():
         "total": total,
         "checked_at": time.time(),
         "timeout_sec": API_LIVENESS_TIMEOUT,
+        "provider_id": target_id,
         "providers": details,
     }
 
@@ -6379,7 +6488,7 @@ async def fetch_upstream_models(provider_id: str):
         grouped[classify_model_id(mid)].append(mid)
     return {"total": len(ids), "image_models": grouped["image"], "chat_models": grouped["chat"], "video_models": grouped["video"], "all": ids}
 
-async def build_online_image_result(payload: OnlineImageRequest, history_type: str = "online", prefix: str = "online_"):
+async def build_online_image_result(payload: OnlineImageRequest, history_type: str = "online", prefix: str = "online_", task_id: str = ""):
     provider = get_api_provider(payload.provider_id)
     default_model = (provider.get("image_models") or [IMAGE_MODEL])[0]
     model = selected_model(payload.model, default_model)
@@ -6434,9 +6543,9 @@ async def build_online_image_result(payload: OnlineImageRequest, history_type: s
         "model": model,
         "provider_id": provider["id"],
         "provider_name": provider.get("name") or provider["id"],
-        "task_id": extract_task_id(raw_items[0]) if raw_items and isinstance(raw_items[0], dict) else None,
+        "task_id": task_id or (extract_task_id(raw_items[0]) if raw_items and isinstance(raw_items[0], dict) else None),
         "request_id": raw_items[0].get("id") if raw_items and isinstance(raw_items[0], dict) else None,
-        "params": {"provider_id": provider["id"], "model": model, "size": payload.size, "quality": payload.quality, "n": count, "reference_images": refs},
+        "params": {k: v for k, v in {"provider_id": provider["id"], "model": model, "size": payload.size, "quality": payload.quality, "n": count, "reference_images": refs, "task_id": task_id or ""}.items() if v not in ("", None)},
         "raw_usage": raw_items[0].get("usage") if raw_items and isinstance(raw_items[0], dict) else None,
     }
     save_to_history(result)
@@ -6457,7 +6566,12 @@ async def run_canvas_image_task(task_id: str, payload: OnlineImageRequest):
             CANVAS_TASKS[task_id]["status"] = "running"
             CANVAS_TASKS[task_id]["updated_at"] = time.time()
     try:
-        result = await build_online_image_result(payload)
+        result = await build_online_image_result(payload, task_id=task_id)
+        if isinstance(result, dict):
+            result["task_id"] = task_id
+            params = result.setdefault("params", {})
+            if isinstance(params, dict):
+                params["task_id"] = task_id
         with CANVAS_TASK_LOCK:
             CANVAS_TASKS[task_id].update({
                 "status": "succeeded",

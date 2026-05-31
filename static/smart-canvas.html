@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -17,8 +17,8 @@
         })();
     </script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260529-v2015-smart-canvas-hardening1"></script>
-    <script src="/static/i18n.js?v=20260529-v2015-smart-canvas-hardening1"></script>
+    <script src="/static/theme.js?v=20260529-v2017-smart-storyboard-workbench1"></script>
+    <script src="/static/i18n.js?v=20260529-v2017-smart-storyboard-workbench1"></script>
     <style>
 :root {
             --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.9); --card:#fff;
@@ -64,6 +64,24 @@
         .image-node.empty-node:hover { border-color:var(--strong); box-shadow:0 10px 30px rgba(15,23,42,.08); }
         .image-node.empty-node.selected { border-color:var(--strong); box-shadow:0 0 0 1px var(--strong), 0 12px 34px var(--shadow); }
         .image-node.prompt-smart-node, .image-node.loop-smart-node { background:var(--card); border:1px solid var(--line); box-shadow:0 12px 34px var(--shadow); overflow:visible; }
+        .image-node.template-script-source, .image-node.template-script-view { border-color:rgba(14,165,233,.42); }
+        .image-node.template-script-source .node-head, .image-node.template-script-view .node-head { background:linear-gradient(90deg, rgba(14,165,233,.1), transparent); border-radius:15px 15px 0 0; }
+        .image-node.template-script-view .prompt-node-card { gap:8px; }
+        .image-node.template-script-view .prompt-node-text { font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; line-height:1.55; background:linear-gradient(180deg, var(--card), var(--soft)); }
+        .image-node.template-script-view .prompt-node-run { min-width:82px; justify-content:center; }
+        .image-node.template-character-asset { border-color:rgba(16,185,129,.38); }
+        .image-node.template-character-asset .node-head { background:linear-gradient(90deg, rgba(16,185,129,.1), transparent); border-radius:15px 15px 0 0; }
+        .image-node.template-character-asset .prompt-node-text { background:linear-gradient(180deg, var(--card), var(--soft)); }
+        .image-node.template-script-shot-prompt { border-color:rgba(59,130,246,.34); }
+        .image-node.template-script-shot-prompt .node-head { background:linear-gradient(90deg, rgba(59,130,246,.09), transparent); border-radius:15px 15px 0 0; }
+        .image-node.template-script-shot-output.empty-node { border-color:rgba(59,130,246,.34); }
+        .image-node.template-script-shot-output .node-drop { border-style:solid; background:linear-gradient(180deg, var(--soft), var(--card)); }
+        .image-node.template-character-ref.empty-node, .image-node.template-character-output.empty-node { border-color:rgba(16,185,129,.42); }
+        .image-node.template-character-ref .node-drop, .image-node.template-character-output .node-drop { border-style:solid; background:linear-gradient(180deg, var(--soft), var(--card)); }
+        .image-node.template-character-ref.empty-node .node-body, .image-node.template-character-output.empty-node .node-body, .image-node.template-script-shot-output.empty-node .node-body { height:calc(100% - 74px); min-height:0; align-items:stretch; justify-content:stretch; padding:10px 12px 0; }
+        .image-node.template-character-ref.empty-node .node-drop, .image-node.template-character-output.empty-node .node-drop, .image-node.template-script-shot-output.empty-node .node-drop { height:100%; min-height:0; }
+        .image-node.template-character-ref.empty-node .node-hint, .image-node.template-character-output.empty-node .node-hint, .image-node.template-script-shot-output.empty-node .node-hint { height:26px; padding:6px 12px 0; }
+        .image-node.template-character-output .node-drop::after { content:"半身 / 全身 / 侧背 / 表情"; display:block; margin-top:2px; color:var(--faint); font-size:10px; font-weight:850; }
         .image-node.smart-frame-group { z-index:1; min-height:0; border:1.5px dashed rgba(15,23,42,.58); border-radius:18px; background:rgba(255,255,255,.08); box-shadow:none; cursor:move; }
         .theme-dark .image-node.smart-frame-group { border-color:rgba(248,250,252,.62); background:rgba(15,23,42,.1); }
         .image-node.smart-frame-group:hover, .image-node.smart-frame-group.selected { border-color:var(--strong); background:rgba(255,255,255,.14); box-shadow:0 0 0 3px rgba(15,23,42,.045); }
@@ -74,7 +92,10 @@
         .image-node.prompt-smart-node.selected, .image-node.loop-smart-node.selected { border-color:var(--strong); box-shadow:0 0 0 1px var(--strong), 0 12px 34px var(--shadow); }
         .prompt-smart-node .node-body, .loop-smart-node .node-body { align-items:stretch; justify-content:stretch; padding:8px; height:calc(100% - 34px); min-height:0; }
         .prompt-node-card { width:100%; min-height:0; display:flex; flex-direction:column; gap:6px; }
-        .prompt-node-text { flex:1; min-height:72px; width:100%; resize:none; overflow:auto; border:1px solid var(--line); border-radius:11px; background:var(--soft); color:var(--text); outline:none; padding:8px; font-size:11.2px; line-height:1.45; scrollbar-width:thin; scrollbar-color:rgba(148,163,184,.45) transparent; }
+        .prompt-text-shell { position:relative; min-width:0; }
+        .prompt-text-shell.main { flex:1; min-height:72px; display:flex; }
+        .prompt-node-text { flex:1; min-height:72px; width:100%; resize:none; overflow:auto; border:1px solid var(--line); border-radius:11px; background:var(--soft); color:var(--text); outline:none; padding:8px 34px 8px 8px; font-size:11.2px; line-height:1.45; scrollbar-width:thin; scrollbar-color:rgba(148,163,184,.45) transparent; }
+        .prompt-text-shell.main .prompt-node-text { height:100%; }
         .prompt-node-text::-webkit-scrollbar, .prompt-node-llm textarea::-webkit-scrollbar { width:7px; height:7px; }
         .prompt-node-text::-webkit-scrollbar-track, .prompt-node-llm textarea::-webkit-scrollbar-track { background:transparent; }
         .prompt-node-text::-webkit-scrollbar-thumb, .prompt-node-llm textarea::-webkit-scrollbar-thumb { background:rgba(148,163,184,.42); border-radius:999px; border:2px solid transparent; background-clip:content-box; }
@@ -89,25 +110,60 @@
         .prompt-node-llm { display:grid; grid-template-columns:1fr 1fr; gap:5px; align-items:start; }
         .prompt-node-llm select, .prompt-node-llm textarea { min-width:0; border:1px solid var(--line); border-radius:9px; background:var(--soft); color:var(--text); outline:none; font-size:10px; }
         .prompt-node-llm select { height:26px; padding:0 7px; }
-        .prompt-node-llm textarea { grid-column:1 / -1; height:48px; resize:none; overflow:auto; padding:7px; line-height:1.4; scrollbar-width:thin; scrollbar-color:rgba(148,163,184,.45) transparent; }
+        .prompt-node-llm textarea { width:100%; height:48px; resize:none; overflow:auto; padding:7px 32px 7px 7px; line-height:1.4; scrollbar-width:thin; scrollbar-color:rgba(148,163,184,.45) transparent; }
+        .prompt-node-llm .prompt-text-shell { grid-column:1 / -1; }
         .prompt-node-llm .prompt-llm-instruction { height:58px; }
         .prompt-node-llm .prompt-llm-system { height:52px; }
+        .prompt-expand-mini { position:absolute; right:5px; top:5px; z-index:20; width:32px; height:32px; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; color:var(--muted); background:rgba(255,255,255,.9); border:1px solid var(--line); box-shadow:0 7px 18px rgba(15,23,42,.1); opacity:.86; transition:opacity .14s ease, color .14s ease, background .14s ease, transform .14s ease; pointer-events:auto; }
+        .prompt-expand-mini:hover { opacity:1; color:var(--text); background:var(--card); transform:translateY(-1px); }
+        .prompt-expand-mini i,.prompt-expand-mini svg { width:15px; height:15px; stroke-width:2.2; pointer-events:none; }
+        .theme-dark .prompt-expand-mini { background:rgba(15,23,42,.82); }
         .prompt-node-llm-actions { grid-column:1 / -1; display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
         .prompt-node-run { height:26px; padding:0 9px; border-radius:999px; background:var(--strong); color:var(--strong-text); display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:700; white-space:nowrap; }
         .prompt-node-run i,.prompt-node-run svg { width:12px; height:12px; }
         .prompt-node-run:disabled { opacity:.55; cursor:wait; }
+        .prompt-node-split { height:26px; padding:0 9px; border-radius:999px; border:1px solid var(--line); background:var(--card); color:var(--text); display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:800; white-space:nowrap; }
+        .prompt-node-split:hover { border-color:var(--strong); background:var(--soft); }
+        .prompt-node-split:disabled { opacity:.55; cursor:not-allowed; background:var(--soft); }
+        .prompt-node-split i,.prompt-node-split svg { width:12px; height:12px; }
         .prompt-node-system-toggle { flex:1 1 auto; justify-content:center; }
         .loop-node-placeholder { width:100%; height:100%; min-height:120px; border-radius:14px; border:1px dashed var(--line); background:var(--soft); color:var(--muted); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; font-size:12px; font-weight:700; }
         .loop-node-placeholder i,.loop-node-placeholder svg { width:24px; height:24px; color:var(--faint); }
-        .create-menu { position:fixed; z-index:75; display:none; width:420px; max-width:calc(100vw - 28px); padding:10px; border-radius:18px; background:var(--panel); border:1px solid var(--line); box-shadow:0 22px 58px var(--shadow); backdrop-filter:blur(20px); }
+        .create-menu { position:fixed; z-index:75; display:none; width:min(760px, calc(100vw - 28px)); max-height:calc(100vh - 28px); overflow:auto; padding:12px; border-radius:20px; background:var(--panel); border:1px solid var(--line); box-shadow:0 22px 58px var(--shadow); backdrop-filter:blur(20px); scrollbar-width:thin; scrollbar-color:rgba(148,163,184,.38) transparent; }
         .create-menu.open { display:block; }
-        .create-menu-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
-        .create-card { min-height:118px; padding:12px 10px; border-radius:14px; border:1px solid var(--line); background:var(--card); color:var(--text); display:flex; flex-direction:column; align-items:flex-start; justify-content:space-between; gap:10px; text-align:left; transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease; }
-        .create-card:hover { transform:translateY(-2px); border-color:var(--strong); box-shadow:0 10px 24px rgba(15,23,42,.1); }
+        .create-menu-head { display:grid; grid-template-columns:40px minmax(0,1fr); gap:10px; align-items:center; padding:2px 2px 10px; }
+        .create-menu-mark { width:40px; height:40px; border-radius:14px; display:flex; align-items:center; justify-content:center; background:var(--strong); color:var(--strong-text); box-shadow:0 10px 24px rgba(15,23,42,.16); }
+        .create-menu-mark i,.create-menu-mark svg { width:19px; height:19px; }
+        .create-menu-title { font-size:14px; font-weight:950; color:var(--text); line-height:1.15; }
+        .create-menu-sub { margin-top:3px; color:var(--faint); font-size:11px; line-height:1.35; font-weight:700; }
+        .create-menu-section { margin-top:8px; }
+        .create-menu-section-title { display:flex; align-items:center; gap:6px; height:22px; margin:0 2px 6px; color:var(--faint); font-size:10px; font-weight:950; letter-spacing:.08em; text-transform:uppercase; }
+        .create-menu-section-title i,.create-menu-section-title svg { width:12px; height:12px; }
+        .create-menu-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
+        .create-basic-grid { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+        .create-card { min-width:0; min-height:86px; padding:12px; border-radius:14px; border:1px solid var(--line); background:var(--card); color:var(--text); display:grid; grid-template-columns:36px minmax(0,1fr); align-items:start; gap:10px; text-align:left; transition:transform .14s ease, border-color .14s ease, box-shadow .14s ease, background .14s ease; }
+        .create-card:hover { transform:translateY(-2px); border-color:var(--strong); box-shadow:0 10px 24px rgba(15,23,42,.1); background:var(--soft); }
+        .create-card.feature-card { min-height:112px; padding:14px; grid-template-columns:44px minmax(0,1fr); }
         .create-card-icon { width:34px; height:34px; border-radius:12px; display:flex; align-items:center; justify-content:center; background:var(--soft); color:var(--text); border:1px solid var(--line); }
+        .feature-card .create-card-icon { width:44px; height:44px; border-radius:15px; background:var(--strong); color:var(--strong-text); border-color:var(--strong); }
         .create-card-icon i,.create-card-icon svg { width:18px; height:18px; }
-        .create-card-title { font-size:12px; font-weight:800; }
-        .create-card-sub { color:var(--faint); font-size:10px; line-height:1.35; font-weight:600; }
+        .feature-card .create-card-icon i,.feature-card .create-card-icon svg { width:20px; height:20px; }
+        .create-card-title { min-width:0; font-size:12px; font-weight:900; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .feature-card .create-card-title { font-size:14px; }
+        .create-card-sub { min-width:0; margin-top:4px; color:var(--faint); font-size:10.5px; line-height:1.35; font-weight:650; }
+        .feature-card .create-card-sub { font-size:11px; line-height:1.45; }
+        .slash-menu { position:absolute; z-index:80; display:none; width:min(420px, calc(100vw - 40px)); padding:8px; border-radius:16px; background:var(--panel); border:1px solid var(--line); box-shadow:0 22px 58px var(--shadow); backdrop-filter:blur(20px); animation:smart-menu-in .14s ease-out; }
+        .slash-menu.open { display:block; }
+        .slash-menu-head { height:28px; padding:0 7px; display:flex; align-items:center; gap:7px; color:var(--faint); font-size:10.5px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+        .slash-menu-head i,.slash-menu-head svg { width:13px; height:13px; }
+        .slash-command-list { display:grid; grid-template-columns:1fr; gap:5px; }
+        .slash-command { min-width:0; width:100%; padding:9px; border-radius:12px; border:1px solid transparent; background:transparent; color:var(--text); display:grid; grid-template-columns:34px minmax(0,1fr) auto; gap:9px; align-items:center; text-align:left; }
+        .slash-command:hover { background:var(--card); border-color:var(--line); box-shadow:0 8px 20px rgba(15,23,42,.08); }
+        .slash-command-icon { width:34px; height:34px; border-radius:11px; display:flex; align-items:center; justify-content:center; background:var(--soft); border:1px solid var(--line); color:var(--text); }
+        .slash-command-icon i,.slash-command-icon svg { width:17px; height:17px; }
+        .slash-command-title { min-width:0; font-size:12px; font-weight:900; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .slash-command-desc { min-width:0; margin-top:2px; color:var(--faint); font-size:10.5px; line-height:1.35; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .slash-command-badge { height:24px; padding:0 8px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; background:var(--soft); border:1px solid var(--line); color:var(--muted); font-size:10px; font-weight:900; white-space:nowrap; }
         .node-head { height:38px; display:flex; align-items:center; justify-content:space-between; gap:8px; padding:0 10px 0 12px; border-bottom:1px solid var(--line); cursor:move; }
         .image-node:not(.empty-node) .node-head { display:none; }
         .image-node:not(.empty-node) .node-title { display:none; }
@@ -138,6 +194,11 @@
         .node-result-placeholder.empty-result { border-color:rgba(245,158,11,.45); background:rgba(245,158,11,.08); color:#b45309; }
         .theme-dark .node-result-placeholder.error { background:rgba(239,68,68,.13); color:#fecaca; }
         .theme-dark .node-result-placeholder.empty-result { background:rgba(245,158,11,.13); color:#fde68a; }
+        .smart-missing-media { width:100%; height:100%; min-height:96px; border-radius:12px; border:1px dashed rgba(239,68,68,.45); background:rgba(239,68,68,.06); color:#dc2626; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; text-align:center; padding:12px; font-size:11px; line-height:1.35; font-weight:850; overflow:hidden; }
+        .smart-missing-media.compact { width:var(--thumb-size, 96px); height:var(--thumb-size, 96px); min-height:0; padding:8px; font-size:10px; }
+        .smart-missing-media i,.smart-missing-media svg { width:22px; height:22px; stroke-width:2.2; }
+        .smart-missing-media.compact i,.smart-missing-media.compact svg { width:16px; height:16px; }
+        .theme-dark .smart-missing-media { background:rgba(239,68,68,.13); color:#fecaca; border-color:rgba(248,113,113,.42); }
         .image-node:not(.empty-node) .node-delete { background:transparent; color:var(--text); border:0; opacity:1; }
         .theme-dark .image-node:not(.empty-node) .node-delete { background:transparent; color:#f8fafc; text-shadow:0 1px 4px rgba(0,0,0,.85); }
         .image-wrap { position:relative; width:100%; border-radius:13px; overflow:visible; background:#fff; }
@@ -547,10 +608,26 @@
         .smart-param-action { height:34px; padding:0 12px; border-radius:999px; display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--line); color:var(--text); font-size:12px; font-weight:850; }
         .smart-param-action.primary { background:var(--strong); color:var(--strong-text); border-color:var(--strong); }
         .smart-param-action i,.smart-param-action svg,.smart-param-close i,.smart-param-close svg { width:16px; height:16px; }
+        .smart-text-modal { position:absolute; inset:0; z-index:94; display:none; align-items:center; justify-content:center; padding:22px; background:rgba(15,23,42,.32); backdrop-filter:blur(14px); }
+        .smart-text-modal.open { display:flex; }
+        .smart-text-panel { width:min(900px, calc(100vw - 44px)); height:min(720px, calc(100vh - 44px)); border-radius:22px; background:var(--panel); border:1px solid var(--line); box-shadow:0 28px 88px rgba(15,23,42,.28); overflow:hidden; display:grid; grid-template-rows:auto minmax(0, 1fr) auto; }
+        .smart-text-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:16px 16px 12px; border-bottom:1px solid var(--line); }
+        .smart-text-title { color:var(--text); font-size:16px; font-weight:950; letter-spacing:0; }
+        .smart-text-sub { margin-top:4px; color:var(--faint); font-size:11px; font-weight:700; }
+        .smart-text-close { flex:0 0 auto; width:36px; height:36px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; color:var(--text); background:var(--card); border:1px solid var(--line); }
+        .smart-text-close:hover { color:#dc2626; border-color:#fecaca; background:#fff1f2; }
+        .smart-text-input { width:100%; height:100%; resize:none; border:0; outline:none; padding:16px; background:var(--card); color:var(--text); font:13px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space:pre-wrap; overflow:auto; scrollbar-width:thin; scrollbar-color:rgba(148,163,184,.45) transparent; }
+        .smart-text-input[readonly] { color:var(--muted); background:var(--soft); }
+        .smart-text-actions { display:flex; justify-content:flex-end; gap:8px; padding:12px 16px; border-top:1px solid var(--line); background:var(--panel); }
+        .smart-text-action { height:34px; padding:0 13px; border-radius:999px; display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--line); color:var(--text); font-size:12px; font-weight:850; }
+        .smart-text-action.primary { background:var(--strong); color:var(--strong-text); border-color:var(--strong); }
+        .smart-text-action i,.smart-text-action svg,.smart-text-close i,.smart-text-close svg { width:15px; height:15px; }
         @media (max-width: 760px){
             .smart-param-panel { grid-template-columns:1fr; overflow:auto; }
             .smart-param-detail { border-left:0; border-top:1px solid var(--line); max-height:none; }
             .smart-param-media img,.smart-param-media video { max-height:42vh; }
+            .smart-text-modal { padding:12px; }
+            .smart-text-panel { width:calc(100vw - 24px); height:calc(100vh - 24px); border-radius:18px; }
         }
         .image-node.node-hidden { opacity:.32; filter:grayscale(.75); }
         .image-node.node-locked { outline:1px dashed rgba(100,116,139,.52); outline-offset:3px; }
@@ -654,8 +731,8 @@
                 animation:none !important;
             }
         }
-        @media (max-width:760px) { .composer { width:min(540px, calc(100vw - 28px)); } .composer-card { grid-template-columns:minmax(0, 1fr) auto; } .composer-expanded .composer-card { min-height:calc(100vh - 52px); } .composer-expanded .prompt-input { min-height:280px; height:calc(100vh - 230px) !important; } .smart-minimap { width:148px; height:98px; } .asset-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
-        @media (max-width:540px) { .asset-grid { grid-template-columns:1fr; } }
+        @media (max-width:760px) { .composer { width:min(540px, calc(100vw - 28px)); } .composer-card { grid-template-columns:minmax(0, 1fr) auto; } .composer-expanded .composer-card { min-height:calc(100vh - 52px); } .composer-expanded .prompt-input { min-height:280px; height:calc(100vh - 230px) !important; } .smart-minimap { width:148px; height:98px; } .asset-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } .create-menu-grid,.create-basic-grid { grid-template-columns:1fr; } .create-card,.create-card.feature-card { min-height:74px; grid-template-columns:38px minmax(0,1fr); } .feature-card .create-card-icon { width:38px; height:38px; border-radius:13px; } .slash-command { grid-template-columns:32px minmax(0,1fr); } .slash-command-badge { display:none; } }
+        @media (max-width:540px) { .asset-grid { grid-template-columns:1fr; } .create-menu-head { grid-template-columns:1fr; } .create-menu-mark { display:none; } }
     </style>
 </head>
 <body>
@@ -709,7 +786,42 @@
         <div id="smartEnhanceMenu" class="smart-enhance-menu" aria-hidden="true"></div>
         <div id="smartContextMenu" class="smart-context-menu" aria-hidden="true"></div>
         <div id="createMenu" class="create-menu">
-            <div class="create-menu-grid">
+            <div class="create-menu-head">
+                <span class="create-menu-mark"><i data-lucide="layout-template"></i></span>
+                <span>
+                    <div class="create-menu-title">选择一个画布起点</div>
+                    <div class="create-menu-sub">先放真实可用的出图工作流，再按需补基础节点。</div>
+                </span>
+            </div>
+            <div class="create-menu-section">
+                <div class="create-menu-section-title"><i data-lucide="sparkles"></i><span>工作流模板</span></div>
+                <div class="create-menu-grid">
+                    <button class="create-card feature-card" type="button" data-create-type="script">
+                        <span class="create-card-icon"><i data-lucide="scroll-text"></i></span>
+                        <span>
+                            <div class="create-card-title">故事脚本生成</div>
+                            <div class="create-card-sub">故事想法 -> 脚本视图，生成可继续拆分的分镜表。</div>
+                        </span>
+                    </button>
+                    <button class="create-card feature-card" type="button" data-create-type="character">
+                        <span class="create-card-icon"><i data-lucide="user-round"></i></span>
+                        <span>
+                            <div class="create-card-title">角色三视图</div>
+                            <div class="create-card-sub">左侧角色图作为参考，右侧生成一张角色设定板。</div>
+                        </span>
+                    </button>
+                    <button class="create-card feature-card" type="button" data-create-type="product">
+                        <span class="create-card-icon"><i data-lucide="package"></i></span>
+                        <span>
+                            <div class="create-card-title">产品三视图</div>
+                            <div class="create-card-sub">铺开主图、细节、场景图，适合产品视觉探索。</div>
+                        </span>
+                    </button>
+                </div>
+            </div>
+            <div class="create-menu-section">
+                <div class="create-menu-section-title"><i data-lucide="plus"></i><span>基础节点</span></div>
+                <div class="create-menu-grid create-basic-grid">
                 <button class="create-card" type="button" data-create-type="image">
                     <span class="create-card-icon"><i data-lucide="image-plus"></i></span>
                     <span>
@@ -731,8 +843,10 @@
                         <div class="create-card-sub">预留批量循环入口</div>
                     </span>
                 </button>
+                </div>
             </div>
         </div>
+        <div id="slashMenu" class="slash-menu" aria-hidden="true"></div>
         <input id="fileInput" type="file" accept="image/*" multiple hidden>
         <div id="minimap" class="smart-minimap" aria-hidden="true">
             <div id="minimapContent" class="smart-minimap-content">
@@ -793,6 +907,22 @@
                         <button class="smart-param-action" type="button" onclick="downloadSmartParamImage()"><i data-lucide="download"></i><span>下载图片</span></button>
                         <button class="smart-param-action" type="button" onclick="closeSmartParamModal()"><span>关闭</span></button>
                     </div>
+                </div>
+            </div>
+        </div>
+        <div id="smartTextModal" class="smart-text-modal" onclick="closeSmartTextModal(false)">
+            <div class="smart-text-panel" onclick="event.stopPropagation()">
+                <div class="smart-text-head">
+                    <div>
+                        <div id="smartTextTitle" class="smart-text-title">编辑文本</div>
+                        <div id="smartTextSub" class="smart-text-sub">放大编辑长提示词，保存后会写回当前节点</div>
+                    </div>
+                    <button id="smartTextClose" class="smart-text-close" type="button" title="关闭"><i data-lucide="x"></i></button>
+                </div>
+                <textarea id="smartTextInput" class="smart-text-input" spellcheck="false"></textarea>
+                <div class="smart-text-actions">
+                    <button id="smartTextCancel" class="smart-text-action" type="button">取消</button>
+                    <button id="smartTextSave" class="smart-text-action primary" type="button"><i data-lucide="check"></i><span>保存</span></button>
                 </div>
             </div>
         </div>
@@ -924,6 +1054,13 @@
         const assetImageControls = document.getElementById('assetImageControls');
         const assetDialogBackdrop = document.getElementById('assetDialogBackdrop');
         const assetDialogTitle = document.getElementById('assetDialogTitle');
+        const smartTextModal = document.getElementById('smartTextModal');
+        const smartTextInput = document.getElementById('smartTextInput');
+        const smartTextTitle = document.getElementById('smartTextTitle');
+        const smartTextSub = document.getElementById('smartTextSub');
+        const smartTextSave = document.getElementById('smartTextSave');
+        const smartTextCancel = document.getElementById('smartTextCancel');
+        const smartTextClose = document.getElementById('smartTextClose');
         const assetDialogInput = document.getElementById('assetDialogInput');
         const assetDialogCancel = document.getElementById('assetDialogCancel');
         const assetDialogOk = document.getElementById('assetDialogOk');
@@ -933,6 +1070,7 @@
         const smartEnhanceBtn = document.getElementById('smartEnhanceBtn');
         const smartEnhanceMenu = document.getElementById('smartEnhanceMenu');
         const smartContextMenu = document.getElementById('smartContextMenu');
+        const slashMenu = document.getElementById('slashMenu');
         let minimapViewport = document.getElementById('minimapViewport');
         let canvas = null;
         let nodes = [];
@@ -960,6 +1098,7 @@
         let mentionSource = 'input';
         let mentionAssetCategoryId = '';
         let createMenuPoint = {x:0, y:0};
+        let slashMenuOpen = false;
         let nodeClipboard = null;
         let lastMouseWorld = null;
         let lastConfigRefreshAt = 0;
@@ -978,8 +1117,61 @@
         let textSelectionGuard = null;
         const UNDO_LIMIT = 40;
         const undoStack = [];
+        const smartMissingAssetUrls = new Set();
+        let smartMissingCheckTimer = null;
+        let smartMissingToastKey = '';
         let undoSuppressed = false;
         let pendingUndoSnapshot = null;
+        const SMART_NODE_DRAFTS_KEY = 'lumaforge_smart_canvas_node_drafts_v1';
+        function smartDraftCanvasKey(){
+            return String(canvasId || canvas?.id || '__smart_canvas__');
+        }
+        function loadSmartNodeDrafts(){
+            try {
+                const parsed = JSON.parse(localStorage.getItem(SMART_NODE_DRAFTS_KEY) || '{}');
+                return parsed && typeof parsed === 'object' ? parsed : {};
+            } catch(e) {
+                return {};
+            }
+        }
+        function writeSmartNodeDrafts(drafts){
+            try { localStorage.setItem(SMART_NODE_DRAFTS_KEY, JSON.stringify(drafts || {})); } catch(e) {}
+        }
+        function saveSmartNodeDraft(nodeId, field, value){
+            if(!nodeId || !field) return;
+            const drafts = loadSmartNodeDrafts();
+            const key = smartDraftCanvasKey();
+            drafts[key] = drafts[key] || {};
+            drafts[key][nodeId] = drafts[key][nodeId] || {};
+            drafts[key][nodeId][field] = {value:String(value ?? ''), updatedAt:Date.now()};
+            writeSmartNodeDrafts(drafts);
+        }
+        function clearSmartNodeDrafts(){
+            const key = smartDraftCanvasKey();
+            const drafts = loadSmartNodeDrafts();
+            if(drafts[key]){
+                delete drafts[key];
+                writeSmartNodeDrafts(drafts);
+            }
+        }
+        function applySmartNodeDrafts(){
+            const draftSet = loadSmartNodeDrafts()[smartDraftCanvasKey()];
+            if(!draftSet || typeof draftSet !== 'object') return false;
+            let changed = false;
+            nodes.forEach(node => {
+                const item = draftSet[node.id];
+                if(!item || typeof item !== 'object') return;
+                ['text','promptDraftHtml','promptDraftText','llmInstruction','llmSystemPrompt','title'].forEach(field => {
+                    if(!item[field]) return;
+                    const value = String(item[field].value ?? '');
+                    if(String(node[field] ?? '') !== value){
+                        node[field] = value;
+                        changed = true;
+                    }
+                });
+            });
+            return changed;
+        }
         function capturePendingUndo(){ pendingUndoSnapshot = snapshotForUndo(); }
         function commitPendingUndo(){
             if(pendingUndoSnapshot){
@@ -1051,13 +1243,19 @@
         let smartPendingReconcileRunning = false;
         let smartParamTarget = null;
         let smartParamPromptText = '';
+        let smartTextModalState = null;
+        const SMART_IMAGE_PENDING_MAX_MS = 60 * 60 * 1000;
+        const SMART_LLM_PENDING_MAX_MS = 12 * 60 * 1000;
+        const SMART_DEFAULT_IMAGE_MODEL = 'gpt-image-2-vip';
+        const SMART_DEFAULT_IMAGE_RATIO = 'wide';
+        const SMART_DEFAULT_IMAGE_RESOLUTION = '1k';
         let settings = {
             engine:'api',
             apiKind:'image',
             provider_id:'',
-            model:'',
-            ratio:'square',
-            resolution:'1k',
+            model:SMART_DEFAULT_IMAGE_MODEL,
+            ratio:SMART_DEFAULT_IMAGE_RATIO,
+            resolution:SMART_DEFAULT_IMAGE_RESOLUTION,
             customRatio:'',
             customRatioWidth:'',
             customRatioHeight:'',
@@ -1106,16 +1304,16 @@
             custom: { label:tr('smart.custom') || '自定义', modelId:'', acceptsImage:true, endpoint:'/api/ms/generate' }
         };
         const SIZE_MAP = {
-            square: {'1k':'1024x1024','2k':'2048x2048','4k':'2880x2880'},
-            landscape: {'1k':'1536x1024','2k':'2048x1360','4k':'3520x2336'},
-            portrait: {'1k':'1024x1536','2k':'1360x2048','4k':'2336x3520'},
-            landscape43: {'1k':'1024x768','2k':'2048x1536','4k':'3312x2480'},
-            portrait43: {'1k':'768x1024','2k':'1536x2048','4k':'2480x3312'},
-            wide: {'1k':'1536x864','2k':'2048x1152','4k':'3840x2160'},
-            story: {'1k':'864x1536','2k':'1152x2048','4k':'2160x3840'}
+            square: {'1k':'1080x1080','2k':'2048x2048','4k':'2880x2880'},
+            landscape: {'1k':'1620x1080','2k':'2160x1440','4k':'3456x2304'},
+            portrait: {'1k':'1080x1620','2k':'1440x2160','4k':'2304x3456'},
+            landscape43: {'1k':'1440x1080','2k':'2048x1536','4k':'3200x2400'},
+            portrait43: {'1k':'1080x1440','2k':'1536x2048','4k':'2400x3200'},
+            wide: {'1k':'1920x1080','2k':'2560x1440','4k':'3840x2160'},
+            story: {'1k':'1080x1920','2k':'1440x2560','4k':'2160x3840'}
         };
-        const RES_LONG_SIDE = { '1k':1024, '2k':2048, '4k':3840 };
-        const RES_PIXEL_LIMIT = { '1k':2359296, '2k':4194304, '4k':8294400 };
+        const RES_LONG_SIDE = { '1k':1920, '2k':2560, '4k':3840 };
+        const RES_PIXEL_LIMIT = { '1k':2073600, '2k':3686400, '4k':8294400 };
         function tr(key){ return window.StudioI18n?.t ? window.StudioI18n.t(key) : key; }
         function refreshIcons(){ if(window.lucide) lucide.createIcons(); }
         function uid(prefix){ return `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36).slice(-4)}`; }
@@ -1134,7 +1332,7 @@
         }
         function backToCanvasList(){
             savePromptDraftForCurrent();
-            const target = `/static/canvas.html?list=smart&v=20260529-v2015-smart-canvas-hardening1`;
+            const target = `/static/canvas.html?list=smart&v=20260529-v2017-smart-storyboard-workbench1`;
             try {
                 if(window.parent && window.parent !== window){
                     window.parent.localStorage?.setItem('studio_active_page', 'smart-canvas');
@@ -1189,6 +1387,59 @@
             el.classList.add('show');
             clearTimeout(toast._timer);
             toast._timer = setTimeout(() => el.classList.remove('show'), 1800);
+        }
+        function smartTextFieldMeta(field){
+            if(field === 'llmInstruction') return {title:'放大编辑 LLM 指令', sub:'这段内容会发送给 LLM，运行后写入节点主文本', placeholder:'输入给 LLM 的文本...'};
+            if(field === 'llmSystemPrompt') return {title:'放大编辑系统提示词', sub:'系统提示词会随 LLM 请求一起发送', placeholder:'输入系统提示词...'};
+            return {title:'放大编辑节点文本', sub:'保存后会写回当前节点，并保留草稿', placeholder:'输入提示词或脚本文本...'};
+        }
+        function nodeTextValueForField(node, field){
+            if(!node) return '';
+            if(field === 'llmSystemPrompt') return node.llmSystemPrompt || 'You are a helpful prompt assistant.';
+            if(field === 'llmInstruction') return node.llmInstruction || '';
+            return node.text || '';
+        }
+        function writeNodeTextField(node, field, value){
+            if(!node) return;
+            const text = String(value ?? '');
+            if(field === 'llmSystemPrompt') node.llmSystemPrompt = text;
+            else if(field === 'llmInstruction') node.llmInstruction = text;
+            else node.text = text;
+            saveSmartNodeDraft(node.id, field === 'llmSystemPrompt' ? 'llmSystemPrompt' : field === 'llmInstruction' ? 'llmInstruction' : 'text', text);
+            scheduleSave();
+        }
+        function openSmartTextModal(nodeId, field='text'){
+            const node = nodes.find(n => n.id === nodeId);
+            if(!node || node.type !== 'smart-prompt' || !smartTextModal || !smartTextInput) return;
+            const meta = smartTextFieldMeta(field);
+            smartTextModalState = {nodeId, field};
+            if(smartTextTitle) smartTextTitle.textContent = meta.title;
+            if(smartTextSub) smartTextSub.textContent = meta.sub;
+            smartTextInput.value = nodeTextValueForField(node, field);
+            smartTextInput.placeholder = meta.placeholder;
+            smartTextInput.readOnly = field === 'text' && node.llmEnabled;
+            if(smartTextSave) smartTextSave.style.display = smartTextInput.readOnly ? 'none' : '';
+            smartTextModal.classList.add('open');
+            if(window.lucide) lucide.createIcons();
+            requestAnimationFrame(() => smartTextInput.focus());
+        }
+        function closeSmartTextModal(save=false){
+            if(!smartTextModal?.classList.contains('open')) return;
+            if(save && smartTextModalState){
+                const node = nodes.find(n => n.id === smartTextModalState.nodeId);
+                if(node) writeNodeTextField(node, smartTextModalState.field, smartTextInput?.value || '');
+            }
+            smartTextModal.classList.remove('open');
+            smartTextModalState = null;
+            render();
+        }
+        async function copyTextToClipboard(text){
+            try {
+                await navigator.clipboard?.writeText(String(text || ''));
+                return true;
+            } catch(e) {
+                return false;
+            }
         }
         function selectedNode(){ return nodes.find(n => n.id === selectedId) || null; }
         function clearSelection(){
@@ -1346,12 +1597,13 @@
         }
         function isBlankCanvasActionTarget(target){
             if(!target) return false;
-            if(target.closest?.('.image-node,.composer,.smart-back,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return false;
+            if(target.closest?.('.image-node,.composer,.smart-back,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return false;
             return target === shell || target === world || Boolean(target.closest?.('#world, .connection-layer'));
         }
         function handleBlankCanvasAction(event){
             if(selectionJustFinished || didPan || !isBlankCanvasActionTarget(event?.target)) return false;
             if(document.getElementById('imageEditModal')?.classList.contains('open')) return false;
+            persistActiveComposerDraft();
             closeCreateMenu();
             if(selectedComposerHasDraft()){
                 scheduleSave();
@@ -1507,6 +1759,22 @@
         function smartMenuRow(action, label, shortcut='', disabled=false){
             return `<button class="smart-menu-row" type="button" data-smart-menu="${action}" ${disabled ? 'disabled' : ''}><span>${escapeHtml(label)}</span><span class="smart-menu-shortcut">${escapeHtml(shortcut)}</span></button>`;
         }
+        function copyNodeParamsPayload(node){
+            if(!node) return {};
+            const payload = JSON.parse(JSON.stringify(node));
+            delete payload.x;
+            delete payload.y;
+            delete payload.w;
+            delete payload.h;
+            delete payload.pending;
+            delete payload.running;
+            payload.settings = cloneSmartSettings(node.runSettings || settings);
+            if(node.type === 'smart-image' || !node.type){
+                payload.prompt = node.runPrompt || node.promptDraftText || '';
+                payload.input_images = inputImagesFor(node).map(ref => ({url:ref.url || '', name:ref.name || '', role:ref.role || ''}));
+            }
+            return payload;
+        }
         function openSmartContextMenu(event, nodeId='', imageIndex=0){
             if(!smartContextMenu) return;
             const targetNode = nodes.find(n => n.id === nodeId) || selectedNode();
@@ -1519,6 +1787,13 @@
             selectedIds = selectedIds.filter(id => nodes.some(n => n.id === id));
             selectedImage = targetNode && (targetNode.type === 'smart-image' || !targetNode.type) ? {nodeId:targetNode.id, index:Number(imageIndex) || 0} : {nodeId:'', index:-1};
             smartContextMenu.innerHTML = [
+                smartMenuRow('rename-node', '重命名', '双击名字', !hasSelection),
+                smartMenuRow('copy-params', '复制节点参数', '', !hasSelection),
+                '<div class="smart-menu-sep"></div>',
+                smartMenuRow('run-selected', '批量运行选中出图节点', '2.0.17', selectedContentNodeIds().filter(id => {
+                    const n = nodes.find(node => node.id === id);
+                    return n && (n.type === 'smart-image' || !n.type);
+                }).length < 1),
                 smartMenuRow('copy', '复制', 'Ctrl+C', !hasSelection),
                 smartMenuRow('cut', '剪切', 'Ctrl+X', !hasSelection || targetNode?.locked),
                 smartMenuRow('paste', '粘贴', 'Ctrl+V', !canPaste),
@@ -1788,22 +2063,47 @@
         }
         function smartImageModelText(target, asset=null){
             const node = target?.node || {};
+            const image = target?.image || {};
             const gen = asset?.generation || {};
             const meta = asset?.metadata || {};
-            const st = node.runSettings || {};
+            const st = node.runSettings || image.runSettings || {};
             return asset?.model || gen.model || meta.model || st.model || st.msCustomModel || st.msgenModel || st.videoModel || st.comfyWorkflow || '-';
         }
         function smartImageSourceText(target, asset=null){
             const gen = asset?.generation || {};
             const meta = asset?.metadata || {};
-            const st = target?.node?.runSettings || {};
+            const st = target?.node?.runSettings || target?.image?.runSettings || {};
             return asset?.source_type || gen.source_type || meta.source_type || [st.engine, st.apiKind].filter(Boolean).join(' / ') || '-';
+        }
+        function smartImageExpectedSizeText(target, asset=null){
+            const params = asset?.generation?.params || asset?.metadata?.params || {};
+            const st = target?.node?.runSettings || target?.image?.runSettings || {};
+            if(params.size) return params.size;
+            if(st.engine === 'api') return apiImageSize(st.ratio || SMART_DEFAULT_IMAGE_RATIO, st.resolution || SMART_DEFAULT_IMAGE_RESOLUTION, st.customRatio || '', st.customSize || '');
+            if(st.engine === 'modelscope') return apiImageSize(st.msRatio || 'square', st.msResolution || '1k', st.msCustomRatio || '', st.msCustomSize || '');
+            if(st.engine === 'comfy' && st.comfyMode === 'text') return `${Number(st.width || 1024)}x${Number(st.height || 1024)}`;
+            return '';
+        }
+        function smartSettingsRatioLabel(st={}){
+            const ratioValue = st.engine === 'modelscope' ? st.msRatio : st.ratio;
+            const map = {square:'1:1', portrait:'2:3', landscape:'3:2', portrait43:'3:4', landscape43:'4:3', story:'9:16', wide:'16:9'};
+            if(ratioValue === 'custom'){
+                const w = st.engine === 'modelscope' ? st.msCustomRatioWidth : st.customRatioWidth;
+                const h = st.engine === 'modelscope' ? st.msCustomRatioHeight : st.customRatioHeight;
+                return w && h ? `${w}:${h}` : '自定义';
+            }
+            return map[ratioValue] || ratioValue || '-';
+        }
+        function smartSettingsResolutionLabel(st={}){
+            const res = st.engine === 'modelscope' ? st.msResolution : st.resolution;
+            return res ? String(res).toUpperCase() : '-';
         }
         function smartImageDimsText(target, asset=null){
             const img = target?.image || {};
             const w = Number(asset?.width || asset?.generation?.width || img.natural_w || img.width || 0);
             const h = Number(asset?.height || asset?.generation?.height || img.natural_h || img.height || 0);
-            return w && h ? `${w} x ${h}` : '-';
+            if(w && h) return `${w} x ${h}`;
+            return smartImageExpectedSizeText(target, asset) || '-';
         }
         function smartImageTaskText(asset=null){
             const gen = asset?.generation || {};
@@ -1819,12 +2119,16 @@
             const prompt = smartImagePromptText(target, asset);
             smartParamPromptText = prompt;
             const node = target?.node || {};
+            const image = target?.image || {};
             const gen = asset?.generation || {};
             const meta = asset?.metadata || {};
-            const st = node.runSettings || {};
+            const st = node.runSettings || image.runSettings || {};
             const rows = [
                 ['模型', smartImageModelText(target, asset)],
                 ['来源', smartImageSourceText(target, asset)],
+                ['比例', smartSettingsRatioLabel(st)],
+                ['档位', smartSettingsResolutionLabel(st)],
+                ['实际请求尺寸', smartImageExpectedSizeText(target, asset) || '-'],
                 ['尺寸', smartImageDimsText(target, asset)],
                 ['Seed', gen.seed || meta.seed || '-'],
                 ['Provider', smartImageProviderText(asset)],
@@ -1834,7 +2138,7 @@
             const extra = {};
             if(st && Object.keys(st).length) extra.runSettings = st;
             if(gen.params || meta.params) extra.params = gen.params || meta.params;
-            if(node.runPromptRefs?.length) extra.references = node.runPromptRefs;
+            if(node.runPromptRefs?.length || image.runPromptRefs?.length) extra.references = node.runPromptRefs || image.runPromptRefs;
             if(gen.workflow_json || meta.workflow_json) extra.workflow_json = gen.workflow_json || meta.workflow_json;
             if(gen.raw_usage || meta.raw_usage) extra.raw_usage = gen.raw_usage || meta.raw_usage;
             const loadingHint = loading ? '<div class="smart-param-box">正在从素材库补全任务 ID、Provider 和尺寸...</div>' : '';
@@ -1908,8 +2212,20 @@
             if(!target) return;
             const node = nodes.find(n => n.id === target.nodeId);
             if(!node) return;
+            const image = (node.images || [])[Number(target.index) || 0] || {};
+            const prompt = smartImagePromptText({node, image});
+            if(prompt){
+                node.runPrompt = prompt;
+                node.runModelPrompt = prompt;
+                node.promptDraftText = prompt;
+                node.promptDraftHtml = escapeHtml(prompt).replace(/\n/g, '<br>');
+            }
+            if(node.runSettings) settings = {...settings, ...cloneSmartSettings(node.runSettings)};
             closeSmartParamModal();
             selectOnlyNode(node.id);
+            lastComposerNodeId = '';
+            activeComposerSubject = null;
+            renderDynamicParams();
             render();
             toast('已选中节点，可修改参数后重新运行');
         }
@@ -1918,8 +2234,20 @@
             if(!target) return;
             const node = nodes.find(n => n.id === target.nodeId);
             if(!node) return;
+            const image = (node.images || [])[Number(target.index) || 0] || {};
+            const prompt = smartImagePromptText({node, image});
+            if(prompt){
+                node.runPrompt = prompt;
+                node.runModelPrompt = prompt;
+                node.promptDraftText = prompt;
+                node.promptDraftHtml = escapeHtml(prompt).replace(/\n/g, '<br>');
+            }
+            if(node.runSettings) settings = {...settings, ...cloneSmartSettings(node.runSettings)};
             closeSmartParamModal();
             selectOnlyNode(node.id);
+            lastComposerNodeId = '';
+            activeComposerSubject = null;
+            renderDynamicParams();
             render();
             setTimeout(() => {
                 const runBtn = document.getElementById('runBtn');
@@ -2234,6 +2562,14 @@
         function imageProviders(){
             return (apiProviders || []).filter(p => p.enabled !== false && p.id !== 'modelscope' && (p.image_models || []).length);
         }
+        function preferredImageProviderId(providerId=''){
+            const providers = imageProviders();
+            if(providerId && providers.some(p => p.id === providerId)) return providerId;
+            const exact = providers.find(p => (p.image_models || []).some(model => String(model).toLowerCase() === SMART_DEFAULT_IMAGE_MODEL));
+            if(exact) return exact.id;
+            const near = providers.find(p => (p.image_models || []).some(model => String(model).toLowerCase().startsWith(SMART_DEFAULT_IMAGE_MODEL)));
+            return near?.id || providers[0]?.id || '';
+        }
         function chatApiProviders(){
             return (apiProviders || []).filter(p => p.enabled !== false && (p.chat_models || []).length);
         }
@@ -2265,6 +2601,52 @@
         }
         function providerImageModels(providerId){
             return (apiProviders || []).find(p => p.id === providerId)?.image_models || [];
+        }
+        function preferredImageModel(models=[]){
+            const list = [...new Set((models || []).filter(Boolean))];
+            const exact = list.find(model => String(model).toLowerCase() === SMART_DEFAULT_IMAGE_MODEL);
+            if(exact) return exact;
+            return list.find(model => String(model).toLowerCase().startsWith(SMART_DEFAULT_IMAGE_MODEL)) || list[0] || '';
+        }
+        function shouldUsePreferredImageModel(model, models=[]){
+            const current = String(model || '').toLowerCase();
+            if(!current) return true;
+            const preferred = preferredImageModel(models);
+            if(!preferred) return false;
+            if(!models.includes(model)) return true;
+            const family = SMART_DEFAULT_IMAGE_MODEL.replace(/-vip$/i, '');
+            return current !== SMART_DEFAULT_IMAGE_MODEL
+                && current.startsWith(family)
+                && models.some(item => String(item).toLowerCase() === SMART_DEFAULT_IMAGE_MODEL);
+        }
+        function applySmartDefaultImageSettings(options={}){
+            let changed = false;
+            if(!settings.engine){ settings.engine = 'api'; changed = true; }
+            if(!settings.apiKind){ settings.apiKind = 'image'; changed = true; }
+            if(!settings.resolution){ settings.resolution = SMART_DEFAULT_IMAGE_RESOLUTION; changed = true; }
+            const shouldMigrateLegacySquare = options.migrateLegacySquare && settings.engine === 'api' && settings.apiKind !== 'video' && (settings.ratio || 'square') === 'square';
+            if(!settings.ratio || shouldMigrateLegacySquare){
+                settings.ratio = SMART_DEFAULT_IMAGE_RATIO;
+                changed = true;
+            }
+            return changed;
+        }
+        function smartDefaultImageRunSettings(base=settings){
+            const next = cloneSmartSettings(base || settings);
+            next.engine = 'api';
+            next.apiKind = 'image';
+            next.provider_id = preferredImageProviderId(next.provider_id);
+            next.ratio = SMART_DEFAULT_IMAGE_RATIO;
+            next.resolution = SMART_DEFAULT_IMAGE_RESOLUTION;
+            next.customRatio = '';
+            next.customRatioWidth = '';
+            next.customRatioHeight = '';
+            next.customSize = '';
+            next.customWidth = '';
+            next.customHeight = '';
+            const models = providerImageModels(next.provider_id);
+            if(shouldUsePreferredImageModel(next.model, models)) next.model = preferredImageModel(models);
+            return next;
         }
         function modelscopeProvider(){
             return (apiProviders || []).find(p => p.id === 'modelscope' && p.enabled !== false) || null;
@@ -2384,6 +2766,8 @@
         function normalizeApiSizeSettings(prefix=''){
             const ratioKey = prefix ? `${prefix}Ratio` : 'ratio';
             const resKey = prefix ? `${prefix}Resolution` : 'resolution';
+            if(!settings[resKey]) settings[resKey] = SMART_DEFAULT_IMAGE_RESOLUTION;
+            if(!settings[ratioKey]) settings[ratioKey] = SMART_DEFAULT_IMAGE_RATIO;
             if(settings[resKey] === '4k' && (settings[ratioKey] || 'square') === 'square') settings[ratioKey] = 'wide';
         }
         async function ensureComfyWorkflow(name){
@@ -2404,6 +2788,7 @@
         function updateProviderModels(){ renderDynamicParams(); }
         function renderDynamicParams(){
             if(!dynamicParams) return;
+            applySmartDefaultImageSettings();
             settings.engine = ['api','modelscope','comfy'].includes(settings.engine) ? settings.engine : 'api';
             settings.apiKind = settings.apiKind === 'video' ? 'video' : 'image';
             engineSelect.value = settings.engine;
@@ -2421,8 +2806,13 @@
             const providers = imageProviders();
             if(!settings.provider_id || !providers.some(p => p.id === settings.provider_id)) settings.provider_id = providers[0]?.id || '';
             const models = providerImageModels(settings.provider_id);
-            if(!settings.model || !models.includes(settings.model)) settings.model = models[0] || '';
+            let shouldPersistDefaults = false;
+            if(shouldUsePreferredImageModel(settings.model, models)){
+                settings.model = preferredImageModel(models);
+                shouldPersistDefaults = true;
+            }
             normalizeApiSizeSettings('');
+            if(shouldPersistDefaults && canvas) scheduleSave();
             dynamicParams.innerHTML = `
                 ${renderProviderControl(providers)}
                 ${renderModelControl(models)}
@@ -2793,10 +3183,10 @@
             const numericKeys = new Set(['count','width','height','enhanceStrength','enhanceUpscaleRes','editUpscaleRes','customRatioWidth','customRatioHeight','customWidth','customHeight','msCustomRatioWidth','msCustomRatioHeight','msCustomWidth','msCustomHeight']);
             const layoutKeys = new Set(['provider_id','model','resolution','ratio','msgenModel','msCustomModel','msResolution','msRatio','comfyMode','comfyWorkflow','quality','count','enhanceUpscaleRes','editUpscaleRes']);
             settings[key] = numericKeys.has(key) && value !== '' ? Number(value) : value;
-            if(key === 'provider_id') settings.model = '';
+            if(key === 'provider_id') settings.model = preferredImageModel(providerImageModels(settings.provider_id));
             if(key === 'resolution'){
                 if(settings.resolution === 'custom') settings.ratio = '';
-                else if(!settings.ratio) settings.ratio = 'square';
+                else if(!settings.ratio) settings.ratio = SMART_DEFAULT_IMAGE_RATIO;
             }
             if(key === 'msResolution'){
                 if(settings.msResolution === 'custom') settings.msRatio = '';
@@ -3094,7 +3484,7 @@
             try { localStorage.setItem(SMART_CANVAS_ID_KEY, id); } catch(e) {}
             const url = new URL(window.location.href);
             url.searchParams.set('id', id);
-            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260529-v2015-smart-canvas-hardening1');
+            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260529-v2017-smart-storyboard-workbench1');
             history.replaceState(null, '', url.toString());
         }
         async function ensureSmartCanvasId(){
@@ -3175,6 +3565,7 @@
                     if(n.running) n.running = false;
                     refreshDefaultNodeTitle(n);
                 });
+                if(applySmartNodeDrafts()) scheduleSave();
                 sanitizeFrameGroups();
                 reconcileStuckSmartNodes();
                 canvas.connections = Array.isArray(canvas.connections) ? canvas.connections : [];
@@ -3182,11 +3573,13 @@
                 viewport = {...viewport, ...(canvas.viewport || {})};
                 viewport.scale = safeScale(viewport.scale);
                 if(canvas.settings) settings = {...settings, ...canvas.settings};
-                if(settings.comfy_workflow && !settings.comfyWorkflow) settings.comfyWorkflow = settings.comfy_workflow;
-                if(settings.comfy_params && !settings.comfyParams) settings.comfyParams = settings.comfy_params;
+            if(settings.comfy_workflow && !settings.comfyWorkflow) settings.comfyWorkflow = settings.comfy_workflow;
+            if(settings.comfy_params && !settings.comfyParams) settings.comfyParams = settings.comfy_params;
+            if(applySmartDefaultImageSettings({migrateLegacySquare:true})) scheduleSave();
             updateProviderModels();
             applyViewport();
             render();
+            refreshSmartMissingAssets({notify:true});
             } catch(e) {
                 console.error('Smart canvas load failed', e);
                 toast(`${tr('smart.toastCanvasFail')}：${(e?.message || e || '').toString().slice(0, 80)}`);
@@ -3199,6 +3592,11 @@
         async function saveCanvas(){
             if(!canvasId || !canvas) return;
             savePromptDraftForCurrent();
+            applySmartDefaultImageSettings({migrateLegacySquare:true});
+            if(settings.engine === 'api' && settings.apiKind !== 'video'){
+                const models = providerImageModels(settings.provider_id);
+                if(shouldUsePreferredImageModel(settings.model, models)) settings.model = preferredImageModel(models);
+            }
             nodes.forEach(node => {
                 node.images = (node.images || []).map(img => stripImageGenerationMeta(img));
             });
@@ -3225,6 +3623,7 @@
                 if(res.ok){
                     const data = await res.json();
                     if(data.canvas) canvas = {...canvas, ...data.canvas};
+                    clearSmartNodeDrafts();
                 } else if(res.status === 409) {
                     const data = await res.json().catch(() => ({}));
                     if(data.detail?.updated_at) canvas.updated_at = data.detail.updated_at;
@@ -3291,6 +3690,449 @@
             render();
             scheduleSave();
             return node;
+        }
+        const SMART_CANVAS_TEMPLATES = {
+            script: {
+                title:'故事脚本生成',
+                icon:'scroll-text',
+                toast:'已创建故事脚本生成工作流',
+                groupTitle:'故事脚本生成',
+                seed:'《未命名故事》\n一句话钩子：一个能在 3 秒内让观众想继续看的反差设定。\n类型/题材：古风 / 穿越 / 爽文短剧\n目标时长：60-90 秒\n画幅：9:16 竖屏短剧\n受众：喜欢强反转、强情绪、强爽点的短视频观众\n整体基调：热血、反转、电影感、东方美学\n视觉风格：写实电影感，厚涂质感，干净构图，高对比光影\n\n【核心故事】\n主角是谁：姓名、年龄、身份、外貌、服装、核心欲望\n反派/阻力：谁阻止主角，冲突是什么\n世界观/时代：发生在哪个时代、地点、规则\n关键反转：中段必须出现的反转\n结尾情绪：爽、虐、悬念、燃、温情，任选其一或组合\n\n【角色一致性】\n角色 A：固定外貌、发型、服装颜色、标志物、性格关键词\n角色 B：固定外貌、发型、服装颜色、标志物、性格关键词\n重要道具：会反复出现的物件、颜色、材质\n\n【生成约束】\n分镜数量：12-18 镜\n每镜时长：3-6 秒\n出图优先：每个分镜必须给出可直接复制的 AI 图片提示词\n视频其次：每个分镜附一条简短图生视频动作提示词\n禁止：不要让角色服装、发型、年龄、脸型在不同镜头漂移；不要写无法出图的抽象词。',
+                instruction:'你是专业短剧编剧、分镜导演、AI 出图提示词设计师。请读取左侧创作简报，生成一个以“出图生产”为主、后续可扩展到图生视频的脚本视图。\n\n工作原则：\n1. 先提取可复用元素：角色、地点、道具、视觉风格、固定禁忌词，方便后续节点复用。\n2. 保持角色一致性：每个镜头的角色描述必须复用同一套年龄、脸型、发型、服装颜色、标志物。\n3. 每个镜头都要可执行：不能只有情绪词，必须写清场景、人物、动作、构图、景别、光线、背景、道具。\n4. 以图片生成为第一目标：图片提示词要完整、可复制、适合直接用于文生图/图生图。\n5. 视频提示词只做补充：写人物动作、环境动态、镜头运动，保持简洁，不要堆无关音效。\n6. 如果左侧信息缺失，请合理补全，但要在“补全假设”中说明。\n\n请严格按以下结构输出：\n\n# 片名与定位\n- 片名：\n- 类型：\n- 目标时长：\n- 画幅：\n- 一句话钩子：\n- 情绪节奏：开场钩子 / 中段反转 / 结尾记忆点\n\n# 可复用元素库\n| 类型 | 名称 | 固定描述 | 视觉关键词 | 使用规则 |\n|---|---|---|---|---|\n角色、地点、道具分别列出。角色必须包含年龄、性别、脸型、发型、服饰颜色、标志物、性格。\n\n# 完整分镜表\n用 Markdown 表格输出，列必须包含：\n| 镜头 | 时长 | 剧情 beat | 场景/地点 | 出场角色 | 角色一致性描述 | 景别 | 机位/角度 | 镜头运动 | 画面描述 | 台词/旁白 | AI 图片提示词 | 图生视频提示词 | 负面约束 |\n\n分镜要求：\n- 镜头数量按左侧要求生成；没有写就生成 12 镜。\n- 每条“AI 图片提示词”必须包含：时代/地点、背景、人物年龄性别、外貌服饰、动作表情、道具、天气/光线、景别、构图、风格、质量词。\n- 每条“图生视频提示词”必须包含：主体动作、表情变化、环境动态、镜头运动，控制在 40 字以内。\n- 负面约束要围绕角色漂移、服装变化、脸部变形、低清晰度、文字水印、畸形手指。\n\n# 下一步建议\n给出 3 个可以在智能画布继续创建的节点建议，例如：角色三视图、关键道具图、第一镜出图。'
+            },
+            character: {
+                title:'角色三视图',
+                icon:'user-round',
+                toast:'已创建角色图 -> 角色三视图工作流',
+                groupTitle:'角色三视图',
+                prompt:'16:9 构图。根据我上传的参考图，生成一张同一人物的角色设定板，保持人物脸型、五官、发型、服装风格、配色和气质一致。画面包含正面半身近景、正面全身、侧面站姿、背面站姿，以及底部 5 种表情头像：微笑、惊讶、傲慢、愤怒、哭泣。整体为专业影视/游戏角色设定图，浅灰干净背景，古风宫廷/仙侠美学，服装材质精致，发饰华丽，细节清晰，同一角色一致性强，高清，干净构图，无文字水印。'
+            },
+            product: {
+                title:'产品三视图',
+                icon:'package',
+                toast:'已创建产品三视图节点',
+                groupTitle:'产品三视图',
+                prompts:[
+                    '产品图 01：主视觉英雄图，产品居中，材质清晰，干净高级布光，适合电商首图。',
+                    '产品图 02：细节特写，突出纹理、结构、接口或卖点，浅景深，高质量微距表现。',
+                    '产品图 03：使用场景图，产品在真实生活或商业场景中出现，保持品牌调性和产品外观一致。'
+                ]
+            }
+        };
+        function createPromptTextNode(x, y, text, options={}){
+            const node = createPromptNode(x, y, {...options, select:false, skipUndo:true});
+            node.text = text || '';
+            node.title = options.title || 'Prompt';
+            node.customTitle = Boolean(options.title);
+            node.w = Number(options.w) || 300;
+            node.h = Number(options.h) || 174;
+            return node;
+        }
+        function createImagePlaceholderNode(x, y, options={}){
+            const node = createNode(x, y, [], {...options, select:false, skipUndo:true});
+            node.title = options.title || 'Image';
+            node.customTitle = Boolean(options.title);
+            node.promptDraftText = options.prompt || '';
+            node.promptDraftHtml = escapeHtml(options.prompt || '').replace(/\n/g, '<br>');
+            node.w = Number(options.w) || 260;
+            node.h = Number(options.h) || 180;
+            return node;
+        }
+        function createCharacterTurnaroundTemplate(point=createMenuPoint || viewportCenter()){
+            const tpl = SMART_CANVAS_TEMPLATES.character;
+            persistActiveComposerDraft();
+            const selectedTarget = selectedImageTarget();
+            pushUndo();
+            closeCreateMenu();
+            closeSlashMenu();
+            const baseX = Math.round((point?.x || 0) - 420);
+            const baseY = Math.round((point?.y || 0) - 170);
+            const refImages = selectedTarget?.image?.url
+                ? [stripImageGenerationMeta({...selectedTarget.image, name:selectedTarget.image.name || 'character-reference.png'})]
+                : [];
+            const referenceNode = refImages.length
+                ? createNode(baseX, baseY, refImages, {select:false, skipUndo:true})
+                : createImagePlaceholderNode(baseX, baseY, {title:'角色图', w:430, h:300});
+            referenceNode.title = '角色图';
+            referenceNode.customTitle = true;
+            referenceNode.templateKind = 'character-ref';
+            referenceNode.w = 430;
+            referenceNode.h = 300;
+            const outputNode = createImagePlaceholderNode(baseX + 560, baseY, {
+                title:'角色三视图',
+                prompt:tpl.prompt,
+                w:640,
+                h:360
+            });
+            outputNode.templateKind = 'character-output';
+            outputNode.runSettings = smartDefaultImageRunSettings(settings);
+            connectInputNode(referenceNode.id, outputNode.id);
+            const ids = [referenceNode.id, outputNode.id];
+            const bounds = groupFrameBoundsForMembers(ids);
+            if(bounds){
+                const group = {
+                    id:uid('group'),
+                    type:'smart-group',
+                    x:bounds.x,
+                    y:bounds.y,
+                    w:Math.max(160, bounds.width),
+                    h:Math.max(120, bounds.height),
+                    title:'角色三视图',
+                    customTitle:true,
+                    memberIds:ids.slice(),
+                    created_at:Date.now()
+                };
+                nodes.push(group);
+                ids.push(group.id);
+            }
+            selectedId = outputNode.id;
+            selectedIds = [];
+            selectedImage = {nodeId:'', index:-1};
+            sanitizeFrameGroups();
+            lastComposerNodeId = '';
+            activeComposerSubject = null;
+            render();
+            scheduleSave();
+            toast(refImages.length ? '已用选中图片创建角色三视图工作流' : tpl.toast);
+        }
+        function createScriptGeneratorTemplate(point=createMenuPoint || viewportCenter()){
+            const tpl = SMART_CANVAS_TEMPLATES.script;
+            persistActiveComposerDraft();
+            pushUndo();
+            closeCreateMenu();
+            closeSlashMenu();
+            const baseX = Math.round((point?.x || 0) - 520);
+            const baseY = Math.round((point?.y || 0) - 170);
+            const sourceNode = createPromptTextNode(baseX, baseY, tpl.seed, {
+                title:'剧本',
+                w:430,
+                h:300
+            });
+            sourceNode.templateKind = 'script-source';
+            const scriptNode = createPromptTextNode(baseX + 560, baseY, '', {
+                title:'脚本视图',
+                w:620,
+                h:420
+            });
+            scriptNode.templateKind = 'script-view';
+            scriptNode.llmEnabled = true;
+            scriptNode.llmInstruction = tpl.instruction;
+            scriptNode.llmSystemEnabled = true;
+            scriptNode.llmSystemPrompt = '你是专业短剧编剧、分镜导演和 AI 影像提示词设计师。输出必须结构清晰、可执行、适合继续拆分为图片/视频节点。';
+            scriptNode.h = 420;
+            scriptNode.w = 620;
+            connectInputNode(sourceNode.id, scriptNode.id);
+            const ids = [sourceNode.id, scriptNode.id];
+            const bounds = groupFrameBoundsForMembers(ids);
+            if(bounds){
+                const group = {
+                    id:uid('group'),
+                    type:'smart-group',
+                    x:bounds.x,
+                    y:bounds.y,
+                    w:Math.max(160, bounds.width),
+                    h:Math.max(120, bounds.height),
+                    title:'故事脚本生成',
+                    customTitle:true,
+                    memberIds:ids.slice(),
+                    created_at:Date.now()
+                };
+                nodes.push(group);
+                ids.push(group.id);
+            }
+            selectedId = scriptNode.id;
+            selectedIds = [];
+            selectedImage = {nodeId:'', index:-1};
+            sanitizeFrameGroups();
+            lastComposerNodeId = '';
+            activeComposerSubject = null;
+            render();
+            scheduleSave();
+            toast(tpl.toast);
+        }
+        function createTemplateNodes(type, point=createMenuPoint || viewportCenter()){
+            if(type === 'script') return createScriptGeneratorTemplate(point);
+            if(type === 'character') return createCharacterTurnaroundTemplate(point);
+            const tpl = SMART_CANVAS_TEMPLATES[type] || SMART_CANVAS_TEMPLATES.script;
+            persistActiveComposerDraft();
+            pushUndo();
+            closeCreateMenu();
+            closeSlashMenu();
+            const baseX = Math.round((point?.x || 0) - 220);
+            const baseY = Math.round((point?.y || 0) - 140);
+            const createdIds = [];
+            const rows = tpl.prompts.map((text, index) => {
+                const y = baseY + index * 235;
+                const promptNode = createPromptTextNode(baseX, y, text, {
+                    title: index === 0 ? tpl.title : `镜头 ${index + 1}`,
+                    w:320,
+                    h:174
+                });
+                const imageNode = createImagePlaceholderNode(baseX + 430, y, {
+                    title: index === 0 ? `${tpl.title} 输出` : `输出 ${index + 1}`,
+                    prompt:text
+                });
+                connectInputNode(promptNode.id, imageNode.id);
+                createdIds.push(promptNode.id, imageNode.id);
+                return {promptNode, imageNode};
+            });
+            if(rows.length){
+                const bounds = groupFrameBoundsForMembers(createdIds);
+                if(bounds){
+                    const group = {
+                        id:uid('group'),
+                        type:'smart-group',
+                        x:bounds.x,
+                        y:bounds.y,
+                        w:Math.max(160, bounds.width),
+                        h:Math.max(120, bounds.height),
+                        title:tpl.groupTitle || tpl.title,
+                        customTitle:true,
+                        memberIds:createdIds.slice(),
+                        created_at:Date.now()
+                    };
+                    nodes.push(group);
+                    createdIds.push(group.id);
+                }
+            }
+            selectedId = '';
+            selectedIds = createdIds;
+            selectedImage = {nodeId:'', index:-1};
+            sanitizeFrameGroups();
+            render();
+            scheduleSave();
+            toast(tpl.toast || '已创建模板节点');
+        }
+        function normalizeScriptCell(value){
+            return String(value || '')
+                .replace(/<br\s*\/?>/gi, '\n')
+                .replace(/^\s*[-*]\s+/, '')
+                .replace(/^["“”'`]+|["“”'`]+$/g, '')
+                .trim();
+        }
+        function splitMarkdownRow(line){
+            const raw = String(line || '').trim();
+            if(!raw.includes('|')) return [];
+            return raw.replace(/^\|/, '').replace(/\|$/, '').split('|').map(normalizeScriptCell);
+        }
+        function isMarkdownSeparatorRow(cells){
+            return cells.length > 0 && cells.every(cell => /^:?-{3,}:?$/.test(String(cell || '').trim()));
+        }
+        function normalizeHeaderKey(value){
+            return String(value || '').replace(/\s+/g, '').replace(/[：:]/g, '').toLowerCase();
+        }
+        function scriptParseSource(text){
+            return String(text || '').trim().slice(0, 80000);
+        }
+        function extractScriptConsistencyContext(text){
+            const lines = scriptParseSource(text).split(/\r?\n/);
+            const keep = [];
+            let capture = false;
+            for(const line of lines){
+                const trimmed = line.trim();
+                if(/^#{1,6}\s*(可复用元素库|角色一致性|元素库|角色设定|固定描述)/.test(trimmed) || /^【(角色一致性|可复用元素库|角色设定)】/.test(trimmed)){
+                    capture = true;
+                    keep.push(trimmed);
+                    continue;
+                }
+                if(capture && /^#{1,6}\s+/.test(trimmed) && !/^#{1,6}\s*(可复用元素库|角色一致性|元素库|角色设定|固定描述)/.test(trimmed)) break;
+                if(capture && trimmed) keep.push(trimmed);
+                if(keep.length >= 18) break;
+            }
+            return keep.join('\n').slice(0, 1200);
+        }
+        function compactShotPrompt(prompt, context){
+            const p = normalizeScriptCell(prompt);
+            const c = normalizeScriptCell(context);
+            if(!c) return p;
+            if(p.includes('角色一致性') || p.includes('可复用元素')) return p;
+            return `${p}\n\n角色一致性/可复用元素：\n${c}`;
+        }
+        function extractScriptCharacters(text){
+            const source = scriptParseSource(text);
+            if(!source) return [];
+            const chars = [];
+            const lines = source.split(/\r?\n/);
+            let header = null;
+            let typeIdx = -1;
+            let nameIdx = -1;
+            let descIdx = -1;
+            let visualIdx = -1;
+            let ruleIdx = -1;
+            for(const line of lines){
+                const cells = splitMarkdownRow(line);
+                if(cells.length < 3 || isMarkdownSeparatorRow(cells)) continue;
+                const keys = cells.map(normalizeHeaderKey);
+                if(keys.some(key => /类型|type/.test(key)) && keys.some(key => /名称|角色|name/.test(key))){
+                    header = cells;
+                    typeIdx = keys.findIndex(key => /类型|type/.test(key));
+                    nameIdx = keys.findIndex(key => /名称|角色|name/.test(key));
+                    descIdx = keys.findIndex(key => /固定描述|描述|外观|设定|description/.test(key));
+                    visualIdx = keys.findIndex(key => /视觉关键词|关键词|visual|style/.test(key));
+                    ruleIdx = keys.findIndex(key => /使用规则|规则|rule/.test(key));
+                    continue;
+                }
+                if(!header) continue;
+                const type = normalizeScriptCell(cells[typeIdx] || '');
+                if(!/角色|character/i.test(type)) continue;
+                const name = normalizeScriptCell(cells[nameIdx] || `角色 ${chars.length + 1}`);
+                const desc = normalizeScriptCell(cells[descIdx] || '');
+                const visual = normalizeScriptCell(cells[visualIdx] || '');
+                const rule = normalizeScriptCell(cells[ruleIdx] || '');
+                const textParts = [`角色：${name}`];
+                if(desc) textParts.push(`固定描述：${desc}`);
+                if(visual) textParts.push(`视觉关键词：${visual}`);
+                if(rule) textParts.push(`使用规则：${rule}`);
+                if(name && textParts.join('').length > 8) chars.push({name, text:textParts.join('\n')});
+            }
+            if(chars.length) return chars.slice(0, 8);
+            const block = extractScriptConsistencyContext(source);
+            const fallback = block.split(/\r?\n/).filter(line => /^角色\s*[A-Z0-9一二三四五六七八九十]?|^\|\s*角色\s*\|/.test(line.trim()));
+            return fallback.slice(0, 6).map((line, index) => ({name:`角色 ${index + 1}`, text:normalizeScriptCell(line)})).filter(item => item.text.length > 8);
+        }
+        function extractShotPromptsFromScript(text){
+            const source = scriptParseSource(text);
+            if(!source) return [];
+            const context = extractScriptConsistencyContext(source);
+            const lines = source.split(/\r?\n/);
+            const shots = [];
+            let header = null;
+            let imagePromptIndex = -1;
+            let shotIndex = -1;
+            let titleIndex = -1;
+            for(const line of lines){
+                const cells = splitMarkdownRow(line);
+                if(cells.length < 3) continue;
+                if(isMarkdownSeparatorRow(cells)) continue;
+                const keys = cells.map(normalizeHeaderKey);
+                const promptIdx = keys.findIndex(key => /^(ai)?图片提示词$|^出图提示词$|^提示词$|^imageprompt$/.test(key));
+                if(promptIdx >= 0){
+                    header = cells;
+                    imagePromptIndex = promptIdx;
+                    shotIndex = keys.findIndex(key => /^(镜头|编号|shot|序号)$/.test(key));
+                    titleIndex = keys.findIndex(key => /剧情|beat|画面描述|场景|镜头描述/.test(key));
+                    continue;
+                }
+                if(header && imagePromptIndex >= 0 && cells.length > imagePromptIndex){
+                    const prompt = normalizeScriptCell(cells[imagePromptIndex]);
+                    if(prompt && prompt.length >= 8){
+                        const shotNo = normalizeScriptCell(cells[shotIndex] || '') || String(shots.length + 1).padStart(2, '0');
+                        const title = normalizeScriptCell(cells[titleIndex] || '') || `镜头 ${shotNo}`;
+                        shots.push({shotNo, title, prompt:compactShotPrompt(prompt, context)});
+                    }
+                }
+            }
+            if(shots.length) return shots.slice(0, 36);
+            const blocks = source.split(/\n(?=(?:镜头|第)\s*\d+|^\d+[.、])/m);
+            blocks.forEach((block, index) => {
+                const blockLines = block.split(/\r?\n/);
+                const promptLineIndex = blockLines.findIndex(line => {
+                    const normalized = normalizeHeaderKey(line.split(/[：:]/)[0] || '');
+                    return line.includes('提示词') && !normalized.includes('视频') && !normalized.includes('负面');
+                });
+                if(promptLineIndex < 0) return;
+                const firstLine = blockLines[promptLineIndex].replace(/^[^：:]*[：:]\s*/, '');
+                const restLines = [];
+                for(let i = promptLineIndex + 1; i < blockLines.length; i++){
+                    const line = blockLines[i] || '';
+                    const key = normalizeHeaderKey(line.split(/[：:]/)[0] || '');
+                    if(line.includes('：') || line.includes(':')){
+                        if(key.includes('视频') || key.includes('负面') || key.includes('镜头')) break;
+                    }
+                    restLines.push(line);
+                }
+                const prompt = normalizeScriptCell([firstLine, ...restLines].join('\n'));
+                if(prompt.length < 8) return;
+                const shotNoMatch = block.match(/(?:镜头|第)?\s*(\d{1,3})/);
+                const shotNo = shotNoMatch?.[1] || String(index + 1).padStart(2, '0');
+                const titleLine = normalizeScriptCell(block.split(/\r?\n/).find(line => /剧情|画面|场景|beat/i.test(line)) || '');
+                shots.push({shotNo, title:titleLine || `镜头 ${shotNo}`, prompt:compactShotPrompt(prompt, context)});
+            });
+            return shots.slice(0, 36);
+        }
+        function createShotNodesFromScript(scriptNode){
+            if(!scriptNode || scriptNode.type !== 'smart-prompt') return false;
+            persistActiveComposerDraft();
+            const shots = extractShotPromptsFromScript(scriptNode.text || '');
+            if(!shots.length){
+                toast('没有识别到 AI 图片提示词，请先运行脚本视图生成分镜表');
+                return false;
+            }
+            if(nodes.some(node => node.sourceScriptNodeId === scriptNode.id)){
+                toast('这个脚本已经拆过节点，请先删除旧拆分结果再重新拆分');
+                return false;
+            }
+            pushUndo();
+            const characters = extractScriptCharacters(scriptNode.text || '');
+            const startX = Math.round((Number(scriptNode.x) || 0) + (Number(scriptNode.w) || 620) + 170);
+            const startY = Math.round(Number(scriptNode.y) || 0);
+            const createdIds = [];
+            const limitedCharacters = characters.slice(0, 8);
+            const limitedShots = shots.slice(0, 24);
+            limitedCharacters.forEach((character, index) => {
+                const x = startX + index * 340;
+                const y = startY - 250;
+                const card = createPromptTextNode(x, y, character.text, {
+                    title: character.name || `角色 ${index + 1}`,
+                    w:300,
+                    h:172
+                });
+                card.templateKind = 'character-asset';
+                card.sourceScriptNodeId = scriptNode.id;
+                createdIds.push(card.id);
+            });
+            limitedShots.forEach((shot, index) => {
+                const x = startX;
+                const y = startY + index * 245;
+                const label = `镜头 ${String(shot.shotNo || index + 1).padStart(2, '0')}`;
+                const promptNode = createPromptTextNode(x, y, shot.prompt, {
+                    title: `${label} 提示词`,
+                    w:430,
+                    h:184
+                });
+                promptNode.templateKind = 'script-shot-prompt';
+                promptNode.sourceScriptNodeId = scriptNode.id;
+                const imageNode = createImagePlaceholderNode(x + 520, y, {
+                    title: `${label} 出图`,
+                    prompt:shot.prompt,
+                    w:330,
+                    h:184
+                });
+                imageNode.templateKind = 'script-shot-output';
+                imageNode.sourceScriptNodeId = scriptNode.id;
+                imageNode.runSettings = {...cloneSmartSettings(settings), engine:settings.engine || 'api', apiKind:'image'};
+                connectInputNode(promptNode.id, imageNode.id);
+                createdIds.push(promptNode.id, imageNode.id);
+            });
+            const bounds = groupFrameBoundsForMembers(createdIds);
+            if(bounds){
+                const group = {
+                    id:uid('group'),
+                    type:'smart-group',
+                    x:bounds.x,
+                    y:bounds.y,
+                    w:Math.max(160, bounds.width),
+                    h:Math.max(120, bounds.height),
+                    title:'脚本拆分镜头出图',
+                    customTitle:true,
+                    sourceScriptNodeId:scriptNode.id,
+                    memberIds:createdIds.slice(),
+                    created_at:Date.now()
+                };
+                nodes.push(group);
+                createdIds.push(group.id);
+            }
+            selectedId = '';
+            selectedIds = createdIds;
+            selectedImage = {nodeId:'', index:-1};
+            sanitizeFrameGroups();
+            lastComposerNodeId = '';
+            activeComposerSubject = null;
+            render();
+            scheduleSave();
+            const omitted = shots.length > limitedShots.length ? `，已限制为前 ${limitedShots.length} 镜` : '';
+            toast(`已拆分 ${limitedShots.length} 个镜头出图节点${omitted}`);
+            return true;
         }
         function cloneSmartNode(node, dx=0, dy=0){
             const copy = JSON.parse(JSON.stringify(node));
@@ -3555,6 +4397,17 @@
                 if(action === 'copy') return copySelectedNodes();
                 if(action === 'cut') return cutSelectedSmartNodes();
                 if(action === 'paste') return pasteNodes();
+                if(action === 'rename-node' && node) {
+                    const label = world.querySelector(`.image-node[data-id="${CSS.escape(node.id)}"] [data-node-title]`);
+                    if(label) beginNodeTitleEdit(label, node);
+                    return;
+                }
+                if(action === 'copy-params' && node) {
+                    await copyTextToClipboard(JSON.stringify(copyNodeParamsPayload(node), null, 2));
+                    toast('节点参数已复制');
+                    return;
+                }
+                if(action === 'run-selected') return await runSelectedImageNodesBatch();
                 if(action === 'duplicate') return duplicateSelectedSmartNodes();
                 if(action === 'send-chat') return await sendSelectedImageToChat();
                 if(action === 'save-asset') return await saveSelectedImageToAssetLibrary();
@@ -3655,6 +4508,76 @@
             const url = String(img.url || '').toLowerCase();
             return /\.(mp4|webm|mov|m4v)(\?|$)/.test(url);
         }
+        function smartMediaUrl(img){
+            return typeof img === 'string' ? img : (img?.url || '');
+        }
+        function isLocalSmartMediaUrl(url){
+            return typeof url === 'string' && (url.startsWith('/output/') || url.startsWith('/assets/'));
+        }
+        function isMissingSmartAssetUrl(url){
+            return Boolean(url && smartMissingAssetUrls.has(url));
+        }
+        function missingSmartMediaHtml(url, compact=false){
+            return `<div class="smart-missing-media ${compact ? 'compact' : ''}" data-missing-url="${escapeHtml(url || '')}" title="${escapeHtml(url || '')}"><i data-lucide="image-off"></i><span>文件缺失</span></div>`;
+        }
+        function smartCanvasLocalAssetUrls(){
+            const urls = new Set();
+            const add = value => {
+                const url = smartMediaUrl(value);
+                if(isLocalSmartMediaUrl(url)) urls.add(url);
+            };
+            (nodes || []).forEach(node => {
+                (node.images || []).forEach(add);
+                (node.runPromptRefs || []).forEach(add);
+                (node.promptRefs || []).forEach(add);
+                if(node.url) add(node.url);
+            });
+            (canvas?.logs || []).forEach(log => {
+                (log.outputs || []).forEach(add);
+                (log.refs || []).forEach(add);
+                (log.run?.refs || []).forEach(add);
+            });
+            return [...urls];
+        }
+        async function refreshSmartMissingAssets(options={}){
+            clearTimeout(smartMissingCheckTimer);
+            const urls = smartCanvasLocalAssetUrls();
+            if(!urls.length){
+                const hadMissing = smartMissingAssetUrls.size > 0;
+                smartMissingAssetUrls.clear();
+                if(hadMissing) render();
+                return;
+            }
+            try {
+                const data = await fetch('/api/canvas-assets/check', {
+                    method:'POST',
+                    headers:{'Content-Type':'application/json'},
+                    body:JSON.stringify({urls})
+                }).then(async r => {
+                    if(!r.ok) throw new Error(await r.text());
+                    return r.json();
+                });
+                const nextMissing = new Set(data.missing || Object.entries(data.exists || {}).filter(([, ok]) => !ok).map(([url]) => url));
+                const before = [...smartMissingAssetUrls].sort().join('\n');
+                smartMissingAssetUrls.clear();
+                nextMissing.forEach(url => smartMissingAssetUrls.add(url));
+                const after = [...smartMissingAssetUrls].sort().join('\n');
+                if(before !== after) render();
+                if(options.notify && nextMissing.size){
+                    const key = after;
+                    if(key && key !== smartMissingToastKey){
+                        smartMissingToastKey = key;
+                        toast(`发现 ${nextMissing.size} 张画布图片文件缺失`);
+                    }
+                }
+            } catch(e) {
+                console.warn('smart canvas asset check failed', e);
+            }
+        }
+        function scheduleSmartMissingAssetCheck(delay=450){
+            clearTimeout(smartMissingCheckTimer);
+            smartMissingCheckTimer = setTimeout(() => refreshSmartMissingAssets({notify:true}), delay);
+        }
         function smartDownloadName(imgOrUrl, fallback='smart-canvas'){
             const rawName = typeof imgOrUrl === 'object' ? (imgOrUrl.name || imgOrUrl.filename || '') : '';
             const url = typeof imgOrUrl === 'object' ? (imgOrUrl.url || '') : String(imgOrUrl || '');
@@ -3678,15 +4601,22 @@
         }
         function thumbMediaHtml(img, node=null){
             const transform = imageTransformStyle(node);
+            const url = smartMediaUrl(img);
+            if(isMissingSmartAssetUrl(url)) return missingSmartMediaHtml(url, true);
             return isVideoMediaItem(img)
-                ? `<video src="${escapeHtml(img.url)}" muted preload="metadata" playsinline style="${transform}"></video>`
-                : `<img src="${escapeHtml(img.url)}" draggable="false" style="${transform}">`;
+                ? `<video src="${escapeHtml(url)}" data-smart-media-url="${escapeHtml(url)}" muted preload="metadata" playsinline style="${transform}"></video>`
+                : `<img src="${escapeHtml(url)}" data-smart-media-url="${escapeHtml(url)}" draggable="false" style="${transform}">`;
         }
         function singleMediaHtml(img, w, h, node=null){
             const transform = imageTransformStyle(node);
+            const url = smartMediaUrl(img);
+            if(isMissingSmartAssetUrl(url)) return missingSmartMediaHtml(url, false);
             return isVideoMediaItem(img)
-                ? `<video class="node-img" src="${escapeHtml(img.url)}" controls muted preload="metadata" playsinline style="width:${w}px;height:${h}px;${transform}"></video>`
-                : `<img class="node-img" src="${escapeHtml(img.url)}" draggable="false" style="width:${w}px;height:${h}px;${transform}">`;
+                ? `<video class="node-img" src="${escapeHtml(url)}" data-smart-media-url="${escapeHtml(url)}" controls muted preload="metadata" playsinline style="width:${w}px;height:${h}px;${transform}"></video>`
+                : `<img class="node-img" src="${escapeHtml(url)}" data-smart-media-url="${escapeHtml(url)}" draggable="false" style="width:${w}px;height:${h}px;${transform}">`;
+        }
+        function promptTextExpandButton(field, title='放大编辑'){
+            return `<button class="prompt-expand-mini prompt-node-control" type="button" data-expand-field="${escapeHtml(field)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><i data-lucide="expand"></i></button>`;
         }
         function promptNodeBodyHtml(node){
             node.llmProvider = resolveChatProviderId(node.llmProvider || '');
@@ -3694,21 +4624,40 @@
             node.llmSystemEnabled = node.llmSystemEnabled === true;
             const readonly = node.llmEnabled ? 'readonly' : '';
             const systemPrompt = (node.llmSystemPrompt || '').trim();
+            let splitBtn = '';
+            if(node.templateKind === 'script-view'){
+                const alreadySplit = nodes.some(item => item.sourceScriptNodeId === node.id);
+                const hasShotPrompts = extractShotPromptsFromScript(node.text || '').length > 0;
+                const disabled = alreadySplit || node.running || !hasShotPrompts;
+                const label = alreadySplit ? '已拆分' : node.running ? '运行中' : hasShotPrompts ? '拆成出图节点' : '先运行脚本';
+                const icon = alreadySplit ? 'check' : node.running ? 'loader-2' : 'git-branch-plus';
+                splitBtn = `<button class="prompt-node-split prompt-node-control" type="button" ${disabled ? 'disabled' : ''} title="${escapeHtml(label)}"><i data-lucide="${icon}"></i><span>${escapeHtml(label)}</span></button>`;
+            }
             const llmParams = node.llmEnabled ? `
                 <div class="prompt-node-llm">
                     <select class="prompt-node-control prompt-llm-provider">${chatProviderOptions(node.llmProvider)}</select>
                     <select class="prompt-node-control prompt-llm-model">${chatModelOptions(node.llmModel, node.llmProvider)}</select>
-                    <textarea class="prompt-node-control prompt-llm-instruction" placeholder="输入给 LLM 的文本，运行后会写入上方提示词">${escapeHtml(node.llmInstruction || '')}</textarea>
+                    <div class="prompt-text-shell">
+                        <textarea class="prompt-node-control prompt-llm-instruction" placeholder="输入给 LLM 的文本，运行后会写入上方提示词">${escapeHtml(node.llmInstruction || '')}</textarea>
+                        ${promptTextExpandButton('llmInstruction', '放大编辑 LLM 指令')}
+                    </div>
                     <div class="prompt-node-llm-actions">
                         <button class="prompt-node-run prompt-node-control" type="button" ${node.running ? 'disabled' : ''}><i data-lucide="${node.running ? 'loader-2' : 'play'}"></i><span>${node.running ? '运行中' : '运行'}</span></button>
                         <button class="prompt-node-pill prompt-node-control prompt-system-toggle ${node.llmSystemEnabled ? 'active' : ''}" type="button"><i data-lucide="${node.llmSystemEnabled ? 'toggle-right' : 'toggle-left'}"></i><span>${node.llmSystemEnabled ? '关闭系统提示词' : '启用系统提示词'}</span></button>
                     </div>
-                    ${node.llmSystemEnabled ? `<textarea class="prompt-node-control prompt-llm-system" placeholder="系统提示词开启后会随请求一起发送">${escapeHtml(systemPrompt || 'You are a helpful prompt assistant.')}</textarea>` : ''}
+                    ${node.llmSystemEnabled ? `<div class="prompt-text-shell">
+                        <textarea class="prompt-node-control prompt-llm-system" placeholder="系统提示词开启后会随请求一起发送">${escapeHtml(systemPrompt || 'You are a helpful prompt assistant.')}</textarea>
+                        ${promptTextExpandButton('llmSystemPrompt', '放大编辑系统提示词')}
+                    </div>` : ''}
                 </div>` : '';
             return `<div class="prompt-node-card">
-                <textarea class="prompt-node-text prompt-node-control" ${readonly} placeholder="输入提示词...">${escapeHtml(node.text || '')}</textarea>
+                <div class="prompt-text-shell main">
+                    <textarea class="prompt-node-text prompt-node-control" ${readonly} placeholder="输入提示词...">${escapeHtml(node.text || '')}</textarea>
+                    ${promptTextExpandButton('text', '放大编辑节点文本')}
+                </div>
                 <div class="prompt-node-tools">
                     <button class="prompt-node-pill prompt-llm-toggle ${node.llmEnabled ? 'active' : ''}" type="button"><i data-lucide="sparkles"></i><span>LLM</span></button>
+                    ${splitBtn}
                 </div>
                 ${llmParams}
             </div>`;
@@ -3794,9 +4743,10 @@
                 const isEmpty = isImageNode && imgs.length === 0 && !hasImageRunState;
                 const isGroup = isImageNode && imgs.length > 1;
                 const isPending = isImageNode && imgs.length === 0 && Boolean(node.pending || node.running);
+                const templateClass = node.templateKind ? `template-${String(node.templateKind).replace(/[^a-z0-9_-]/gi, '')}` : '';
             const body = nodeBodyHtml(node, layout);
             const deleteBtn = isNodeSelected(node.id) ? `<button class="mini-x node-delete" type="button" title="${escapeHtml(tr('smart.deleteNode'))}"><i data-lucide="trash-2"></i></button>` : '';
-            return `<div class="image-node ${isFrameGroup ? 'smart-frame-group' : ''} ${isEmpty ? 'empty-node' : ''} ${isGroup ? 'group-node' : ''} ${isPrompt ? 'prompt-smart-node' : ''} ${isLoop ? 'loop-smart-node' : ''} ${node.runError ? 'node-error' : ''} ${isNodeSelected(node.id) ? 'selected' : ''} ${(dragState?.groupIds?.includes(node.id) || dragState?.id === node.id) ? 'dragging' : ''} ${node.running ? 'node-running' : ''} ${isPending ? 'node-pending' : ''} ${node.hidden ? 'node-hidden' : ''} ${node.locked ? 'node-locked' : ''}" data-id="${escapeHtml(node.id)}" style="left:${node.x || 0}px;top:${node.y || 0}px;width:${layout.width}px;height:${layout.height}px">
+            return `<div class="image-node ${isFrameGroup ? 'smart-frame-group' : ''} ${isEmpty ? 'empty-node' : ''} ${isGroup ? 'group-node' : ''} ${isPrompt ? 'prompt-smart-node' : ''} ${isLoop ? 'loop-smart-node' : ''} ${templateClass} ${node.runError ? 'node-error' : ''} ${isNodeSelected(node.id) ? 'selected' : ''} ${(dragState?.groupIds?.includes(node.id) || dragState?.id === node.id) ? 'dragging' : ''} ${node.running ? 'node-running' : ''} ${isPending ? 'node-pending' : ''} ${node.hidden ? 'node-hidden' : ''} ${node.locked ? 'node-locked' : ''}" data-id="${escapeHtml(node.id)}" style="left:${node.x || 0}px;top:${node.y || 0}px;width:${layout.width}px;height:${layout.height}px">
                     ${!isFrameGroup ? (isPrompt || isLoop || isEmpty ? `<div class="node-head">${nodeTitleLabelHtml(node, 'head')}<div class="node-actions">${deleteBtn}</div></div>` : nodeTitleLabelHtml(node, 'floating')) : ''}
                     ${runTimePillHtml(node)}
                     <div class="node-body">${body}</div>
@@ -3818,6 +4768,7 @@
             updateSmartSelectionToolbar();
             if(window.lucide) lucide.createIcons();
             measureSmartNodeImages();
+            bindSmartMediaLoadGuards();
             refreshRunTimerPills();
             scheduleSmartPendingReconcile();
             } catch(err) {
@@ -3850,6 +4801,26 @@
                 };
                 if(imgEl.complete) apply();
                 else imgEl.addEventListener('load', apply, {once:true});
+            });
+        }
+        function bindSmartMediaLoadGuards(){
+            world.querySelectorAll('[data-smart-media-url]').forEach(mediaEl => {
+                const onMissing = () => {
+                    const url = mediaEl.dataset.smartMediaUrl || mediaEl.getAttribute('src') || '';
+                    if(!url || smartMissingAssetUrls.has(url)) return;
+                    smartMissingAssetUrls.add(url);
+                    scheduleSmartMissingAssetCheck(80);
+                    const holder = mediaEl.closest('.thumb-item') ? mediaEl.closest('.thumb-item') : mediaEl.closest('.image-wrap');
+                    const compact = Boolean(mediaEl.closest('.thumb-item'));
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = missingSmartMediaHtml(url, compact);
+                    const replacement = wrapper.firstElementChild;
+                    if(replacement) mediaEl.replaceWith(replacement);
+                    if(window.lucide) lucide.createIcons();
+                    if(holder) holder.title = `文件缺失：${url}`;
+                };
+                mediaEl.addEventListener('error', onMissing, {once:true});
+                if(mediaEl.tagName === 'IMG' && mediaEl.complete && mediaEl.naturalWidth <= 0) onMissing();
             });
         }
         function bindConnectionEvents(){
@@ -3912,7 +4883,7 @@
             const textEl = el.querySelector('.prompt-node-text');
             if(textEl) {
                 bindScrollableText(textEl);
-                textEl.oninput = e => { node.text = e.target.value; scheduleSave(); };
+                textEl.oninput = e => { node.text = e.target.value; saveSmartNodeDraft(node.id, 'text', node.text); scheduleSave(); };
             }
             const toggle = el.querySelector('.prompt-llm-toggle');
             if(toggle) toggle.onclick = e => {
@@ -3952,11 +4923,34 @@
                 scheduleSave();
             };
             const systemEl = el.querySelector('.prompt-llm-system');
-            if(systemEl) { bindScrollableText(systemEl); systemEl.oninput = e => { node.llmSystemPrompt = e.target.value; scheduleSave(); }; }
+            if(systemEl) { bindScrollableText(systemEl); systemEl.oninput = e => { node.llmSystemPrompt = e.target.value; saveSmartNodeDraft(node.id, 'llmSystemPrompt', node.llmSystemPrompt); scheduleSave(); }; }
             const instructionEl = el.querySelector('.prompt-llm-instruction');
-            if(instructionEl) { bindScrollableText(instructionEl); instructionEl.oninput = e => { node.llmInstruction = e.target.value; scheduleSave(); }; }
+            if(instructionEl) { bindScrollableText(instructionEl); instructionEl.oninput = e => { node.llmInstruction = e.target.value; saveSmartNodeDraft(node.id, 'llmInstruction', node.llmInstruction); scheduleSave(); }; }
+            el.querySelectorAll('.prompt-expand-mini[data-expand-field]').forEach(btn => {
+                ['pointerdown', 'mousedown', 'click'].forEach(type => {
+                    btn.addEventListener(type, e => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if(type === 'click') openSmartTextModal(node.id, btn.dataset.expandField || 'text');
+                    });
+                });
+            });
+            el.addEventListener('click', e => {
+                const btn = e.target.closest?.('.prompt-expand-mini[data-expand-field]');
+                if(!btn || !el.contains(btn)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                openSmartTextModal(node.id, btn.dataset.expandField || 'text');
+            });
             const runEl = el.querySelector('.prompt-node-run');
             if(runEl) runEl.onclick = e => { e.preventDefault(); e.stopPropagation(); runPromptLLMNode(node.id); };
+            const splitEl = el.querySelector('.prompt-node-split');
+            if(splitEl) splitEl.onclick = e => {
+                e.preventDefault();
+                e.stopPropagation();
+                if(splitEl.disabled) return;
+                createShotNodesFromScript(node);
+            };
         }
         function commitNodeTitleEdit(label, node, input, commit=true){
             if(!label || !node || !input) return;
@@ -3965,6 +4959,7 @@
             if(commit && next && next !== previous){
                 node.title = next.slice(0, 80);
                 node.customTitle = true;
+                saveSmartNodeDraft(node.id, 'title', node.title);
                 scheduleSave();
             }
             label.classList.remove('editing');
@@ -4135,7 +5130,7 @@
                 return;
             }
             if(!drag.moved){ discardPendingUndo(); render(); return; }
-            if(hit?.closest?.('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-minimap')){
+            if(hit?.closest?.('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-text-modal,.smart-minimap')){
                 discardPendingUndo(); render(); return;
             }
             const p = screenToWorld(e);
@@ -5141,6 +6136,8 @@
             subject.promptDraftHtml = promptInput.innerHTML;
             subject.promptDraftText = promptPlainText();
             subject.runSettings = cloneSmartSettings(settings);
+            saveSmartNodeDraft(subject.id, 'promptDraftHtml', subject.promptDraftHtml);
+            saveSmartNodeDraft(subject.id, 'promptDraftText', subject.promptDraftText);
         }
         function loadPromptDraft(subject){
             if(subject?.promptDraftHtml){
@@ -5430,20 +6427,34 @@
                 createdAt:Date.now()
             };
         }
+        function normalizedRunMeta(meta={}, fallbackNode=null){
+            const st = cloneSmartSettings(meta.settings || fallbackNode?.runSettings || settings);
+            return {
+                prompt:String(meta.prompt || fallbackNode?.runModelPrompt || fallbackNode?.canvasTaskPrompt || fallbackNode?.runPrompt || '').trim(),
+                displayPrompt:String(meta.displayPrompt || fallbackNode?.runPrompt || meta.promptText || meta.prompt || '').trim(),
+                promptHtml:meta.promptHtml ?? fallbackNode?.promptDraftHtml ?? '',
+                promptText:String(meta.promptText || fallbackNode?.promptDraftText || meta.displayPrompt || meta.prompt || '').trim(),
+                promptRefs:Array.isArray(meta.promptRefs) ? meta.promptRefs : (fallbackNode?.runPromptRefs || []),
+                sourceNodeId:meta.sourceNodeId || fallbackNode?.sourceNodeId || fallbackNode?.id || '',
+                settings:st,
+                createdAt:Number(meta.createdAt || fallbackNode?.runAt || fallbackNode?.runStartedAt || Date.now())
+            };
+        }
         function attachRunMeta(targetNode, meta){
             if(!targetNode || !meta) return;
-            targetNode.runPrompt = meta.displayPrompt || meta.promptText || meta.prompt;
-            targetNode.runModelPrompt = meta.prompt;
-            targetNode.runPromptRefs = meta.promptRefs || [];
-            targetNode.runSettings = meta.settings;
-            targetNode.sourceNodeId = meta.sourceNodeId;
-            targetNode.runAt = meta.createdAt;
+            const nextMeta = normalizedRunMeta(meta, targetNode);
+            targetNode.runPrompt = nextMeta.displayPrompt || nextMeta.promptText || nextMeta.prompt;
+            targetNode.runModelPrompt = nextMeta.prompt;
+            targetNode.runPromptRefs = nextMeta.promptRefs || [];
+            targetNode.runSettings = nextMeta.settings;
+            targetNode.sourceNodeId = nextMeta.sourceNodeId;
+            targetNode.runAt = nextMeta.createdAt;
             // 保存可编辑的 @ 提及表单草稿，方便重新选中输出节点时恢复原始编辑状态。
-            if(meta.promptHtml != null){
-                const htmlHasToken = String(meta.promptHtml || '').includes('mention-image-token');
-                const rebuiltHtml = htmlHasToken ? '' : promptHtmlWithMentionTokens(meta.displayPrompt || meta.promptText || '', meta.promptRefs || []);
-                targetNode.promptDraftHtml = htmlHasToken ? meta.promptHtml : (rebuiltHtml || meta.promptHtml);
-                targetNode.promptDraftText = meta.promptText || '';
+            if(nextMeta.promptHtml != null){
+                const htmlHasToken = String(nextMeta.promptHtml || '').includes('mention-image-token');
+                const rebuiltHtml = htmlHasToken ? '' : promptHtmlWithMentionTokens(nextMeta.displayPrompt || nextMeta.promptText || '', nextMeta.promptRefs || []);
+                targetNode.promptDraftHtml = htmlHasToken ? nextMeta.promptHtml : (rebuiltHtml || nextMeta.promptHtml);
+                targetNode.promptDraftText = nextMeta.promptText || nextMeta.displayPrompt || '';
             }
             targetNode.images = (targetNode.images || []).map(img => stripImageGenerationMeta(img));
         }
@@ -5798,6 +6809,7 @@
             sel.removeAllRanges();
             sel.addRange(range);
             closeMentionPicker();
+            closeSlashMenu();
             promptInput.focus();
             renderInputThumbsRow(selectedNode());
             promptInput.dispatchEvent(new Event('input', {bubbles:true}));
@@ -5831,6 +6843,11 @@
             saveMentionRange();
             renderInputThumbsRow(selectedNode());
             return true;
+        }
+        function maybeOpenSlashMenu(){
+            const text = promptPlainText();
+            if(text === '/' || /(?:^|\s)\/$/.test(text)) openSlashMenu();
+            else closeSlashMenu();
         }
         function addExternalAssetToCanvas(asset){
             const url = asset?.url || asset?.local_url || asset?.thumb_url || '';
@@ -6404,10 +7421,16 @@
         }
         async function runGeneration(){
             const node = selectedNode();
+            const previousSettingsForNodeRun = node?.runSettings ? cloneSmartSettings(settings) : null;
+            if(node?.runSettings) settings = {...settings, ...cloneSmartSettings(node.runSettings)};
             const request = buildPromptRequest(node, null, true);
             const prompt = request.prompt.trim();
             if(!node) return;
-            if(!prompt){ toast(tr('smart.toastNeedPrompt')); return; }
+            if(!prompt){
+                if(previousSettingsForNodeRun) settings = previousSettingsForNodeRun;
+                toast(tr('smart.toastNeedPrompt'));
+                return;
+            }
             const refs = request.refs;
             const meta = snapshotRunMeta(prompt, node.id, request.displayPrompt, refs);
             const expectedCount = settings.engine === 'comfy'
@@ -6468,6 +7491,7 @@
                     ? await runModelscopeGeneration(prompt, refs)
                     : await runApiGeneration(prompt, refs, pendingNode, meta);
                 if(!outImages.length) throw new Error(tr('smart.errNoOutImages'));
+                meta.settings = cloneSmartSettings(settings);
                 finalizePendingNode(pendingNode, outImages, meta);
                 clearPromptInput({preserveDraft:true});
                 scheduleSave();
@@ -6483,6 +7507,7 @@
                 delete pendingNode._runMetaTargetId;
                 toast((e.message || tr('smart.errRunFailed')).slice(0, 160));
             } finally {
+                if(previousSettingsForNodeRun) settings = previousSettingsForNodeRun;
                 if(!apiConcurrentRun){
                     clearNodeRunningState(pendingNode);
                     runBtn.disabled = false;
@@ -6490,14 +7515,72 @@
                 render();
             }
         }
+        async function runImageNodeById(nodeId){
+            const node = nodes.find(n => n.id === nodeId);
+            if(!node || (!(node.type === 'smart-image' || !node.type)) || node.locked) return false;
+            if(node.pending || node.running) return false;
+            const inputPrompt = inputPromptTextFor(node).trim();
+            const ownPrompt = String(node.promptDraftText || node.runPrompt || node.runModelPrompt || '').trim();
+            const prompt = inputPrompt || ownPrompt;
+            if(!prompt) return false;
+            const previousSelectedId = selectedId;
+            const previousSelectedIds = selectedIds.slice();
+            const previousSelectedImage = {...selectedImage};
+            const previousComposerSubject = activeComposerSubject;
+            const previousLastComposerNodeId = lastComposerNodeId;
+            const previousSettings = cloneSmartSettings(settings);
+            try {
+                selectedId = node.id;
+                selectedIds = [];
+                selectedImage = {nodeId:'', index:-1};
+                activeComposerSubject = node;
+                lastComposerNodeId = node.id;
+                if(node.runSettings) settings = {...settings, ...cloneSmartSettings(node.runSettings)};
+                setPromptText(prompt);
+                await runGeneration();
+                return true;
+            } finally {
+                settings = previousSettings;
+                selectedId = previousSelectedId;
+                selectedIds = previousSelectedIds;
+                selectedImage = previousSelectedImage;
+                activeComposerSubject = previousComposerSubject;
+                lastComposerNodeId = previousLastComposerNodeId;
+                render();
+            }
+        }
+        async function runSelectedImageNodesBatch(){
+            const ids = selectedContentNodeIds().filter(id => {
+                const node = nodes.find(n => n.id === id);
+                return node && (node.type === 'smart-image' || !node.type);
+            });
+            if(!ids.length){ toast('请先选择要运行的出图节点'); return; }
+            toast(`开始批量运行 ${ids.length} 个出图节点`);
+            let ok = 0;
+            for(const id of ids){
+                try {
+                    if(await runImageNodeById(id)) ok += 1;
+                } catch(e) {
+                    console.warn('batch run node failed', id, e);
+                }
+            }
+            toast(ok ? `批量运行完成：已提交 ${ok} 个节点` : '没有可运行的节点，请检查提示词或连接');
+            scheduleSave();
+        }
         async function runPromptLLMNode(nodeId){
             const node = nodes.find(n => n.id === nodeId);
             if(!node || node.type !== 'smart-prompt') return;
-            const message = (node.llmInstruction || node.text || '').trim();
+            const inputText = inputPromptTextFor(node).trim();
+            const instruction = (node.llmInstruction || '').trim();
+            const message = inputText
+                ? `${instruction || '请根据以下内容进行整理和创作。'}\n\n【输入内容】\n${inputText}`
+                : (instruction || node.text || '').trim();
             if(!message){ toast('请先输入给 LLM 的文本'); return; }
             const systemPrompt = (node.llmSystemPrompt || '').trim();
             node.llmEnabled = true;
             node.running = true;
+            node.runStartedAt = Date.now();
+            node.runError = '';
             render();
             try {
                 const provider = resolveChatProviderId(node.llmProvider || '');
@@ -6524,9 +7607,12 @@
                 node.llmModel = model;
                 scheduleSave();
             } catch(e) {
-                toast((e.message || 'LLM 运行失败').slice(0, 160));
+                node.runError = (e.message || 'LLM 运行失败').slice(0, 160);
+                toast(node.runError);
             } finally {
                 node.running = false;
+                node.runFinishedAt = Date.now();
+                node.runElapsedMs = Math.max(0, node.runFinishedAt - Number(node.runStartedAt || node.runFinishedAt));
                 render();
             }
         }
@@ -6817,7 +7903,7 @@
             return known;
         }
         function smartRunMetaFromNode(node){
-            return {
+            const meta = normalizedRunMeta({
                 prompt: node?.runModelPrompt || node?.canvasTaskPrompt || node?.runPrompt || '',
                 displayPrompt: node?.runPrompt || node?.runModelPrompt || node?.canvasTaskPrompt || '',
                 promptText: node?.runPrompt || '',
@@ -6825,7 +7911,8 @@
                 sourceNodeId: node?.sourceNodeId || node?.id || '',
                 settings: cloneSmartSettings(node?.runSettings || settings),
                 createdAt: Number(node?.runAt || node?.runStartedAt || node?.created_at || Date.now())
-            };
+            }, node);
+            return meta;
         }
         async function loadRecentSmartImageAssets(){
             const data = await fetch('/api/assets?type=image&limit=200').then(async r => {
@@ -6869,18 +7956,53 @@
             const items = assetItems || await loadRecentSmartImageAssets();
             return smartUrlsFromAssets(items, opts);
         }
+        function smartNodeStartedAtMs(node){
+            const raw = Number(node?.runStartedAt || node?.canvasTaskCreatedAt || node?.created_at || 0);
+            if(!Number.isFinite(raw) || raw <= 0) return 0;
+            return raw < 100000000000 ? raw * 1000 : raw;
+        }
+        function smartNodeRunAgeMs(node){
+            const startedAt = smartNodeStartedAtMs(node);
+            if(!startedAt) return 0;
+            return Math.abs(Date.now() - startedAt);
+        }
+        function markSmartNodeStale(node, message){
+            if(!node) return false;
+            const wasActive = Boolean(node.pending || node.running);
+            node.pending = 0;
+            node.running = false;
+            node.runFinishedAt = Date.now();
+            const startedAt = smartNodeStartedAtMs(node) || node.runFinishedAt;
+            node.runElapsedMs = Math.max(0, node.runFinishedAt - startedAt);
+            node.runError = message || '任务超时，已停止等待。可检查素材库后重新运行';
+            return wasActive;
+        }
         function reconcileStuckSmartNodes(){
             let hasStuck = false;
+            let changed = false;
+            const now = Date.now();
             nodes.forEach(node => {
                 if((node.images || []).length) return;
                 if(node.runError) return;
+                if(node.type === 'smart-prompt'){
+                    if(node.running && smartNodeRunAgeMs(node) && smartNodeRunAgeMs(node) > SMART_LLM_PENDING_MAX_MS){
+                        changed = markSmartNodeStale(node, 'LLM 运行超时，已停止等待。请检查模型或重新运行') || changed;
+                    }
+                    return;
+                }
                 const hasMeta = node.runStartedAt || node.canvasTaskCreatedAt || node.canvasTaskId || node.runModelPrompt || node.runPrompt || node.runSettings?.model;
                 if(!hasMeta) return;
+                const runAge = smartNodeRunAgeMs(node);
+                if(runAge && runAge > SMART_IMAGE_PENDING_MAX_MS){
+                    changed = markSmartNodeStale(node, '图片任务等待超时，已停止转圈。可检查素材库后重新运行') || changed;
+                    return;
+                }
                 node.pending = 1;
                 node.running = true;
                 if(!node.runStartedAt) node.runStartedAt = node.canvasTaskCreatedAt || node.created_at || Date.now();
                 hasStuck = true;
             });
+            if(changed) scheduleSave();
             if(hasStuck) scheduleSmartPendingReconcile(1200);
         }
         async function reconcileSmartPendingNodes(){
@@ -6892,6 +8014,11 @@
                 const items = await loadRecentSmartImageAssets();
                 let changed = false;
                 for(const node of pendingNodes){
+                    const runAge = smartNodeRunAgeMs(node);
+                    if(runAge && runAge > SMART_IMAGE_PENDING_MAX_MS){
+                        changed = markSmartNodeStale(node, '图片任务等待超时，已停止转圈。可检查素材库后重新运行') || changed;
+                        continue;
+                    }
                     const urls = smartUrlsFromAssets(items, {
                         node,
                         taskId: node.canvasTaskId,
@@ -7037,11 +8164,81 @@
         function closeCreateMenu(){
             createMenu?.classList.remove('open');
         }
+        function closeSlashMenu(){
+            if(!slashMenu) return;
+            slashMenu.classList.remove('open');
+            slashMenu.setAttribute('aria-hidden', 'true');
+            slashMenuOpen = false;
+        }
+        function slashCommandItems(){
+            return [
+                {id:'script', title:'故事脚本生成', desc:'故事想法 -> 脚本视图和可执行分镜表', badge:'/脚本', icon:'scroll-text'},
+                {id:'character', title:'角色三视图', desc:'左侧参考图 -> 右侧角色设定板', badge:'/角色', icon:'user-round'},
+                {id:'product', title:'产品三视图', desc:'主图、细节、场景图', badge:'/产品', icon:'package'}
+            ];
+        }
+        function renderSlashMenu(){
+            if(!slashMenu) return;
+            slashMenu.innerHTML = `
+                <div class="slash-menu-head"><i data-lucide="command"></i><span>画布出图模板</span></div>
+                <div class="slash-command-list">
+                    ${slashCommandItems().map(item => `
+                        <button class="slash-command" type="button" data-slash-command="${escapeHtml(item.id)}">
+                            <span class="slash-command-icon"><i data-lucide="${escapeHtml(item.icon)}"></i></span>
+                            <span>
+                                <div class="slash-command-title">${escapeHtml(item.title)}</div>
+                                <div class="slash-command-desc">${escapeHtml(item.desc)}</div>
+                            </span>
+                            <span class="slash-command-badge">${escapeHtml(item.badge)}</span>
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+            refreshIcons();
+        }
+        function positionSlashMenu(){
+            if(!slashMenu || !composer) return;
+            const row = promptInput.closest('.prompt-row');
+            const rowRect = row.getBoundingClientRect();
+            const width = slashMenu.offsetWidth || 420;
+            const left = Math.max(10, Math.min(window.innerWidth - width - 10, rowRect.left + 4));
+            const top = Math.max(10, Math.min(window.innerHeight - 250, rowRect.top - 228));
+            slashMenu.style.left = `${left}px`;
+            slashMenu.style.top = `${top}px`;
+        }
+        function openSlashMenu(){
+            if(!slashMenu || !promptInput) return;
+            renderSlashMenu();
+            slashMenu.classList.add('open');
+            slashMenu.setAttribute('aria-hidden', 'false');
+            slashMenuOpen = true;
+            createMenuPoint = selectedNode() ? {x:(selectedNode().x || 0), y:(selectedNode().y || 0) + 260} : viewportCenter();
+            positionSlashMenu();
+        }
+        function removeTrailingSlashCommand(){
+            const text = promptPlainText();
+            if(text === '/') {
+                clearPromptInput();
+                return true;
+            }
+            if(/\/$/.test(text)){
+                setPromptText(text.replace(/\/$/, '').trimEnd());
+                savePromptDraftForCurrent();
+                return true;
+            }
+            return false;
+        }
+        function runSlashCommand(type){
+            removeTrailingSlashCommand();
+            const node = selectedNode();
+            const p = createMenuPoint || (node ? {x:(node.x || 0), y:(node.y || 0) + 260} : viewportCenter());
+            createTemplateNodes(type, p);
+        }
         function openCreateMenu(event){
             if(!createMenu) return;
             createMenuPoint = screenToWorld(event);
-            const w = 420;
-            const h = 150;
+            const w = Math.min(760, window.innerWidth - 28);
+            const h = Math.min(520, window.innerHeight - 28);
             const left = Math.max(14, Math.min(window.innerWidth - w - 14, event.clientX + 8));
             const top = Math.max(14, Math.min(window.innerHeight - h - 14, event.clientY + 8));
             createMenu.style.left = `${left}px`;
@@ -7054,26 +8251,28 @@
             closeCreateMenu();
             if(type === 'prompt') return createPromptNode(p.x - 158, p.y - 97);
             if(type === 'loop') return createLoopNode(p.x - 135, p.y - 95);
+            if(SMART_CANVAS_TEMPLATES[type]) return createTemplateNodes(type, p);
             return createNode(p.x - 130, p.y - 90);
         }
         shell.addEventListener('mousedown', e => {
             if(!zoomPreviewState) return;
             if(e.button !== 0) return;
-            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
             e.preventDefault();
             e.stopPropagation();
         }, true);
         shell.addEventListener('click', e => {
             if(!zoomPreviewState) return;
             if(e.button !== 0) return;
-            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
             e.preventDefault();
             e.stopPropagation();
             exitZoomPreview(screenToWorld(e));
         }, true);
         shell.onmousedown = e => {
-            if(zoomPreviewState && e.button === 0 && !e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
-            if(e.target.closest('.composer,.smart-back,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            if(zoomPreviewState && e.button === 0 && !e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            if(e.target.closest('.composer,.smart-back,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            persistActiveComposerDraft();
             closeCreateMenu();
             if(e.button === 1){
                 e.preventDefault();
@@ -7093,9 +8292,10 @@
             }
         };
         shell.oncontextmenu = e => {
-            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            if(e.target.closest('.composer,.smart-back,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
             e.preventDefault();
             e.stopPropagation();
+            persistActiveComposerDraft();
             closeCreateMenu();
             closeSmartEnhanceMenu();
             smartImageToolbar?.classList.remove('open');
@@ -7103,7 +8303,8 @@
             smartSelectionToolbar?.classList.remove('open');
             smartSelectionToolbar?.setAttribute('aria-hidden', 'true');
             if(e.target.closest('.image-node')) return;
-            if(selectedImageTarget()) openSmartImageParams(selectedImageTarget());
+            const node = selectedNode();
+            if(node) openSmartContextMenu(e, node.id, Math.max(0, Number(selectedImage.index || 0)));
             else openSmartContextMenu(e);
         };
         shell.ondblclick = e => {
@@ -7387,7 +8588,7 @@
             }
         };
         shell.addEventListener('wheel', e => {
-            if(e.target.closest('.composer,.smart-back,.image-edit-modal,.asset-panel,.asset-toggle,.smart-param-modal')) return;
+            if(e.target.closest('.composer,.smart-back,.image-edit-modal,.asset-panel,.asset-toggle,.smart-param-modal,.smart-text-modal')) return;
             e.preventDefault();
             const rect = shell.getBoundingClientRect();
             const sx = e.clientX - rect.left;
@@ -7430,6 +8631,18 @@
         });
         window.addEventListener('keydown', e => {
             const key = String(e.key || '').toLowerCase();
+            if(smartTextModal?.classList.contains('open')){
+                if((e.ctrlKey || e.metaKey) && key === 'enter' && !smartTextInput?.readOnly){
+                    e.preventDefault();
+                    closeSmartTextModal(true);
+                    return;
+                }
+                if(e.key === 'Escape'){
+                    e.preventDefault();
+                    closeSmartTextModal(false);
+                    return;
+                }
+            }
             if(!e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget(e.target)){
                 if(key === 'z'){
                     if(e.repeat) return;
@@ -7529,6 +8742,23 @@
             }
         });
         engineSelect.onchange = () => { settings.engine = engineSelect.value; syncApiKindToggleVisibility(); renderDynamicParams(); scheduleSave(); };
+        smartTextSave?.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeSmartTextModal(true);
+        });
+        smartTextCancel?.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeSmartTextModal(false);
+        });
+        smartTextClose?.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeSmartTextModal(false);
+        });
+        smartTextModal?.addEventListener('mousedown', e => e.stopPropagation());
+        smartTextModal?.addEventListener('wheel', e => e.stopPropagation(), {passive:false});
         function syncApiKindToggleVisibility(){
             if(!apiKindToggle) return;
             apiKindToggle.style.display = settings.engine === 'api' ? 'inline-flex' : 'none';
@@ -7649,6 +8879,13 @@
             const card = event.target.closest('[data-create-type]');
             if(card) createNodeFromMenu(card.dataset.createType || 'image');
         });
+        slashMenu?.addEventListener('mousedown', event => event.stopPropagation());
+        slashMenu?.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            const btn = event.target.closest('[data-slash-command]');
+            if(btn) runSlashCommand(btn.dataset.slashCommand || 'script');
+        });
         composer.addEventListener('pointerdown', event => event.stopPropagation());
         composer.addEventListener('mousedown', event => event.stopPropagation());
         composer.addEventListener('click', event => {
@@ -7663,6 +8900,7 @@
             scheduleSave();
         });
         promptInput.addEventListener('input', maybeOpenMentionPicker);
+        promptInput.addEventListener('input', maybeOpenSlashMenu);
         promptInput.addEventListener('input', () => {
             delete promptInput.dataset.preserveDraftOnce;
             if(!isComposing) savePromptDraftForCurrent();
@@ -7677,7 +8915,15 @@
         promptInput.addEventListener('mouseup', saveMentionRange);
         promptInput.addEventListener('focus', saveMentionRange);
         promptInput.addEventListener('keydown', event => {
-            if(event.key === 'Escape') closeMentionPicker();
+            if(event.key === 'Escape') { closeMentionPicker(); closeSlashMenu(); }
+            if(event.key === 'Enter' && slashMenuOpen){
+                const first = slashMenu?.querySelector('[data-slash-command]');
+                if(first){
+                    event.preventDefault();
+                    event.stopPropagation();
+                    runSlashCommand(first.dataset.slashCommand || 'script');
+                }
+            }
         });
         promptInput.addEventListener('mouseover', event => {
             const token = event.target.closest?.('.mention-image-token');
@@ -7733,11 +8979,12 @@
         document.addEventListener('click', event => {
             if(!event.target.closest('.smart-control')) closeAllSmartPopovers();
             if(!event.target.closest('.mention-picker') && !event.target.closest('#promptInput')) closeMentionPicker();
+            if(!event.target.closest('.slash-menu') && !event.target.closest('#promptInput')) closeSlashMenu();
             if(!event.target.closest('.smart-enhance-menu')) closeSmartEnhanceMenu();
             if(!event.target.closest('.smart-context-menu')) closeSmartContextMenu();
         });
         document.addEventListener('keydown', event => {
-            if(event.key === 'Escape') { closeAllSmartPopovers(); closeCreateMenu(); closeSmartEnhanceMenu(); closeSmartContextMenu(); closeSmartParamModal(); }
+            if(event.key === 'Escape') { closeAllSmartPopovers(); closeCreateMenu(); closeSlashMenu(); closeSmartEnhanceMenu(); closeSmartContextMenu(); closeSmartParamModal(); closeSmartTextModal(false); }
         });
         document.getElementById('cropBox').addEventListener('mousedown', event => beginCropDrag(event, 'move'));
         document.getElementById('cropHandle').addEventListener('mousedown', event => beginCropDrag(event, 'resize'));

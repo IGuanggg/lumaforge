@@ -1,9 +1,9 @@
-FROM python:3.12-slim
+﻿FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_RUNTIME_DIR=/app/userdata \
-    APP_VERSION=2.0.15 \
+    APP_VERSION=2.0.18 \
     APP_PORT=3000
 
 WORKDIR /app
@@ -24,3 +24,4 @@ EXPOSE 3000
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["python", "main.py"]
+

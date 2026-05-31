@@ -205,6 +205,53 @@
         .setting-input:focus { border-color:var(--text); background:var(--panel); }
         body.studio-theme-dark .setting-input,
         html.studio-theme-dark body .setting-input { background:var(--panel); border-color:var(--line-strong); }
+        .update-config-line {
+            display:grid;
+            grid-template-columns:minmax(0,1fr) auto;
+            gap:10px;
+            align-items:end;
+        }
+        .update-config-line .action-btn { min-width:104px; height:40px; }
+        .update-action-board {
+            display:grid;
+            grid-template-columns:1fr;
+            gap:14px;
+            align-items:stretch;
+            padding-top:2px;
+        }
+        .update-action-group { min-width:0; display:flex; flex-direction:column; gap:7px; }
+        .update-action-label {
+            color:var(--faint);
+            font-size:10.5px;
+            line-height:1;
+            font-weight:950;
+            letter-spacing:.08em;
+            text-transform:uppercase;
+        }
+        .update-button-row {
+            display:grid;
+            grid-template-columns:repeat(3,minmax(112px,1fr));
+            gap:8px;
+        }
+        .update-button-row.execute { grid-template-columns:1fr; }
+        .update-button-row .action-btn {
+            width:100%;
+            min-width:0;
+            height:40px;
+        }
+        .update-button-row .action-btn span {
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+        }
+        .update-install-actions {
+            display:none;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:8px;
+            justify-content:stretch;
+            padding-top:2px;
+        }
+        .update-install-actions .action-btn { width:100%; height:40px; }
         .update-result {
             display:none;
             padding:12px 14px;
@@ -345,6 +392,17 @@
         .modal-head { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-bottom:1px solid var(--line); }
         .modal-title { font-size:14px; font-weight:950; }
         .modal-body { padding:16px; color:var(--text); font-size:12.5px; font-weight:750; line-height:1.65; white-space:pre-wrap; overflow:auto; }
+        .confirm-panel { width:min(420px, 100%); }
+        .confirm-body { padding:16px; color:var(--muted); font-size:12.5px; font-weight:780; line-height:1.7; white-space:pre-wrap; }
+        .confirm-actions { display:flex; justify-content:flex-end; gap:8px; padding:0 16px 16px; }
+        .confirm-actions .action-btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+        .confirm-actions .action-btn.danger { background:var(--danger); border-color:var(--danger); color:#fff; }
+        .update-notice-panel { width:min(460px, 100%); }
+        .update-notice-body { padding:16px; display:flex; flex-direction:column; gap:10px; color:var(--text); }
+        .update-notice-title { font-size:15px; font-weight:950; line-height:1.35; }
+        .update-notice-meta { color:var(--muted); font-size:12px; line-height:1.6; font-weight:760; word-break:break-word; }
+        .update-notice-actions { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,.95fr) auto; gap:8px; padding:0 16px 16px; align-items:center; }
+        .update-notice-actions .action-btn { height:40px; }
         .status {
             min-height:20px;
             color:var(--muted);
@@ -380,6 +438,13 @@
             .health-grid,
             .diagnostic-summary { grid-template-columns:1fr; }
         }
+        @media (max-width:620px) {
+            .update-config-line { grid-template-columns:1fr; }
+            .update-config-line .action-btn { width:100%; }
+            .update-button-row,
+            .update-install-actions,
+            .update-notice-actions { grid-template-columns:1fr; }
+        }
     </style>
 </head>
 <body>
@@ -402,8 +467,8 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.0.15 智能画布交互加固 + API 检测手动版</div>
-                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示，用来提醒这次智能画布鼠标交互统一、API 状态改为手动检测、输入草稿保护和节点打组命名增强。</div>
+                        <div class="welcome-title">v2.0.17 智能画布脚本与角色工作台版</div>
+                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示，用来提醒这次新增 / 快捷模板菜单、故事脚本生成、角色三视图、产品三视图、脚本视图拆分角色卡与出图节点和批量运行选中出图节点。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
                 </div>
@@ -507,24 +572,40 @@
                             <div class="kv"><span>最近升级</span><span id="update-last-text">-</span></div>
                             <div class="kv"><span>升级备份</span><span id="update-backup-text">-</span></div>
                         </div>
-                        <label class="setting-field">
-                            <span class="setting-label">更新检查地址</span>
-                            <input id="update-url-input" class="setting-input" type="url" placeholder="https://example.com/version.json 或 GitHub latest release API">
-                        </label>
-                        <div class="path-actions">
+                        <div class="update-config-line">
+                            <label class="setting-field">
+                                <span class="setting-label">更新检查地址</span>
+                                <input id="update-url-input" class="setting-input" type="url" placeholder="https://example.com/version.json 或 GitHub latest release API">
+                            </label>
                             <button class="action-btn" id="save-update-url-btn" type="button">
                                 <i data-lucide="save" class="w-4 h-4"></i><span>保存地址</span>
                             </button>
-                            <button class="action-btn primary" id="check-update-btn" type="button">
-                                <i data-lucide="refresh-cw" class="w-4 h-4"></i><span>检查更新</span>
-                            </button>
-                            <button class="action-btn primary" id="auto-update-btn" type="button">
-                                <i data-lucide="sparkles" class="w-4 h-4"></i><span>自动升级</span>
-                            </button>
-                            <button class="action-btn" id="release-check-btn" type="button">
-                                <i data-lucide="list-checks" class="w-4 h-4"></i><span>发布检查</span>
-                            </button>
                         </div>
+                        <div class="update-action-board">
+                            <div class="update-action-group">
+                                <div class="update-action-label">检查</div>
+                                <div class="update-button-row">
+                                    <button class="action-btn primary" id="check-update-btn" type="button">
+                                        <i data-lucide="refresh-cw" class="w-4 h-4"></i><span>检查更新</span>
+                                    </button>
+                                    <button class="action-btn" id="update-preflight-btn" type="button">
+                                        <i data-lucide="shield-check" class="w-4 h-4"></i><span>安装前检查</span>
+                                    </button>
+                                    <button class="action-btn" id="release-check-btn" type="button">
+                                        <i data-lucide="list-checks" class="w-4 h-4"></i><span>发布检查</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="update-action-group">
+                                <div class="update-action-label">执行</div>
+                                <div class="update-button-row execute">
+                                    <button class="action-btn primary" id="auto-update-btn" type="button">
+                                        <i data-lucide="sparkles" class="w-4 h-4"></i><span>自动升级</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="update-result" id="update-preflight-result"></div>
                         <div class="update-result" id="update-result"></div>
                         <div class="update-result" id="release-check-result"></div>
                         <div class="update-progress-card" id="update-progress-card">
@@ -544,7 +625,7 @@
                             <div class="update-failure" id="update-failure"></div>
                         </div>
                         <div class="pending-box" id="update-post-state"></div>
-                        <div class="path-actions" id="update-actions" style="display:none">
+                        <div class="update-install-actions" id="update-actions" style="display:none">
                             <button class="action-btn primary" id="download-update-btn" type="button" style="display:none">
                                 <i data-lucide="download" class="w-4 h-4"></i><span>下载更新</span>
                             </button>
@@ -602,6 +683,34 @@
             <div class="modal-body" id="release-notes-body"></div>
         </div>
     </div>
+    <div class="modal-mask" id="confirm-modal" aria-hidden="true">
+        <div class="modal-panel confirm-panel" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+            <div class="modal-head">
+                <div class="modal-title" id="confirm-title">确认操作</div>
+            </div>
+            <div class="confirm-body" id="confirm-message"></div>
+            <div class="confirm-actions">
+                <button class="action-btn" id="confirm-cancel-btn" type="button">取消</button>
+                <button class="action-btn primary" id="confirm-ok-btn" type="button">确定</button>
+            </div>
+        </div>
+    </div>
+    <div class="modal-mask" id="update-notice-modal" aria-hidden="true">
+        <div class="modal-panel update-notice-panel" role="dialog" aria-modal="true" aria-labelledby="update-notice-title">
+            <div class="modal-head">
+                <div class="modal-title">版本更新</div>
+            </div>
+            <div class="update-notice-body">
+                <div class="update-notice-title" id="update-notice-title">发现新版本</div>
+                <div class="update-notice-meta" id="update-notice-meta"></div>
+            </div>
+            <div class="update-notice-actions">
+                <button class="action-btn primary" id="update-notice-now-btn" type="button"><i data-lucide="sparkles" class="w-4 h-4"></i><span>立即更新</span></button>
+                <button class="action-btn" id="update-notice-later-btn" type="button" title="3 天内不再提醒"><i data-lucide="clock-3" class="w-4 h-4"></i><span>3天后提醒</span></button>
+                <button class="action-btn" id="update-notice-cancel-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>取消</span></button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const PATH_ROWS = [
@@ -616,6 +725,8 @@
         let appInfo = null;
         let latestReleaseNotes = '';
         let updatePollTimer = null;
+        const UPDATE_NOTICE_IGNORE_KEY = 'lumaforge_update_notice_ignore_until';
+        const UPDATE_NOTICE_SEEN_KEY = 'lumaforge_update_notice_seen';
         let lastAssetHealth = null;
 
         async function jsonOrThrow(res) {
@@ -827,6 +938,140 @@
             }
         }
 
+        function confirmDialog(options = {}) {
+            const modal = document.getElementById('confirm-modal');
+            const title = document.getElementById('confirm-title');
+            const message = document.getElementById('confirm-message');
+            const okBtn = document.getElementById('confirm-ok-btn');
+            const cancelBtn = document.getElementById('confirm-cancel-btn');
+            if(!modal || !okBtn || !cancelBtn) return Promise.resolve(false);
+            if(title) title.textContent = options.title || '确认操作';
+            if(message) message.textContent = options.message || '';
+            okBtn.textContent = options.confirmText || '确定';
+            cancelBtn.textContent = options.cancelText || '取消';
+            okBtn.classList.toggle('danger', !!options.danger);
+            okBtn.classList.toggle('primary', !options.danger);
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden', 'false');
+            return new Promise(resolve => {
+                const finish = result => {
+                    modal.classList.remove('show');
+                    modal.setAttribute('aria-hidden', 'true');
+                    okBtn.removeEventListener('click', onOk);
+                    cancelBtn.removeEventListener('click', onCancel);
+                    modal.removeEventListener('click', onMask);
+                    document.removeEventListener('keydown', onKey);
+                    resolve(result);
+                };
+                const onOk = () => finish(true);
+                const onCancel = () => finish(false);
+                const onMask = event => { if(event.target === modal) finish(false); };
+                const onKey = event => { if(event.key === 'Escape') finish(false); };
+                okBtn.addEventListener('click', onOk);
+                cancelBtn.addEventListener('click', onCancel);
+                modal.addEventListener('click', onMask);
+                document.addEventListener('keydown', onKey);
+                setTimeout(() => okBtn.focus(), 30);
+            });
+        }
+
+        function updateNoticeIgnoreUntil() {
+            try { return Number(localStorage.getItem(UPDATE_NOTICE_IGNORE_KEY) || 0); } catch(e) { return 0; }
+        }
+
+        function shouldShowUpdateNotice(data) {
+            if(!data?.configured || !data?.is_newer) return false;
+            const ignoreUntil = updateNoticeIgnoreUntil();
+            if(ignoreUntil && Date.now() < ignoreUntil) return false;
+            return true;
+        }
+
+        function setUpdateNoticeIgnore(days = 3) {
+            const until = Date.now() + Math.max(1, Number(days) || 3) * 24 * 60 * 60 * 1000;
+            try { localStorage.setItem(UPDATE_NOTICE_IGNORE_KEY, String(until)); } catch(e) {}
+            return until;
+        }
+
+        function markUpdateNoticeSeen(data) {
+            try {
+                localStorage.setItem(UPDATE_NOTICE_SEEN_KEY, JSON.stringify({
+                    version:data?.latest_version || '',
+                    current:data?.current_version || appInfo?.version || '',
+                    seenAt:Date.now()
+                }));
+            } catch(e) {}
+        }
+
+        function closeUpdateNotice() {
+            const modal = document.getElementById('update-notice-modal');
+            if(modal) {
+                modal.classList.remove('show');
+                modal.setAttribute('aria-hidden', 'true');
+            }
+        }
+
+        function openUpdateNotice(data) {
+            const modal = document.getElementById('update-notice-modal');
+            const title = document.getElementById('update-notice-title');
+            const meta = document.getElementById('update-notice-meta');
+            const nowBtn = document.getElementById('update-notice-now-btn');
+            const laterBtn = document.getElementById('update-notice-later-btn');
+            const cancelBtn = document.getElementById('update-notice-cancel-btn');
+            if(!modal || !nowBtn || !laterBtn || !cancelBtn) return;
+            const latest = data?.latest_version || '-';
+            const current = data?.current_version || appInfo?.version || '-';
+            const asset = data?.selected_asset || {};
+            const size = Number(asset.size || 0);
+            if(title) title.textContent = `发现新版本 ${latest}`;
+            if(meta) {
+                meta.textContent = [
+                    `当前版本：${current}`,
+                    `更新方式：${updateModeText(data?.update_mode)}`,
+                    asset.name ? `更新包：${asset.name}${size ? ` · ${formatBytes(size)}` : ''}` : '',
+                    data?.auto_update_supported ? '可以直接自动升级；安装前会先检查并保护本地数据。' : (data?.auto_update_reason || '当前环境不支持自动升级，可手动下载更新包。')
+                ].filter(Boolean).join('\n');
+            }
+            const cleanup = () => {
+                nowBtn.onclick = null;
+                laterBtn.onclick = null;
+                cancelBtn.onclick = null;
+                modal.onclick = null;
+                document.removeEventListener('keydown', onKey);
+            };
+            const finish = () => {
+                closeUpdateNotice();
+                cleanup();
+            };
+            const onKey = event => {
+                if(event.key === 'Escape') finish();
+            };
+            nowBtn.onclick = () => {
+                markUpdateNoticeSeen(data);
+                finish();
+                if(data?.auto_update_supported) autoUpdate({skipConfirm:true});
+                else {
+                    renderUpdateResult(data);
+                    setStatus('update-status', data?.download_url ? '当前环境不支持自动升级，请使用下载链接手动更新。' : '当前环境不支持自动升级。', 'warn');
+                }
+            };
+            laterBtn.onclick = () => {
+                const until = setUpdateNoticeIgnore(3);
+                markUpdateNoticeSeen(data);
+                finish();
+                setStatus('update-status', `已选择下次提醒，${formatTime(until)} 前不再弹出。`, 'ok');
+            };
+            cancelBtn.onclick = () => {
+                markUpdateNoticeSeen(data);
+                finish();
+            };
+            modal.onclick = event => { if(event.target === modal) finish(); };
+            document.addEventListener('keydown', onKey);
+            modal.classList.add('show');
+            modal.setAttribute('aria-hidden', 'false');
+            if(window.lucide) lucide.createIcons();
+            setTimeout(() => nowBtn.focus(), 30);
+        }
+
         function setText(id, value) {
             const el = document.getElementById(id);
             if(el) el.textContent = value;
@@ -840,13 +1085,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.0.15' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.0.17' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.0.15';
+            const version = appInfo?.version || '2.0.17';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }
@@ -912,7 +1157,12 @@
         }
 
         async function runCleanup() {
-            if(!confirm('只会清理缓存和旧画布备份，不会删除素材原图或画布主数据。确定继续吗？')) return;
+            const confirmed = await confirmDialog({
+                title:'清理本地缓存',
+                message:'只会清理缓存和旧画布备份，不会删除素材原图或画布主数据。确定继续吗？',
+                confirmText:'开始清理'
+            });
+            if(!confirmed) return;
             setStatus('local-data-status', '正在清理缓存和旧备份...');
             const btn = document.getElementById('run-cleanup-btn');
             if(btn) btn.disabled = true;
@@ -1003,7 +1253,13 @@
                 setStatus('local-data-status', '当前检查结果里没有可移除的缺失引用。', 'warn');
                 return;
             }
-            if(!confirm(`将从素材库移除 ${ids.length} 条缺失文件引用，不会删除任何本地文件。建议先确认这些文件确实不需要恢复。确定继续吗？`)) return;
+            const confirmed = await confirmDialog({
+                title:'移除缺失引用',
+                message:`将从素材库移除 ${ids.length} 条缺失文件引用，不会删除任何本地文件。建议先确认这些文件确实不需要恢复。确定继续吗？`,
+                confirmText:'移除引用',
+                danger:true
+            });
+            if(!confirmed) return;
             setStatus('local-data-status', '正在移除缺失素材引用...');
             try {
                 const data = await fetch('/api/assets/bulk-delete', {
@@ -1069,7 +1325,13 @@
                 '',
                 '确定继续吗？'
             ].join('\n');
-            if(!confirm(warning)) return;
+            const confirmed = await confirmDialog({
+                title:'恢复本地备份',
+                message:warning,
+                confirmText:'恢复备份',
+                danger:true
+            });
+            if(!confirmed) return;
             const btn = document.getElementById('restore-backup-btn');
             if(btn) btn.disabled = true;
             setStatus('local-data-status', '正在创建恢复前快照...');
@@ -1294,7 +1556,12 @@
             const message = desktop
                 ? '应用会关闭并自动重新打开，当前未保存的页面状态可能丢失。确定重启吗？'
                 : '本地服务会重启，页面会短暂断开连接。确定重启吗？';
-            if(!confirm(message)) return;
+            const confirmed = await confirmDialog({
+                title:'重启应用',
+                message,
+                confirmText:'重启'
+            });
+            if(!confirmed) return;
             if(btn) btn.disabled = true;
             setStatus(statusId, '正在重启应用...');
             try {
@@ -1312,7 +1579,13 @@
             const message = desktop
                 ? '应用窗口和本地服务都会退出。确定退出 LumaForge 吗？'
                 : '这会停止当前本地服务，浏览器页面之后将无法继续连接。确定退出吗？';
-            if(!confirm(message)) return;
+            const confirmed = await confirmDialog({
+                title:'退出应用',
+                message,
+                confirmText:'退出',
+                danger:true
+            });
+            if(!confirmed) return;
             const btn = document.getElementById('desktop-exit-btn');
             if(btn) btn.disabled = true;
             setStatus('desktop-action-status', '正在退出应用...');
@@ -1321,6 +1594,58 @@
                 setStatus('desktop-action-status', data.message || '应用正在退出。', 'ok');
             } catch(e) {
                 setStatus('desktop-action-status', e.message || String(e), 'error');
+                if(btn) btn.disabled = false;
+            }
+        }
+
+        function renderUpdatePreflight(data) {
+            const box = document.getElementById('update-preflight-result');
+            if(!box) return;
+            const checks = Array.isArray(data?.checks) ? data.checks : [];
+            const blocking = checks.filter(item => item.blocking && !item.ok);
+            const warnings = checks.filter(item => !item.blocking && !item.ok);
+            const okItems = checks.filter(item => item.ok);
+            const row = item => publishCheckItem(item.label || item.id, !!item.ok, item.detail || '', !item.blocking);
+            box.innerHTML = `
+                <div class="update-result-title">安装前检查：${blocking.length ? '存在阻塞' : warnings.length ? '可继续但有提醒' : '通过'}</div>
+                <div class="update-result-meta">程序目录：${escapeHtml(data?.app_dir || '-')}</div>
+                <div class="update-result-meta">数据目录：${escapeHtml(data?.data_dir || '-')}</div>
+                <div class="diagnostic-summary">
+                    <div class="diagnostic-bucket">
+                        <div class="diagnostic-bucket-title">通过 · ${okItems.length}</div>
+                        ${okItems.length ? okItems.map(row).join('') : '<div class="diagnostic-row ok"><i data-lucide="check-circle-2" class="w-4 h-4"></i><span>暂无</span></div>'}
+                    </div>
+                    <div class="diagnostic-bucket">
+                        <div class="diagnostic-bucket-title">阻塞 · ${blocking.length}</div>
+                        ${blocking.length ? blocking.map(row).join('') : '<div class="diagnostic-row ok"><i data-lucide="check-circle-2" class="w-4 h-4"></i><span>暂无</span></div>'}
+                    </div>
+                    <div class="diagnostic-bucket">
+                        <div class="diagnostic-bucket-title">提醒 · ${warnings.length}</div>
+                        ${warnings.length ? warnings.map(row).join('') : '<div class="diagnostic-row ok"><i data-lucide="check-circle-2" class="w-4 h-4"></i><span>暂无</span></div>'}
+                    </div>
+                </div>
+                <div class="update-result-notes">更新器只替换程序文件；API、data、assets、logs、cache、updates、output 等目录列为保护目录。</div>
+            `;
+            box.classList.add('show');
+            if(window.lucide) lucide.createIcons();
+        }
+
+        async function runUpdatePreflight(options = {}) {
+            const btn = document.getElementById('update-preflight-btn');
+            const silent = !!options.silent;
+            if(btn) btn.disabled = true;
+            if(!silent) setStatus('update-status', '正在执行安装前检查...');
+            try {
+                const data = await fetch('/api/app/update-preflight').then(jsonOrThrow);
+                renderUpdatePreflight(data);
+                if(!silent) {
+                    setStatus('update-status', data.ok ? '安装前检查通过。' : `安装前检查发现 ${data.blocking_count || 0} 个阻塞项。`, data.ok ? 'ok' : 'error');
+                }
+                return data;
+            } catch(e) {
+                setStatus('update-status', e.message || String(e), 'error');
+                throw e;
+            } finally {
                 if(btn) btn.disabled = false;
             }
         }
@@ -1411,10 +1736,15 @@
         async function installUpdate() {
             const instBtn = document.getElementById('install-update-btn');
             if(instBtn) instBtn.disabled = true;
-            setStatus('update-status', '正在安装更新（备份旧版本、替换文件）...');
-            beginUpdatePolling();
             let externalStarted = false;
             try {
+                const preflight = await runUpdatePreflight({silent:true});
+                if(preflight && preflight.blocking_count){
+                    setStatus('update-status', `安装前检查未通过：${preflight.blocking_count} 个阻塞项。`, 'error');
+                    return;
+                }
+                setStatus('update-status', '正在安装更新（备份旧版本、替换文件）...');
+                beginUpdatePolling();
                 const data = await fetch('/api/app/update-install', { method:'POST' }).then(jsonOrThrow);
                 if(data.external_updater_started) {
                     externalStarted = true;
@@ -1442,14 +1772,26 @@
             await requestAppRestart('update-status', restartBtn);
         }
 
-        async function autoUpdate() {
-            if(!confirm('自动升级会下载最新 zip、备份当前版本并替换程序文件；data、assets、API、logs、cache 等数据目录不会被覆盖。确定继续吗？')) return;
+        async function autoUpdate(options = {}) {
+            if(!options.skipConfirm) {
+                const confirmed = await confirmDialog({
+                    title:'自动升级',
+                    message:'自动升级会下载最新 zip、备份当前版本并替换程序文件；data、assets、API、logs、cache 等数据目录不会被覆盖。确定继续吗？',
+                    confirmText:'开始升级'
+                });
+                if(!confirmed) return;
+            }
             const btn = document.getElementById('auto-update-btn');
             if(btn) btn.disabled = true;
-            setStatus('update-status', '正在自动升级：检查版本、下载更新包、安装替换...');
-            beginUpdatePolling();
             let externalStarted = false;
             try {
+                const preflight = await runUpdatePreflight({silent:true});
+                if(preflight && preflight.blocking_count){
+                    setStatus('update-status', `安装前检查未通过：${preflight.blocking_count} 个阻塞项。`, 'error');
+                    return;
+                }
+                setStatus('update-status', '正在自动升级：检查版本、下载更新包、安装替换...');
+                beginUpdatePolling();
                 const data = await fetch('/api/app/update-auto', { method:'POST' }).then(jsonOrThrow);
                 if(data.updated) {
                     if(data.install?.external_updater_started) {
@@ -1515,6 +1857,22 @@
             }
         }
 
+        async function checkUpdateOnOpen() {
+            if(!appInfo?.update_check_configured && !appInfo?.update_check_url) return;
+            if(updateNoticeIgnoreUntil() && Date.now() < updateNoticeIgnoreUntil()) return;
+            try {
+                const data = await fetch('/api/app/update-check').then(jsonOrThrow);
+                if(!data.configured) return;
+                if(data.is_newer) {
+                    renderUpdateResult(data);
+                    setStatus('update-status', `发现新版本 ${data.latest_version}。`, 'ok');
+                    if(shouldShowUpdateNotice(data)) openUpdateNotice(data);
+                }
+            } catch(e) {
+                console.warn('auto update check failed', e);
+            }
+        }
+
         function publishCheckItem(label, ok, detail, warnOnly=false) {
             const icon = ok ? 'check-circle-2' : (warnOnly ? 'alert-circle' : 'x-circle');
             const klass = ok ? 'ok' : (warnOnly ? 'manual' : 'manual');
@@ -1540,7 +1898,7 @@
                 const staticHealth = info.static_health || {};
                 const updateCapability = info.update_capability || {};
                 const checks = [
-                    {label:'当前版本', ok:info.version === '2.0.15', detail:info.version || '-'},
+                    {label:'当前版本', ok:info.version === '2.0.17', detail:info.version || '-'},
                     {label:'前端依赖', ok:!!staticHealth.ok, detail:staticHealth.ok ? `${Number(staticHealth.checked_count || 0)} 项完整` : `缺失 ${Number(staticHealth.missing_count || 0)} 项`},
                     {label:'素材文件', ok:Number(assets.missing_count || 0) === 0, detail:`缺失 ${Number(assets.missing_count || 0)} 个`},
                     {label:'缩略图', ok:Number(assets.thumb_missing_count || 0) === 0, detail:`待重建 ${Number(assets.thumb_missing_count || 0)} 个`, warnOnly:true},
@@ -1590,6 +1948,7 @@
         });
         document.getElementById('save-update-url-btn').addEventListener('click', saveUpdateSettings);
         document.getElementById('check-update-btn').addEventListener('click', checkUpdate);
+        document.getElementById('update-preflight-btn')?.addEventListener('click', () => runUpdatePreflight().catch(() => {}));
         document.getElementById('auto-update-btn').addEventListener('click', autoUpdate);
         document.getElementById('release-check-btn')?.addEventListener('click', runReleaseCheck);
         document.getElementById('download-update-btn').addEventListener('click', downloadUpdate);
@@ -1629,6 +1988,7 @@
             loadBackups().catch(() => {});
             checkAssetHealth().catch(() => {});
             refreshUpdateState();
+            setTimeout(() => checkUpdateOnOpen(), 700);
             if(window.lucide) lucide.createIcons();
         });
     </script>
