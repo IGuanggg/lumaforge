@@ -579,6 +579,34 @@
         .smart-tool-btn.is-hidden { display:none; }
         .smart-tool-btn:hover { color:var(--text); background:var(--card); border-color:var(--line); transform:translateY(-1px); }
         .smart-tool-btn i,.smart-tool-btn svg { width:14px; height:14px; }
+        .smart-task-toggle { position:absolute; left:18px; top:64px; z-index:58; height:34px; padding:0 10px; border-radius:999px; display:inline-flex; align-items:center; gap:7px; background:var(--panel); border:1px solid var(--line); color:var(--text); box-shadow:0 12px 32px var(--shadow); font-size:12px; font-weight:900; backdrop-filter:blur(16px); }
+        .smart-task-toggle:hover,.smart-task-toggle.active { border-color:var(--strong); background:var(--card); }
+        .smart-task-toggle i,.smart-task-toggle svg { width:15px; height:15px; }
+        .smart-task-badge { min-width:18px; height:18px; padding:0 5px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; background:var(--strong); color:var(--strong-text); font-size:10px; line-height:1; font-weight:950; }
+        .smart-task-panel { position:absolute; left:18px; top:106px; z-index:59; display:none; width:min(360px, calc(100vw - 36px)); max-height:min(560px, calc(100vh - 128px)); overflow:hidden; border-radius:18px; background:var(--panel); border:1px solid var(--line); color:var(--text); box-shadow:0 24px 70px rgba(15,23,42,.18); backdrop-filter:blur(18px); }
+        .smart-task-panel.open { display:grid; grid-template-rows:auto minmax(0, 1fr); animation:smart-menu-in .16s ease; }
+        .smart-task-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:12px 12px 10px; border-bottom:1px solid var(--line); }
+        .smart-task-title { font-size:13px; font-weight:950; line-height:1.2; }
+        .smart-task-sub { margin-top:3px; color:var(--faint); font-size:10.5px; line-height:1.35; font-weight:700; }
+        .smart-task-close { flex:0 0 auto; width:28px; height:28px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; color:var(--muted); background:var(--card); border:1px solid var(--line); }
+        .smart-task-close:hover { color:var(--text); border-color:var(--strong); }
+        .smart-task-close i,.smart-task-close svg { width:14px; height:14px; }
+        .smart-task-list { overflow:auto; padding:8px; scrollbar-width:thin; scrollbar-color:rgba(148,163,184,.38) transparent; }
+        .smart-task-empty { min-height:90px; display:flex; align-items:center; justify-content:center; padding:16px; color:var(--faint); text-align:center; font-size:12px; font-weight:800; line-height:1.5; }
+        .smart-task-item { padding:9px; border-radius:13px; border:1px solid var(--line); background:var(--card); margin-bottom:8px; }
+        .smart-task-item:last-child { margin-bottom:0; }
+        .smart-task-item.running { border-color:rgba(37,99,235,.25); }
+        .smart-task-item.failed { border-color:rgba(239,68,68,.25); background:rgba(239,68,68,.06); }
+        .smart-task-item.done { border-color:rgba(16,185,129,.22); }
+        .smart-task-row { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; }
+        .smart-task-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:950; }
+        .smart-task-state { flex:0 0 auto; color:var(--faint); font-size:10px; font-weight:950; }
+        .smart-task-meta { margin-top:4px; color:var(--muted); font-size:10.5px; line-height:1.45; font-weight:750; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+        .smart-task-actions { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+        .smart-task-action { height:26px; padding:0 9px; border-radius:999px; display:inline-flex; align-items:center; gap:5px; background:var(--soft); border:1px solid var(--line); color:var(--text); font-size:10.5px; font-weight:850; }
+        .smart-task-action:hover { border-color:var(--strong); background:var(--panel); }
+        .smart-task-action[disabled] { opacity:.4; pointer-events:none; }
+        .smart-task-action i,.smart-task-action svg { width:12px; height:12px; }
         .smart-context-menu { position:absolute; z-index:95; min-width:226px; display:none; padding:7px; border-radius:16px; background:var(--panel); border:1px solid var(--line); color:var(--text); box-shadow:0 24px 70px rgba(15,23,42,.18); backdrop-filter:blur(18px); }
         .smart-context-menu.open { display:block; animation:smart-menu-in .16s ease; transform-origin:top left; }
         .smart-enhance-menu { position:absolute; z-index:96; min-width:196px; display:none; padding:7px; border-radius:16px; background:var(--panel); border:1px solid var(--line); color:var(--text); box-shadow:0 24px 70px rgba(15,23,42,.18); backdrop-filter:blur(18px); }
@@ -783,6 +811,21 @@
             <button class="smart-tool-btn" type="button" data-smart-selection-tool="group"><i data-lucide="group"></i><span>打组</span></button>
             <button class="smart-tool-btn" type="button" data-smart-selection-tool="ungroup"><i data-lucide="ungroup"></i><span>解组</span></button>
         </div>
+        <button id="smartTaskToggle" class="smart-task-toggle" type="button" aria-expanded="false">
+            <i data-lucide="activity"></i><span>任务</span><span id="smartTaskBadge" class="smart-task-badge">0</span>
+        </button>
+        <section id="smartTaskPanel" class="smart-task-panel" aria-hidden="true">
+            <div class="smart-task-head">
+                <div>
+                    <div class="smart-task-title">智能画布任务</div>
+                    <div class="smart-task-sub">查看运行中、失败和最近完成的节点；手动从素材库回捞结果。</div>
+                </div>
+                <button id="smartTaskClose" class="smart-task-close" type="button" title="关闭任务"><i data-lucide="x"></i></button>
+            </div>
+            <div id="smartTaskList" class="smart-task-list">
+                <div class="smart-task-empty">暂无任务</div>
+            </div>
+        </section>
         <div id="smartEnhanceMenu" class="smart-enhance-menu" aria-hidden="true"></div>
         <div id="smartContextMenu" class="smart-context-menu" aria-hidden="true"></div>
         <div id="createMenu" class="create-menu">
@@ -1067,6 +1110,11 @@
         const assetHoverPreview = document.getElementById('assetHoverPreview');
         const smartImageToolbar = document.getElementById('smartImageToolbar');
         const smartSelectionToolbar = document.getElementById('smartSelectionToolbar');
+        const smartTaskToggle = document.getElementById('smartTaskToggle');
+        const smartTaskBadge = document.getElementById('smartTaskBadge');
+        const smartTaskPanel = document.getElementById('smartTaskPanel');
+        const smartTaskList = document.getElementById('smartTaskList');
+        const smartTaskClose = document.getElementById('smartTaskClose');
         const smartEnhanceBtn = document.getElementById('smartEnhanceBtn');
         const smartEnhanceMenu = document.getElementById('smartEnhanceMenu');
         const smartContextMenu = document.getElementById('smartContextMenu');
@@ -1648,6 +1696,84 @@
             smartEnhanceMenu.classList.remove('open');
             smartEnhanceMenu.setAttribute('aria-hidden', 'true');
         }
+        function closeSmartTaskPanel(){
+            smartTaskPanel?.classList.remove('open');
+            smartTaskPanel?.setAttribute('aria-hidden', 'true');
+            smartTaskToggle?.classList.remove('active');
+            smartTaskToggle?.setAttribute('aria-expanded', 'false');
+        }
+        function toggleSmartTaskPanel(force){
+            if(!smartTaskPanel) return;
+            const open = force == null ? !smartTaskPanel.classList.contains('open') : Boolean(force);
+            smartTaskPanel.classList.toggle('open', open);
+            smartTaskPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+            smartTaskToggle?.classList.toggle('active', open);
+            smartTaskToggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if(open) renderSmartTaskPanel();
+        }
+        function smartTaskState(node){
+            if(node?.runError) return {key:'failed', label:'失败'};
+            if(node?.pending || node?.running) return {key:'running', label:'运行中'};
+            if(node?.runFinishedAt) return {key:'done', label:'已完成'};
+            return {key:'idle', label:'待运行'};
+        }
+        function smartTaskItems(){
+            return (nodes || [])
+                .filter(node => !isSmartFrameGroup(node) && (node.type === 'smart-image' || !node.type))
+                .filter(node => node.pending || node.running || node.runError || node.runStartedAt || node.runFinishedAt || node.canvasTaskId)
+                .sort((a, b) => Number(b.runFinishedAt || b.runStartedAt || b.created_at || 0) - Number(a.runFinishedAt || a.runStartedAt || a.created_at || 0))
+                .slice(0, 18);
+        }
+        function smartTaskSummary(node){
+            const text = String(node?.runError || node?.runPrompt || node?.runModelPrompt || node?.promptDraftText || '').trim();
+            if(text) return text;
+            if((node?.images || []).length) return `${(node.images || []).length} 个结果`;
+            return '暂无提示词';
+        }
+        function canManualMatchNode(node){
+            return Boolean(node && (node.type === 'smart-image' || !node.type) && !(node.images || []).length && (node.runStartedAt || node.canvasTaskId || node.runModelPrompt || node.runPrompt));
+        }
+        function renderSmartTaskPanel(){
+            const items = smartTaskItems();
+            if(smartTaskBadge) {
+                const activeCount = items.filter(node => node.pending || node.running || node.runError).length;
+                smartTaskBadge.textContent = String(Math.min(99, activeCount || items.length || 0));
+            }
+            if(!smartTaskList) return;
+            if(!items.length){
+                smartTaskList.innerHTML = '<div class="smart-task-empty">暂无运行中或失败任务。生成后会在这里看到最近状态。</div>';
+                refreshIcons();
+                return;
+            }
+            smartTaskList.innerHTML = items.map(node => {
+                const state = smartTaskState(node);
+                const elapsed = node.runStartedAt ? ` · ${formatRunDuration(nodeRunElapsedMs(node))}` : '';
+                return `<article class="smart-task-item ${state.key}">
+                    <div class="smart-task-row">
+                        <div class="smart-task-name">${escapeHtml(nodeTitleText(node))}</div>
+                        <div class="smart-task-state">${escapeHtml(state.label)}${escapeHtml(elapsed)}</div>
+                    </div>
+                    <div class="smart-task-meta">${escapeHtml(smartTaskSummary(node))}</div>
+                    <div class="smart-task-actions">
+                        <button class="smart-task-action" type="button" data-smart-task-action="select" data-node-id="${escapeHtml(node.id)}"><i data-lucide="mouse-pointer-2"></i><span>定位</span></button>
+                        <button class="smart-task-action" type="button" data-smart-task-action="match" data-node-id="${escapeHtml(node.id)}" ${canManualMatchNode(node) ? '' : 'disabled'}><i data-lucide="library"></i><span>匹配素材</span></button>
+                        <button class="smart-task-action" type="button" data-smart-task-action="retry" data-node-id="${escapeHtml(node.id)}" ${node.runError ? '' : 'disabled'}><i data-lucide="refresh-cw"></i><span>重试</span></button>
+                    </div>
+                </article>`;
+            }).join('');
+            refreshIcons();
+        }
+        function focusSmartNode(nodeId){
+            const node = nodes.find(n => n.id === nodeId);
+            if(!node) return;
+            selectOnlyNode(node.id);
+            selectedImage = {nodeId:'', index:-1};
+            const rect = nodeRect(node);
+            viewport.x = Math.round(shell.clientWidth / 2 - (rect.x + rect.width / 2) * viewport.scale);
+            viewport.y = Math.round(shell.clientHeight / 2 - (rect.y + rect.height / 2) * viewport.scale);
+            applyViewport();
+            render();
+        }
         function enhanceOptionsForImage(image){
             const long = targetLongEdge(image);
             if(long >= 3600) return [];
@@ -1783,6 +1909,9 @@
             const canPaste = Boolean(nodeClipboard?.nodes?.length);
             const canGroup = groupableSelectedNodeIds().length > 1;
             const canUngroup = selectedFrameGroups().length > 0 || isSmartFrameGroup(targetNode) || imageCount > 1;
+            const canManualMatch = Boolean(targetNode && (targetNode.type === 'smart-image' || !targetNode.type) && !(targetNode.images || []).length && (targetNode.runStartedAt || targetNode.canvasTaskId || targetNode.runModelPrompt || targetNode.runPrompt));
+            const imageAtMenuTarget = targetNode && (targetNode.images || [])[Number(imageIndex) || 0];
+            const canRestoreHistory = Boolean(targetNode?.historyForNodeId && imageAtMenuTarget?.url);
             selectedId = targetNode?.id || selectedId;
             selectedIds = selectedIds.filter(id => nodes.some(n => n.id === id));
             selectedImage = targetNode && (targetNode.type === 'smart-image' || !targetNode.type) ? {nodeId:targetNode.id, index:Number(imageIndex) || 0} : {nodeId:'', index:-1};
@@ -1790,7 +1919,7 @@
                 smartMenuRow('rename-node', '重命名', '双击名字', !hasSelection),
                 smartMenuRow('copy-params', '复制节点参数', '', !hasSelection),
                 '<div class="smart-menu-sep"></div>',
-                smartMenuRow('run-selected', '批量运行选中出图节点', '2.0.17', selectedContentNodeIds().filter(id => {
+                smartMenuRow('run-selected', '批量运行选中出图节点', '2.0.19', selectedContentNodeIds().filter(id => {
                     const n = nodes.find(node => node.id === id);
                     return n && (n.type === 'smart-image' || !n.type);
                 }).length < 1),
@@ -1802,6 +1931,11 @@
                 smartMenuRow('send-chat', '发送至对话', '', !selectedImageTarget()),
                 smartMenuRow('save-asset', '保存到资产库', '', !selectedImageTarget()),
                 smartMenuRow('params', '查看生成参数', '', !selectedImageTarget()),
+                smartMenuRow('match-assets', '从素材库匹配结果', '手动', !canManualMatch),
+                smartMenuRow('restore-history', '恢复到原节点', '', !canRestoreHistory),
+                smartMenuRow('character-expression', '角色表情头像', '', !selectedImageTarget()),
+                smartMenuRow('character-half', '角色半身图', '', !selectedImageTarget()),
+                smartMenuRow('character-full', '角色全身图', '', !selectedImageTarget()),
                 smartMenuRow('group', '创建编组', 'Ctrl+G', !canGroup),
                 smartMenuRow('ungroup', '解除编组', 'Ctrl+Shift+G', !canUngroup || targetNode?.locked),
                 smartMenuRow('merge', '合并图层', 'Ctrl+E', !canGroup),
@@ -2611,13 +2745,8 @@
         function shouldUsePreferredImageModel(model, models=[]){
             const current = String(model || '').toLowerCase();
             if(!current) return true;
-            const preferred = preferredImageModel(models);
-            if(!preferred) return false;
-            if(!models.includes(model)) return true;
-            const family = SMART_DEFAULT_IMAGE_MODEL.replace(/-vip$/i, '');
-            return current !== SMART_DEFAULT_IMAGE_MODEL
-                && current.startsWith(family)
-                && models.some(item => String(item).toLowerCase() === SMART_DEFAULT_IMAGE_MODEL);
+            const normalized = (models || []).map(item => String(item || '').toLowerCase());
+            return !normalized.includes(current);
         }
         function applySmartDefaultImageSettings(options={}){
             let changed = false;
@@ -4412,6 +4541,11 @@
                 if(action === 'send-chat') return await sendSelectedImageToChat();
                 if(action === 'save-asset') return await saveSelectedImageToAssetLibrary();
                 if(action === 'params') return await openSmartImageParams(target);
+                if(action === 'match-assets') return await matchSelectedNodeFromAssets(node);
+                if(action === 'restore-history') return restoreHistoryImageToSource(node, selectedImage.index);
+                if(action === 'character-expression') return createCharacterReuseNode(target, 'expression');
+                if(action === 'character-half') return createCharacterReuseNode(target, 'half');
+                if(action === 'character-full') return createCharacterReuseNode(target, 'full');
                 if(action === 'group') return createFrameGroupFromSelection();
                 if(action === 'merge') return mergeSelectedNodesIntoImageGroup();
                 if(action === 'ungroup') {
@@ -4763,6 +4897,7 @@
             bindNodeEvents();
             bindConnectionEvents();
             updateComposer();
+            renderSmartTaskPanel();
             renderMinimap();
             updateSmartImageToolbar();
             updateSmartSelectionToolbar();
@@ -7052,6 +7187,87 @@
             delete pendingNode._selectAfterRunId;
             selectedImage = {nodeId:'', index:-1};
         }
+        async function matchNodeFromAssets(node){
+            if(!node) return false;
+            const items = await loadRecentSmartImageAssets();
+            const urls = smartUrlsFromAssets(items, {
+                node,
+                taskId: node.canvasTaskId,
+                prompt: node.canvasTaskPrompt || node.runModelPrompt || node.runPrompt || node.promptDraftText,
+                startedAt: node.runStartedAt || node.created_at,
+                expectedCount: node.pending || node.canvasTaskExpectedCount || 1
+            });
+            if(!urls.length) return false;
+            finalizePendingNode(node, urls, smartRunMetaFromNode(node), 'image');
+            node.running = false;
+            scheduleSave();
+            render();
+            return true;
+        }
+        async function matchSelectedNodeFromAssets(node=selectedNode()){
+            if(!node){ toast('请先选择要匹配的节点'); return false; }
+            if(!canManualMatchNode(node)){ toast('这个节点没有可匹配的待完成任务'); return false; }
+            try {
+                const ok = await matchNodeFromAssets(node);
+                toast(ok ? '已从素材库匹配到生成结果' : '素材库暂未找到匹配结果');
+                return ok;
+            } catch(e) {
+                toast((e?.message || '素材库匹配失败').slice(0, 160));
+                return false;
+            }
+        }
+        function restoreHistoryImageToSource(historyNode=selectedNode(), imageIndex=selectedImage.index){
+            if(!historyNode?.historyForNodeId){ toast('请选择历史结果节点'); return false; }
+            const source = nodes.find(n => n.id === historyNode.historyForNodeId);
+            const image = (historyNode.images || [])[Number(imageIndex) || 0];
+            if(!source || !image?.url){ toast('找不到可恢复的原节点或历史图'); return false; }
+            pushUndo();
+            archiveNodeImagesToHistory(source);
+            source.images = [stripImageGenerationMeta({...image})];
+            delete source.w;
+            delete source.h;
+            refreshDefaultNodeTitle(source);
+            selectedId = source.id;
+            selectedIds = [];
+            selectedImage = {nodeId:source.id, index:0};
+            render();
+            scheduleSave();
+            toast('已恢复到原节点');
+            return true;
+        }
+        function createCharacterReuseNode(target, kind='expression'){
+            if(!target?.image?.url) return;
+            const labels = {
+                expression:'角色表情头像',
+                half:'角色半身图',
+                full:'角色全身图'
+            };
+            const prompts = {
+                expression:'参考这张角色设定图，生成同一角色的 5 个表情头像：微笑、惊讶、傲慢、愤怒、哭泣。保持脸型、五官、发型、发饰、服装配色和气质一致，浅灰干净背景，专业影视/游戏角色表情设定，高清，无文字水印。',
+                half:'参考这张角色设定图，生成同一角色的正面半身近景。保持人物脸型、五官、发型、服装风格、配色和气质一致，古风宫廷/仙侠美学，服装材质精致，发饰华丽，浅灰干净背景，高清，无文字水印。',
+                full:'参考这张角色设定图，生成同一角色的正面全身站姿。保持人物脸型、五官、发型、服装风格、配色和气质一致，古风宫廷/仙侠美学，完整服装结构清晰，浅灰干净背景，高清，无文字水印。'
+            };
+            pushUndo();
+            const rect = nodeRect(target.node);
+            const refNode = createNode(rect.x + rect.width + 80, rect.y, [stripImageGenerationMeta({...target.image, name:target.image.name || 'character-reference.png'})], {select:false, skipUndo:true});
+            refNode.title = '角色参考';
+            refNode.customTitle = true;
+            const outNode = createImagePlaceholderNode(rect.x + rect.width + 410, rect.y, {
+                title:labels[kind] || labels.expression,
+                prompt:prompts[kind] || prompts.expression,
+                w:320,
+                h:220
+            });
+            outNode.templateKind = `character-${kind}`;
+            outNode.runSettings = smartDefaultImageRunSettings(settings);
+            connectInputNode(refNode.id, outNode.id);
+            selectedId = outNode.id;
+            selectedIds = [];
+            selectedImage = {nodeId:'', index:-1};
+            render();
+            scheduleSave();
+            toast(`已创建${labels[kind] || labels.expression}节点`);
+        }
         function restoreFromExtraction(node, extracted){
             if(!node || !extracted) return;
             node.images = extracted.images.slice();
@@ -8957,6 +9173,29 @@
             if(action === 'ungroup') ungroupSelectedFrameGroups();
             if(action === 'duplicate') duplicateSelectedSmartNodes();
         });
+        smartTaskToggle?.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggleSmartTaskPanel();
+        });
+        smartTaskClose?.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            closeSmartTaskPanel();
+        });
+        smartTaskPanel?.addEventListener('mousedown', event => event.stopPropagation());
+        smartTaskPanel?.addEventListener('click', async event => {
+            const btn = event.target.closest('[data-smart-task-action]');
+            if(!btn || btn.disabled) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const nodeId = btn.dataset.nodeId || '';
+            const node = nodes.find(n => n.id === nodeId);
+            const action = btn.dataset.smartTaskAction;
+            if(action === 'select') return focusSmartNode(nodeId);
+            if(action === 'match') return await matchSelectedNodeFromAssets(node);
+            if(action === 'retry') return await runImageNodeById(nodeId);
+        });
         smartEnhanceMenu?.addEventListener('mousedown', event => event.stopPropagation());
         smartEnhanceMenu?.addEventListener('click', event => {
             event.preventDefault();
@@ -8977,6 +9216,7 @@
             savePromptDraftForCurrent();
         }, true);
         document.addEventListener('click', event => {
+            if(!event.target.closest('.smart-task-panel,.smart-task-toggle')) closeSmartTaskPanel();
             if(!event.target.closest('.smart-control')) closeAllSmartPopovers();
             if(!event.target.closest('.mention-picker') && !event.target.closest('#promptInput')) closeMentionPicker();
             if(!event.target.closest('.slash-menu') && !event.target.closest('#promptInput')) closeSlashMenu();

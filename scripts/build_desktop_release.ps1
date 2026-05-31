@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env pwsh
+#!/usr/bin/env pwsh
 # LumaForge Desktop Release Build Script
 # Usage: .\scripts\build_desktop_release.ps1
 
@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$Version = "2.0.18"
+$Version = "2.0.19"
 
 Write-Host "[1/8] Cleaning dist and build..."
 Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
@@ -69,4 +69,3 @@ Get-ChildItem releases\LumaForge* | ForEach-Object {
     Write-Host "  Release: $($_.Name) ($([math]::Round($_.Length/1MB, 1)) MB)"
     Write-Host "    SHA256: $hash"
 }
-

@@ -1,7 +1,7 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="${VERSION:-2.0.18}"
+VERSION="${VERSION:-2.0.19}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
@@ -41,4 +41,3 @@ echo "[6/6] Done."
 echo "  macOS package: $MAC_ZIP"
 echo ""
 echo "Optional signing/notarization can be added after this step with codesign and notarytool."
-

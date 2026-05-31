@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import hashlib
 import hmac
 import html
@@ -35,7 +35,7 @@ AVATAR_TYPES = {
 TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_TOKEN_TTL_SECONDS", str(30 * 24 * 60 * 60)))
 RESET_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_RESET_TOKEN_TTL_SECONDS", str(30 * 60)))
 EMAIL_TOKEN_TTL_SECONDS = int(os.getenv("CLOUD_EMAIL_TOKEN_TTL_SECONDS", str(24 * 60 * 60)))
-CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "2.0.18").strip() or "2.0.18"
+CLOUD_APP_VERSION = os.getenv("CLOUD_APP_VERSION", "2.0.19").strip() or "2.0.19"
 CLOUD_PUBLIC_URL = os.getenv("CLOUD_PUBLIC_URL", "").strip().rstrip("/")
 SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
@@ -3091,4 +3091,3 @@ if __name__ == "__main__":
     import uvicorn
 
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("CLOUD_CONFIG_PORT", "8787")))
-
