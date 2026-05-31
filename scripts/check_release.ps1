@@ -1,5 +1,5 @@
-param(
-    [string]$Version = "2.0.19"
+﻿param(
+    [string]$Version = "2.0.20"
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,7 +46,7 @@ Write-Host "[3/5] Checking key HTML script syntax when Node is available..."
 if (Get-Command node -ErrorAction SilentlyContinue) {
     node -e @"
 const fs = require('fs');
-const files = ['static/index.html', 'static/canvas.html', 'static/gpt-chat.html', 'static/assets.html', 'static/enhance.html'];
+const files = ['static/index.html', 'static/canvas.html', 'static/smart-canvas.html', 'static/gpt-chat.html', 'static/assets.html', 'static/enhance.html'];
 for (const file of files) {
   const html = fs.readFileSync(file, 'utf8');
   const scripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map(m => m[1]);

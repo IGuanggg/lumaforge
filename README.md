@@ -1,14 +1,14 @@
-# 光绘工坊 / LumaForge
+﻿# 光绘工坊 / LumaForge
 
 LumaForge 是一个本地优先的 AI 创作工作台，核心是无限画布、素材库、Agent 创作、GPT 对话、图像增强、视频生成和云同步。
 
-当前版本：`2.0.19`
+当前版本：`2.0.20`
 
-v2.0.19 是智能画布稳定闭环版：保留 `gpt-image-2-vip / 16:9 / 1K` 作为默认出图配置，同时修复普通 `gpt-image-2` 被自动切回 VIP 的问题；新增任务中心、手动从素材库回捞生成结果、历史结果恢复到原节点，以及角色设定板的表情/半身/全身复用快捷入口。这个版本不堆新大功能，重点是让出图链路更稳、更容易自救。
+v2.0.20 是智能画布稳定体验版：在 v2.0.19 出图闭环基础上继续加固任务中心和画布操作体验，新增任务中心批量匹配/批量重试/缺失检查，缺失图片可直接尝试从素材库回捞或临时忽略，节点增加运行中、失败、缺失、完成、历史等状态角标，同时优化左上导航与任务入口排版，避免浮层误触发画布框选。
 
 ## 核心功能
 
-- 智能画布：输出节点等待/失败/空结果状态明确显示；任务中心可查看运行中、失败和最近完成节点，支持失败重试、手动从素材库匹配结果；历史结果可恢复到原节点；图片选中浮动工具条（高清、去背景、画笔、画同款、下载）；支持 `/` 快捷模板菜单、故事脚本生成、角色三视图、产品三视图、脚本视图拆分角色卡与出图节点和选中节点批量运行；左键选择/框选、中键拖动画布、滚轮缩放、右键属性；支持节点/组命名、打组/解组、批量移动、提示词草稿持久化、生成输入框放大；返回列表会进入智能画布列表视角。
+- 智能画布：输出节点等待/失败/空结果状态明确显示；任务中心可查看运行中、失败和最近完成节点，支持定位、失败重试、批量重试、手动从素材库匹配结果、批量匹配和缺失文件检查；缺失图片可在节点内尝试匹配素材或临时忽略；节点角标显示运行中、失败、缺失、完成、历史、锁定等状态；历史结果可恢复到原节点；图片选中浮动工具条（高清、去背景、画笔、画同款、下载）；支持 `/` 快捷模板菜单、故事脚本生成、角色三视图、产品三视图、脚本视图拆分角色卡与出图节点和选中节点批量运行；左键选择/框选、中键拖动画布、滚轮缩放、右键属性；支持节点/组命名、打组/解组、批量移动、提示词草稿持久化、生成输入框放大；返回列表会进入智能画布列表视角。
 - 无限画布：节点式创作、拖拽连线、LLM/API/ComfyUI/Output 节点、Agent 自动规划。
 - Agent 创作：把自然语言目标拆成可编辑节点，支持尺寸、比例、张数和模型参数落地。
 - GPT 对话：支持聊天和生图模式，聊天可上传临时参考图，参考图不会进入素材库；智能画布支持发送参考图到 GPT 对话。
@@ -90,16 +90,16 @@ macOS 不能在 Windows 上交叉构建，必须在 Mac 机器或 GitHub Actions
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-VERSION=2.0.19 bash scripts/build_macos_release.sh
+VERSION=2.0.20 bash scripts/build_macos_release.sh
 ```
 
-也可以在 GitHub Actions 里手动运行 `Build macOS Release` workflow，或推送 `v2.0.19` tag 后让 macOS runner 自动构建并上传 macOS 包。
+也可以在 GitHub Actions 里手动运行 `Build macOS Release` workflow，或推送 `v2.0.20` tag 后让 macOS runner 自动构建并上传 macOS 包。
 
 输出：
 
 ```text
-releases/LumaForge-2.0.19-macos.zip
-releases/LumaForge-2.0.19-macos.sha256.txt
+releases/LumaForge-2.0.20-macos.zip
+releases/LumaForge-2.0.20-macos.sha256.txt
 ```
 
 说明：
@@ -115,7 +115,7 @@ releases/LumaForge-2.0.19-macos.sha256.txt
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f Dockerfile.cloud \
-  -t iguang9881/lumaforge-cloud:2.0.19 \
+  -t iguang9881/lumaforge-cloud:2.0.20 \
   -t iguang9881/lumaforge-cloud:latest \
   --push .
 ```
@@ -126,7 +126,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
 
-docker pull iguang9881/lumaforge-cloud:2.0.19
+docker pull iguang9881/lumaforge-cloud:2.0.20
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 
@@ -134,10 +134,10 @@ docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.19 \
+  -e CLOUD_APP_VERSION=2.0.20 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.19
+  iguang9881/lumaforge-cloud:2.0.20
 ```
 
 不要删除 `/opt/lumaforge-cloud/cloud-data`，否则云端账户、SMTP、配置同步和备份记录会丢失。
@@ -147,14 +147,14 @@ docker run -d \
 发布前运行：
 
 ```powershell
-.\scripts\check_release.ps1 -Version 2.0.19
+.\scripts\check_release.ps1 -Version 2.0.20
 ```
 
 GitHub Release 建议同时上传：
 
-- `releases/LumaForge-Setup-2.0.19.exe` 安装器
-- `releases/LumaForge-2.0.19-desktop.zip` 桌面自动更新包
-- `releases/LumaForge-2.0.19-macos.zip` macOS 包（在 macOS 上构建）
+- `releases/LumaForge-Setup-2.0.20.exe` 安装器
+- `releases/LumaForge-2.0.20-desktop.zip` 桌面自动更新包
+- `releases/LumaForge-2.0.20-macos.zip` macOS 包（在 macOS 上构建）
 - 对应 SHA256 校验信息
 
 发布流程和人工回归项见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。

@@ -1,6 +1,6 @@
-#!/usr/bin/env pwsh
+﻿#!/usr/bin/env pwsh
 # LumaForge Windows Code Signing Script
-# Usage: .\scripts\sign_windows.ps1 -Version 2.0.19
+# Usage: .\scripts\sign_windows.ps1 -Version 2.0.20
 #
 # Environment variables:
 #   WINDOWS_SIGN_CERT_PATH      - Path to .pfx certificate file
@@ -8,7 +8,7 @@
 #   WINDOWS_SIGN_TIMESTAMP_URL  - Timestamp server (default: http://timestamp.digicert.com)
 
 param(
-    [string]$Version = "2.0.19",
+    [string]$Version = "2.0.20",
     [string[]]$Files = @(),
     [string]$CertPath = $env:WINDOWS_SIGN_CERT_PATH,
     [string]$CertPassword = $env:WINDOWS_SIGN_CERT_PASSWORD,

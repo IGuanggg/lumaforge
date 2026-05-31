@@ -1,6 +1,6 @@
-# LumaForge 打包与部署
+﻿# LumaForge 打包与部署
 
-目标版本：`2.0.19`
+目标版本：`2.0.20`
 
 ## 桌面窗口版
 
@@ -23,7 +23,7 @@ dist\LumaForge\LumaForge.exe
 发布给自动更新使用的 zip 必须包含 `LumaForge/` 根目录：
 
 ```text
-LumaForge-2.0.19-desktop.zip
+LumaForge-2.0.20-desktop.zip
   LumaForge\
     LumaForge.exe
     LumaForgeUpdater.exe
@@ -60,23 +60,23 @@ macOS 产物必须在 macOS 上构建，不能在 Windows 上交叉编译：
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-VERSION=2.0.19 bash scripts/build_macos_release.sh
+VERSION=2.0.20 bash scripts/build_macos_release.sh
 ```
 
-也可以在 GitHub Actions 手动运行 `Build macOS Release` workflow；推送 `v2.0.19` tag 时，该 workflow 会在 macOS runner 上构建并把 macOS zip 上传到 GitHub Release。
+也可以在 GitHub Actions 手动运行 `Build macOS Release` workflow；推送 `v2.0.20` tag 时，该 workflow 会在 macOS runner 上构建并把 macOS zip 上传到 GitHub Release。
 
 产物：
 
 ```text
-releases/LumaForge-2.0.19-macos.zip
-releases/LumaForge-2.0.19-macos.sha256.txt
+releases/LumaForge-2.0.20-macos.zip
+releases/LumaForge-2.0.20-macos.sha256.txt
 ```
 
 正式分发建议在 macOS 上追加 Apple Developer 签名和公证：
 
 ```bash
 codesign --deep --force --options runtime --sign "Developer ID Application: YOUR NAME (TEAMID)" "dist/LumaForge.app"
-xcrun notarytool submit "releases/LumaForge-2.0.19-macos.zip" --keychain-profile "notarytool-profile" --wait
+xcrun notarytool submit "releases/LumaForge-2.0.20-macos.zip" --keychain-profile "notarytool-profile" --wait
 ```
 
 ## 源码运行
@@ -97,17 +97,17 @@ python launcher.py
 ```bash
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
-docker pull iguang9881/lumaforge-cloud:2.0.19
+docker pull iguang9881/lumaforge-cloud:2.0.20
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.19 \
+  -e CLOUD_APP_VERSION=2.0.20 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.19
+  iguang9881/lumaforge-cloud:2.0.20
 ```
 
 ## 注意事项
