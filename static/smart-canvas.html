@@ -43,6 +43,7 @@
         button { border:0; cursor:pointer; }
         button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline:0; box-shadow:0 0 0 4px rgba(37,99,235,.16); }
         .shell { position:relative; width:100vw; height:100vh; overflow:hidden; background-color:var(--page); background-image:radial-gradient(var(--grid) 1px, transparent 1px); background-size:24px 24px; cursor:default; }
+        .shell.space-pan { cursor:grab; }
         .shell.panning { cursor:grabbing; }
         .shell.middle-panning { cursor:grabbing; }
         .shell.zoom-preview { cursor:crosshair; }
@@ -249,9 +250,10 @@
         .connection-layer .conn-end-dot { opacity:.42; transition:opacity .14s ease, r .14s ease; }
         .connection-layer .conn-end-dot.conn-active { opacity:.95; animation:conn-dot-pulse 1.5s ease-in-out infinite; }
         .connection-layer .conn-hit { pointer-events:stroke; cursor:pointer; }
-        .connection-layer .conn-cut { pointer-events:none; cursor:pointer; opacity:0; transition:opacity .14s ease, transform .14s ease; }
-        .connection-layer .conn-cut.conn-active { pointer-events:auto; opacity:.42; }
-        .connection-layer .conn-cut:hover { opacity:1; }
+        .connection-layer .conn-cut { pointer-events:auto; cursor:pointer; opacity:.26; transition:opacity .14s ease, transform .14s ease; }
+        .connection-layer .conn-cut.conn-active { opacity:.82; }
+        .connection-layer .conn-cut:hover { opacity:1; transform:scale(1.08); }
+        .connection-layer .conn-cut-hit { pointer-events:all; }
         .connection-layer .conn-pending { stroke-dasharray:5 4; animation:dash 1.5s linear infinite; }
         @keyframes conn-flow-dash { to { stroke-dashoffset:-56; } }
         @keyframes conn-dot-pulse { 0%,100% { r:3.4px; opacity:.72; } 50% { r:4.8px; opacity:1; } }
@@ -1156,6 +1158,7 @@
         let uploadTargetId = '';
         let mentionRange = null;
         let panState = null;
+        let spacePanActive = false;
         let didPan = false;
         let portDragState = null;
         let connectionPulseTimer = null;
@@ -1429,6 +1432,47 @@
         }
         function setPromptText(text){
             promptInput.textContent = text || '';
+        }
+        function clipboardPlainText(event){
+            const data = event?.clipboardData;
+            const text = data?.getData('text/plain');
+            if(text) return text;
+            const html = data?.getData('text/html');
+            if(!html) return '';
+            const tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            return tmp.innerText || tmp.textContent || '';
+        }
+        function insertPlainTextAtPrompt(text){
+            const value = String(text ?? '').replace(/\r\n?/g, '\n');
+            if(!value) return false;
+            promptInput.focus();
+            if(document.queryCommandSupported?.('insertText') && document.execCommand('insertText', false, value)){
+                return true;
+            }
+            const sel = window.getSelection();
+            if(!sel) return false;
+            let range = sel.rangeCount ? sel.getRangeAt(0) : null;
+            if(!range || !promptInput.contains(range.commonAncestorContainer)){
+                range = document.createRange();
+                range.selectNodeContents(promptInput);
+                range.collapse(false);
+            }
+            range.deleteContents();
+            const fragment = document.createDocumentFragment();
+            const lines = value.split('\n');
+            lines.forEach((line, index) => {
+                if(index) fragment.appendChild(document.createElement('br'));
+                if(line) fragment.appendChild(document.createTextNode(line));
+            });
+            const marker = document.createTextNode('');
+            fragment.appendChild(marker);
+            range.insertNode(fragment);
+            range.setStartAfter(marker);
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+            return true;
         }
         function clearPromptInput(options={}){
             promptInput.textContent = '';
@@ -2523,6 +2567,10 @@
         function isEditableTarget(target){
             const el = target || document.activeElement;
             return !!el?.closest?.('input, textarea, select, option, [contenteditable="true"], .prompt-node-control, .prompt-input');
+        }
+        function setSpacePanActive(active){
+            spacePanActive = Boolean(active);
+            shell?.classList.toggle('space-pan', spacePanActive && !panState);
         }
         function safeScale(value){
             const n = Number(value);
@@ -4669,7 +4717,7 @@
                 const glowColor = kind === 'input' || isHistory ? 'rgba(165,180,252,0.22)' : 'rgba(125,211,252,0.22)';
                 const baseWidth = kind === 'input' || isHistory ? '1.8' : '1.55';
                 const dataAttrs = `data-from="${escapeHtml(conn.from)}" data-to="${escapeHtml(conn.to)}" data-kind="${escapeHtml(kind)}"`;
-                return `<path class="conn-base ${activeCls} ${pendingCls}" ${dataAttrs} d="${curve}" stroke="${baseColor}" stroke-width="${baseWidth}" fill="none"></path><path class="conn-flow-glow ${activeCls}" ${dataAttrs} d="${curve}" stroke="${glowColor}" stroke-width="7" fill="none"></path><path class="conn-flow-core ${activeCls}" ${dataAttrs} d="${curve}" stroke="${flowColor}" stroke-width="2.2" fill="none"></path><path class="conn-hit" data-conn-index="${conn.index}" ${dataAttrs} d="${curve}" stroke="transparent" stroke-width="14" fill="none"></path><circle class="conn-end-dot ${activeCls}" cx="${tx}" cy="${ty}" r="3.4" fill="${flowColor}"></circle><g class="conn-cut ${activeCls}" data-conn-index="${conn.index}" ${dataAttrs} transform="translate(${mx} ${my})"><circle r="8" fill="var(--card)" stroke="${baseColor}" stroke-width="1.4"></circle><path d="M-3 -3 L3 3 M3 -3 L-3 3" stroke="${baseColor}" stroke-width="1.5" stroke-linecap="round"></path></g>`;
+                return `<path class="conn-base ${activeCls} ${pendingCls}" ${dataAttrs} d="${curve}" stroke="${baseColor}" stroke-width="${baseWidth}" fill="none"></path><path class="conn-flow-glow ${activeCls}" ${dataAttrs} d="${curve}" stroke="${glowColor}" stroke-width="7" fill="none"></path><path class="conn-flow-core ${activeCls}" ${dataAttrs} d="${curve}" stroke="${flowColor}" stroke-width="2.2" fill="none"></path><path class="conn-hit" data-conn-index="${conn.index}" ${dataAttrs} d="${curve}" stroke="transparent" stroke-width="14" fill="none"></path><circle class="conn-end-dot ${activeCls}" cx="${tx}" cy="${ty}" r="3.4" fill="${flowColor}"></circle><g class="conn-cut ${activeCls}" data-conn-index="${conn.index}" ${dataAttrs} transform="translate(${mx} ${my})"><circle class="conn-cut-hit" r="18" fill="transparent"></circle><circle r="9" fill="var(--card)" stroke="${baseColor}" stroke-width="1.5"></circle><path d="M-3.5 -3.5 L3.5 3.5 M3.5 -3.5 L-3.5 3.5" stroke="${baseColor}" stroke-width="1.65" stroke-linecap="round"></path></g>`;
             }).join('');
             return `<svg class="connection-layer" width="6000" height="4000" viewBox="0 0 6000 4000" xmlns="http://www.w3.org/2000/svg">${paths}</svg>`;
         }
@@ -5087,11 +5135,21 @@
                     });
                     return;
                 }
-                el.addEventListener('click', e => {
+                const remove = e => {
                     e.preventDefault(); e.stopPropagation();
+                    if(el.dataset.removing === '1') return;
+                    el.dataset.removing = '1';
                     const index = Number(el.dataset.connIndex);
                     disconnectConnection(index);
+                };
+                el.addEventListener('pointerdown', e => {
+                    e.stopPropagation();
                 });
+                el.addEventListener('mousedown', e => {
+                    e.stopPropagation();
+                });
+                el.addEventListener('pointerup', remove);
+                el.addEventListener('click', remove);
             });
         }
         function ensurePortDragPathElement(){
@@ -5544,6 +5602,7 @@
                     port.addEventListener('dblclick', e => { e.stopPropagation(); });
                 });
                 el.onmousedown = e => {
+                    if(e.button === 0 && spacePanActive && !e.target.closest('.mini-x, .node-resize-handle, .node-port, .prompt-node-control, .prompt-node-pill, [data-node-title], textarea, select, input, button')) return;
                     if(e.button !== 0 || e.target.closest('.mini-x, .node-resize-handle, .thumb-item, .node-port, .prompt-node-control, .prompt-node-pill, [data-node-title], textarea, select, input, button')) return;
                     e.preventDefault(); e.stopPropagation();
                     let node = nodes.find(n => n.id === id);
@@ -8042,6 +8101,7 @@
                 node: pendingNode,
                 meta
             });
+            if(result?.partial_error) toast(friendlyTaskError(result.partial_error).slice(0, 160));
             return smartResultImageUrls(result).filter(Boolean);
         }
         async function runApiVideoGeneration(prompt, refs){
@@ -8465,7 +8525,14 @@
                     if(fallback.length) return {images:fallback};
                     return task.result;
                 }
-                if(task?.status === 'failed') throw new Error(friendlyTaskError(task.error));
+                if(task?.status === 'failed'){
+                    const urls = smartResultImageUrls(task.result);
+                    const errorText = friendlyTaskError(task.error || task.result?.partial_error);
+                    if(urls.length) return {...(task.result || {}), images:urls, partial_error:errorText};
+                    const fallback = await findCompletedSmartImages({...opts, taskId}).catch(() => []);
+                    if(fallback.length) return {images:fallback, partial_error:errorText};
+                    throw new Error(errorText);
+                }
                 if(i >= 4 && i % 3 === 1){
                     const fallback = await findCompletedSmartImages({...opts, taskId}).catch(() => []);
                     if(fallback.length) return {images:fallback};
@@ -8670,22 +8737,22 @@
             if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
             persistActiveComposerDraft();
             closeCreateMenu();
-            if(e.button === 1){
+            if(e.button === 0 && spacePanActive){
                 e.preventDefault();
                 didPan = false;
-                panState = {button:e.button, startX:e.clientX, startY:e.clientY, ox:viewport.x, oy:viewport.y};
+                panState = {button:e.button, mode:'space', startX:e.clientX, startY:e.clientY, ox:viewport.x, oy:viewport.y};
                 shell.classList.add('panning');
-                shell.classList.add('middle-panning');
+                shell.classList.remove('space-pan');
                 return;
             }
-            if(e.target.closest('.image-node')) return;
-            if(e.button === 0){
+            if(e.button === 1){
                 e.preventDefault();
                 didPan = false;
                 selectionState = {startScreen:{x:e.clientX, y:e.clientY}, startWorld:screenToWorld(e)};
                 updateSelectionBox(e);
                 return;
             }
+            if(e.target.closest('.image-node')) return;
         };
         shell.oncontextmenu = e => {
             if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
@@ -8712,6 +8779,12 @@
         shell.onclick = e => {
             handleBlankCanvasAction(e);
         };
+        shell.addEventListener('auxclick', e => {
+            if(e.button !== 1) return;
+            if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            e.preventDefault();
+            e.stopPropagation();
+        });
         minimap?.addEventListener('mousedown', e => {
             if(e.button !== 0) return;
             e.preventDefault();
@@ -8916,10 +8989,11 @@
             }
             if(panState) {
                 const wasPan = didPan;
-                if(!wasPan && panState.button !== 1) handleBlankCanvasAction(e);
+                if(!wasPan && panState.mode !== 'space' && panState.button !== 1) handleBlankCanvasAction(e);
                 panState = null;
                 shell.classList.remove('panning');
                 shell.classList.remove('middle-panning');
+                shell.classList.toggle('space-pan', spacePanActive);
                 if(wasPan) scheduleSave();
                 setTimeout(() => { didPan = false; }, 0);
             }
@@ -9027,6 +9101,7 @@
         });
         window.addEventListener('keydown', e => {
             const key = String(e.key || '').toLowerCase();
+            const isSpaceKey = e.code === 'Space' || e.key === ' ' || key === 'spacebar';
             if(smartTextModal?.classList.contains('open')){
                 if((e.ctrlKey || e.metaKey) && key === 'enter' && !smartTextInput?.readOnly){
                     e.preventDefault();
@@ -9038,6 +9113,11 @@
                     closeSmartTextModal(false);
                     return;
                 }
+            }
+            if(isSpaceKey && !e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget(e.target) && !imageEditModal?.classList.contains('open')){
+                e.preventDefault();
+                if(!e.repeat) setSpacePanActive(true);
+                return;
             }
             if(!e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget(e.target)){
                 if(key === 'z'){
@@ -9137,6 +9217,11 @@
                 createFrameGroupFromSelection();
             }
         });
+        window.addEventListener('keyup', e => {
+            const key = String(e.key || '').toLowerCase();
+            if(e.code === 'Space' || e.key === ' ' || key === 'spacebar') setSpacePanActive(false);
+        });
+        window.addEventListener('blur', () => setSpacePanActive(false));
         engineSelect.onchange = () => { settings.engine = engineSelect.value; syncApiKindToggleVisibility(); renderDynamicParams(); scheduleSave(); };
         smartTextSave?.addEventListener('click', e => {
             e.preventDefault();
@@ -9294,6 +9379,15 @@
             isComposing = false;
             savePromptDraftForCurrent();
             scheduleSave();
+        });
+        promptInput.addEventListener('paste', event => {
+            if(Array.from(event.clipboardData?.files || []).some(file => file.type.startsWith('image/'))) return;
+            event.preventDefault();
+            if(promptInput.dataset.promptLocked === '1') return;
+            if(insertPlainTextAtPrompt(clipboardPlainText(event))){
+                promptInput.dispatchEvent(new Event('input', {bubbles:true}));
+                saveMentionRange();
+            }
         });
         promptInput.addEventListener('input', maybeOpenMentionPicker);
         promptInput.addEventListener('input', maybeOpenSlashMenu);

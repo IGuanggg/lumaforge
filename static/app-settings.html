@@ -467,16 +467,16 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.0.20 智能画布稳定体验版</div>
-                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是任务中心批量处理、缺失图片自救、节点状态角标，以及左上导航与任务入口排版优化。</div>
+                        <div class="welcome-title">v2.0.21 智能画布稳定修复版</div>
+                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是多图部分成功、节点 loading 兜底、鼠标操作、连线删除和粘贴体验修复。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
                 </div>
                 <div class="welcome-list">
-                    <div class="welcome-item"><i data-lucide="activity" class="w-4 h-4"></i><span>任务中心支持匹配全部、重试失败和检查缺失</span></div>
-                    <div class="welcome-item"><i data-lucide="image-off" class="w-4 h-4"></i><span>缺失图片可在节点内匹配素材或临时忽略</span></div>
-                    <div class="welcome-item"><i data-lucide="badge-check" class="w-4 h-4"></i><span>节点显示运行中、失败、缺失、完成、历史等状态角标</span></div>
-                    <div class="welcome-item"><i data-lucide="layout-dashboard" class="w-4 h-4"></i><span>左上导航和任务入口重新排版，减少遮挡和误触</span></div>
+                    <div class="welcome-item"><i data-lucide="image-plus" class="w-4 h-4"></i><span>多图生成支持部分成功回填，避免成功图片被失败项拖住</span></div>
+                    <div class="welcome-item"><i data-lucide="activity" class="w-4 h-4"></i><span>任务失败会先从结果和素材库回捞图片，减少节点永久 loading</span></div>
+                    <div class="welcome-item"><i data-lucide="mouse-pointer-2" class="w-4 h-4"></i><span>智能画布鼠标操作同步为左键选择、空格拖动画布、滚轮缩放</span></div>
+                    <div class="welcome-item"><i data-lucide="unlink" class="w-4 h-4"></i><span>连线中间删除键命中区域加大，输入框粘贴统一为纯文本</span></div>
                 </div>
                 <div class="welcome-actions">
                     <button class="action-btn primary" id="welcome-run-diagnostics-btn" type="button"><i data-lucide="stethoscope" class="w-4 h-4"></i><span>运行诊断</span></button>
@@ -1085,13 +1085,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.0.20' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.0.21' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.0.20';
+            const version = appInfo?.version || '2.0.21';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }
@@ -1898,7 +1898,7 @@
                 const staticHealth = info.static_health || {};
                 const updateCapability = info.update_capability || {};
                 const checks = [
-                    {label:'当前版本', ok:info.version === '2.0.20', detail:info.version || '-'},
+                    {label:'当前版本', ok:info.version === '2.0.21', detail:info.version || '-'},
                     {label:'前端依赖', ok:!!staticHealth.ok, detail:staticHealth.ok ? `${Number(staticHealth.checked_count || 0)} 项完整` : `缺失 ${Number(staticHealth.missing_count || 0)} 项`},
                     {label:'素材文件', ok:Number(assets.missing_count || 0) === 0, detail:`缺失 ${Number(assets.missing_count || 0)} 个`},
                     {label:'缩略图', ok:Number(assets.thumb_missing_count || 0) === 0, detail:`待重建 ${Number(assets.thumb_missing_count || 0)} 个`, warnOnly:true},

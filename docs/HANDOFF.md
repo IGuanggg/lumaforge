@@ -17,8 +17,8 @@ Last updated: 2026-05-28
 
 ## Current State
 
-- Current local app version in code: 2.0.15
-- Current build id: 20260529-v2015-smart-canvas-hardening1
+- Current local app version in code: 2.0.21
+- Current build id: 20260603-v2021-smart-canvas-hotfix1
 - Main local URL: http://localhost:3010/
 - Main app file: main.py
 - Desktop launcher: desktop_launcher.py
@@ -114,11 +114,11 @@ The update process must replace program files only. It must not overwrite user d
 
 ## Current User Request / Next Target
 
-Current planned version: 2.0.15
+Current planned version: 2.0.21
 
 Goal:
 
-v2.0.15 smart canvas hardening: unified mouse interaction (left=select/marquee, middle=pan, wheel=zoom, right=properties), API status checks are manual-only, angle-control entry is hidden, smart-canvas grouping/naming/input expansion are in place, prompt drafts persist across selection changes, cloud media sync can refresh remote prompt metadata, and docs/build metadata are bumped for release.
+v2.0.21 smart canvas hotfix: multi-image generation supports partial success, failed task polling can recover completed images from task results or the asset library, mouse interaction is left=select/marquee, Space+left=pan, wheel=zoom, right=properties, prompt paste is plain text, connection delete hit area is larger and more reliable, and README / release notes / build metadata are bumped for release.
 
 The user specifically asked for:
 

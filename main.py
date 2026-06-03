@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.20")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260531-v2019-smart-canvas-stability1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.21")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260603-v2021-smart-canvas-hotfix1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -6488,30 +6488,11 @@ async def fetch_upstream_models(provider_id: str):
         grouped[classify_model_id(mid)].append(mid)
     return {"total": len(ids), "image_models": grouped["image"], "chat_models": grouped["chat"], "video_models": grouped["video"], "all": ids}
 
-async def build_online_image_result(payload: OnlineImageRequest, history_type: str = "online", prefix: str = "online_", task_id: str = ""):
-    provider = get_api_provider(payload.provider_id)
-    default_model = (provider.get("image_models") or [IMAGE_MODEL])[0]
-    model = selected_model(payload.model, default_model)
-    refs = [ref.dict() for ref in payload.reference_images if ref.url]
-    try:
-        count = max(1, min(8, int(getattr(payload, "n", 1) or 1)))
-        if count <= 1:
-            image_data, raw = await generate_ai_image(payload.prompt, payload.size, payload.quality, model, refs, provider["id"])
-            local_urls = [await save_ai_image_to_output(image_data, prefix=prefix)]
-            raw_items = [raw]
-        else:
-            parallel_results = await asyncio.gather(*[
-                generate_ai_image(payload.prompt, payload.size, payload.quality, model, refs, provider["id"])
-                for _ in range(count)
-            ])
-            raw_items = [raw for _, raw in parallel_results]
-            local_urls = []
-            for idx, (image_data, _) in enumerate(parallel_results):
-                local_url = await save_ai_image_to_output(image_data, prefix=f"{prefix}{idx + 1}_")
-                local_urls.append(local_url)
-    except httpx.HTTPStatusError as exc:
+def image_generation_error_detail(exc, payload_size: str = "", model: str = "") -> str:
+    if isinstance(exc, HTTPException):
+        return str(exc.detail or "生图接口错误")
+    if isinstance(exc, httpx.HTTPStatusError):
         text = exc.response.text or ''
-        # 把上游英文错误转成中文友好提示
         friendly = None
         lower_text = text.lower()
         if any(token in lower_text for token in ("credits not enough", "credit not enough", "insufficient credit", "insufficient balance", "balance not enough", "quota exceeded")) or "余额不足" in text or "额度不足" in text:
@@ -6523,14 +6504,53 @@ async def build_online_image_result(payload: OnlineImageRequest, history_type: s
             limit = m.group(1)
             friendly = f"该模型不支持当前分辨率：最长边超过 {limit}px。请把图片分辨率调低（例如换到 2K 或更小），或更换支持高分辨率的模型。"
         elif "Invalid size" in text or "invalid_value" in text:
-            friendly = f"该模型不支持当前尺寸：{payload.size}。请尝试更换分辨率或模型。"
-        elif "rate limit" in text.lower() or "429" in text:
+            friendly = f"该模型不支持当前尺寸：{payload_size}。请尝试更换分辨率或模型。"
+        elif "rate limit" in lower_text or "429" in text:
             friendly = "请求过于频繁，已被上游限流，请稍后再试。"
         elif "Unauthorized" in text or "401" in text:
             friendly = "API Key 无效或已过期，请到「API 设置」检查 Key。"
         elif "model_not_found" in text or "channel not found" in text:
             friendly = f"上游平台找不到模型「{model}」可用通道。可能该模型未在此账号开通，请换一个已开通的模型。"
-        detail = friendly or f"上游生图接口错误：{text[:300]}"
+        return friendly or f"上游生图接口错误：{text[:300]}"
+    if isinstance(exc, httpx.HTTPError):
+        return f"请求上游生图接口失败：{exc}"
+    return str(exc) or "生图接口错误"
+
+async def build_online_image_result(payload: OnlineImageRequest, history_type: str = "online", prefix: str = "online_", task_id: str = ""):
+    provider = get_api_provider(payload.provider_id)
+    default_model = (provider.get("image_models") or [IMAGE_MODEL])[0]
+    model = selected_model(payload.model, default_model)
+    refs = [ref.dict() for ref in payload.reference_images if ref.url]
+    partial_errors = []
+    try:
+        count = max(1, min(8, int(getattr(payload, "n", 1) or 1)))
+        if count <= 1:
+            image_data, raw = await generate_ai_image(payload.prompt, payload.size, payload.quality, model, refs, provider["id"])
+            local_urls = [await save_ai_image_to_output(image_data, prefix=prefix)]
+            raw_items = [raw]
+        else:
+            gathered_results = await asyncio.gather(*[
+                generate_ai_image(payload.prompt, payload.size, payload.quality, model, refs, provider["id"])
+                for _ in range(count)
+            ], return_exceptions=True)
+            partial_errors = [
+                image_generation_error_detail(item, payload.size, model)
+                for item in gathered_results
+                if isinstance(item, Exception)
+            ]
+            parallel_results = [item for item in gathered_results if not isinstance(item, Exception)]
+            if not parallel_results:
+                first_error = next((item for item in gathered_results if isinstance(item, Exception)), None)
+                if first_error:
+                    raise first_error
+                raise HTTPException(status_code=502, detail="生图接口没有返回图片数据")
+            raw_items = [raw for _, raw in parallel_results]
+            local_urls = []
+            for idx, (image_data, _) in enumerate(parallel_results):
+                local_url = await save_ai_image_to_output(image_data, prefix=f"{prefix}{idx + 1}_")
+                local_urls.append(local_url)
+    except httpx.HTTPStatusError as exc:
+        detail = image_generation_error_detail(exc, payload.size, model)
         raise HTTPException(status_code=exc.response.status_code, detail=detail) from exc
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"请求上游生图接口失败：{exc}") from exc
@@ -6548,6 +6568,10 @@ async def build_online_image_result(payload: OnlineImageRequest, history_type: s
         "params": {k: v for k, v in {"provider_id": provider["id"], "model": model, "size": payload.size, "quality": payload.quality, "n": count, "reference_images": refs, "task_id": task_id or ""}.items() if v not in ("", None)},
         "raw_usage": raw_items[0].get("usage") if raw_items and isinstance(raw_items[0], dict) else None,
     }
+    if partial_errors:
+        result["partial_errors"] = partial_errors
+        result["partial_error"] = "；".join(partial_errors[:2])
+        result["partial_failed"] = len(partial_errors)
     save_to_history(result)
     await manager.broadcast_new_image(result)
     return result
