@@ -32,9 +32,9 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.24")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260604-v2024-gesture-boundary1")
-APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases/latest").strip()
+APP_VERSION = os.getenv("APP_VERSION", "2.0.25")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260604-v2025-update-restart-hotfix1")
+APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
 
@@ -3602,6 +3602,27 @@ def desktop_updater_path():
             return path
     return ""
 
+def desktop_exe_candidates(primary: str = ""):
+    candidates = []
+    def add(path: str):
+        path = os.path.abspath(path or "")
+        if path and path not in candidates:
+            candidates.append(path)
+    add(primary)
+    add(sys.executable)
+    for base in [desktop_program_dir(), BUNDLE_DIR, BASE_DIR]:
+        add(os.path.join(base, "LumaForge.exe"))
+    local_programs = os.getenv("LOCALAPPDATA")
+    if local_programs:
+        add(os.path.join(local_programs, "Programs", "LumaForge", "LumaForge.exe"))
+    return candidates
+
+def resolve_desktop_exe(primary: str = ""):
+    for path in desktop_exe_candidates(primary):
+        if os.path.isfile(path):
+            return path
+    return ""
+
 def desktop_update_capability():
     is_frozen = getattr(sys, "frozen", False)
     if not is_frozen:
@@ -3664,7 +3685,18 @@ def spawn_delayed_relaunch(exe_path: str):
             close_fds=True,
         )
 
+def normalize_lumaforge_version(value: str):
+    text = str(value or "").strip()
+    if text.lower().startswith("v"):
+        text = text[1:]
+    # Recovery for the accidental v20.0.x release line: treat it as v2.0.x
+    # so affected installations can still upgrade to normal 2.0.x releases.
+    if re.match(r"^20\.0\.\d+(?:\D.*)?$", text):
+        text = "2.0." + text.split(".", 2)[2]
+    return text
+
 def version_tuple(value: str):
+    value = normalize_lumaforge_version(value)
     parts = []
     for piece in re.split(r"[^0-9]+", value or ""):
         if piece:
@@ -3789,10 +3821,32 @@ def _is_zip_download_url(url: str) -> bool:
     return path.endswith(".zip")
 
 
-def normalize_update_payload(data: Dict[str, Any]):
-    latest = str(data.get("version") or data.get("latest_version") or data.get("tag_name") or "").strip()
-    if latest.lower().startswith("v"):
-        latest = latest[1:]
+def update_payload_version(data: Dict[str, Any]):
+    return normalize_lumaforge_version(data.get("version") or data.get("latest_version") or data.get("tag_name") or "")
+
+def is_supported_release_version(value: str):
+    text = normalize_lumaforge_version(value)
+    return bool(re.match(r"^2\.0\.\d+(?:\D.*)?$", text))
+
+def normalize_update_payload(data: Any):
+    if isinstance(data, list):
+        candidates = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            version = update_payload_version(item)
+            if not version or not is_supported_release_version(version):
+                continue
+            if item.get("draft") or item.get("prerelease"):
+                continue
+            candidates.append(item)
+        if candidates:
+            data = max(candidates, key=lambda item: version_tuple(update_payload_version(item)))
+        else:
+            data = {}
+    elif not isinstance(data, dict):
+        data = {}
+    latest = update_payload_version(data)
     raw_assets = data.get("assets") or []
     parsed_assets = []
     if isinstance(raw_assets, list):
@@ -3862,6 +3916,26 @@ def normalize_update_payload(data: Dict[str, Any]):
         "assets": parsed_assets,
         "selected_asset": selected,
     }
+
+async def fetch_update_source_payload(client: httpx.AsyncClient):
+    resp = await client.get(APP_UPDATE_CHECK_URL)
+    resp.raise_for_status()
+    data = resp.json()
+    raw_latest = ""
+    if isinstance(data, dict):
+        raw_latest = str(data.get("version") or data.get("latest_version") or data.get("tag_name") or "").strip().lstrip("vV")
+    normalized = normalize_update_payload(data)
+    # If a configured /latest endpoint points at the accidental v20.0.x line,
+    # recover by querying the releases list and selecting the highest valid v2.0.x.
+    if (re.match(r"^20\.0\.\d+", raw_latest) or not normalized.get("latest_version") or not is_supported_release_version(normalized.get("latest_version"))) and "api.github.com/repos/IGuanggg/lumaforge/releases" in APP_UPDATE_CHECK_URL:
+        list_url = APP_UPDATE_CHECK_URL.rstrip("/")
+        if list_url.endswith("/latest"):
+            list_url = list_url[:-len("/latest")]
+        list_resp = await client.get(list_url)
+        list_resp.raise_for_status()
+        data = list_resp.json()
+        normalized = normalize_update_payload(data)
+    return data, normalized
 
 @app.get("/login.html")
 async def login_page():
@@ -4022,15 +4096,12 @@ async def app_update_check():
             "configured": False,
             "current_version": APP_VERSION,
             "message": "未配置更新检查地址。发布到 GitHub 后可通过 APP_UPDATE_CHECK_URL 指向 release/version JSON。",
-        }
+    }
     try:
         async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.get(APP_UPDATE_CHECK_URL)
-            resp.raise_for_status()
-            data = resp.json()
+            data, normalized = await fetch_update_source_payload(client)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"检查更新失败：{exc}")
-    normalized = normalize_update_payload(data if isinstance(data, dict) else {})
     latest = normalized["latest_version"]
     is_newer = bool(latest and version_tuple(latest) > version_tuple(APP_VERSION))
     capability = desktop_update_capability()
@@ -4222,6 +4293,9 @@ def launch_desktop_updater(zip_path: str, target_version: str = "", download_met
     if not os.path.isfile(zip_path):
         raise HTTPException(status_code=400, detail="更新包文件不存在")
     app_dir = desktop_program_dir()
+    restart_exe = resolve_desktop_exe(sys.executable)
+    if not restart_exe:
+        raise HTTPException(status_code=400, detail="找不到可重启的 LumaForge.exe，请检查安装目录或重新安装桌面版。")
     os.makedirs(UPDATE_DIR, exist_ok=True)
     run_updater = os.path.join(UPDATE_DIR, "LumaForgeUpdater.exe")
     try:
@@ -4237,6 +4311,7 @@ def launch_desktop_updater(zip_path: str, target_version: str = "", download_met
         "download": download_meta or {},
         "desktop_updater": run_updater,
         "app_dir": app_dir,
+        "restart_exe": restart_exe,
         "started_at": now_ms(),
         "restart_required": True,
         "pending_external_updater": True,
@@ -4248,7 +4323,7 @@ def launch_desktop_updater(zip_path: str, target_version: str = "", download_met
         "--pid", str(os.getpid()),
         "--package", zip_path,
         "--app-dir", app_dir,
-        "--exe", sys.executable,
+        "--exe", restart_exe,
         "--state", UPDATE_STATE_FILE,
         "--version", target_version or "",
         "--restart",
@@ -4279,12 +4354,9 @@ async def app_update_download():
         raise HTTPException(status_code=400, detail="未配置更新检查地址")
     try:
         async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.get(APP_UPDATE_CHECK_URL)
-            resp.raise_for_status()
-            data = resp.json()
+            data, normalized = await fetch_update_source_payload(client)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"检查更新失败：{exc}")
-    normalized = normalize_update_payload(data if isinstance(data, dict) else {})
     latest = normalized["latest_version"]
     if not latest or not (version_tuple(latest) > version_tuple(APP_VERSION)):
         raise HTTPException(status_code=400, detail=f"当前已是最新版本 {APP_VERSION}")
@@ -4564,11 +4636,21 @@ async def app_update_auto():
 @app.post("/api/app/restart")
 async def app_restart():
     is_frozen = getattr(sys, "frozen", False)
+    restart_exe = resolve_desktop_exe(sys.executable) if is_frozen else ""
+    if is_frozen and not restart_exe:
+        error = "找不到可重启的 LumaForge.exe，请检查安装目录或重新安装桌面版。"
+        save_update_state({
+            "phase": "restart_failed",
+            "current_version": APP_VERSION,
+            "error": error,
+            "restart_candidates": desktop_exe_candidates(sys.executable),
+        })
+        raise HTTPException(status_code=500, detail=error)
     async def _delayed_restart():
         await asyncio.sleep(0.8)
         if is_frozen:
             try:
-                spawn_delayed_relaunch(sys.executable)
+                spawn_delayed_relaunch(restart_exe)
             finally:
                 os._exit(0)
         else:
@@ -4582,6 +4664,7 @@ async def app_restart():
         "ok": True,
         "restarting": True,
         "mode": "desktop-relaunch" if is_frozen else "source-execv",
+        "restart_exe": restart_exe,
         "message": "应用正在重启，请稍后刷新页面。",
     }
 

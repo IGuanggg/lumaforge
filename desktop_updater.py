@@ -169,14 +169,48 @@ def write_state(path: str, payload: dict):
         pass
 
 
-def restart_app(exe_path: str):
-    if not exe_path or not os.path.isfile(exe_path):
-        return
+def resolve_restart_exe(exe_path: str, app_dir: str):
+    candidates = []
+    def add(path: str):
+        path = os.path.abspath(path or "")
+        if path and path not in candidates:
+            candidates.append(path)
+    add(exe_path)
+    add(os.path.join(app_dir, "LumaForge.exe"))
+    localappdata = os.getenv("LOCALAPPDATA") or ""
+    if localappdata:
+        add(os.path.join(localappdata, "Programs", "LumaForge", "LumaForge.exe"))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path, candidates
+    return "", candidates
+
+
+def restart_app(exe_path: str, app_dir: str, state_path: str = "", state: dict | None = None):
+    resolved, candidates = resolve_restart_exe(exe_path, app_dir)
+    if not resolved:
+        if state is not None:
+            state["phase"] = "restart_failed"
+            state["restart_required"] = True
+            state["restart_error"] = "LumaForge.exe not found"
+            state["restart_candidates"] = candidates
+            write_state(state_path, state)
+        return False
     try:
         time.sleep(2.0)
-        subprocess.Popen([exe_path], cwd=os.path.dirname(exe_path), close_fds=True)
-    except Exception:
-        pass
+        subprocess.Popen([resolved], cwd=os.path.dirname(resolved), close_fds=True)
+        if state is not None:
+            state["restart_exe"] = resolved
+            write_state(state_path, state)
+        return True
+    except Exception as exc:
+        if state is not None:
+            state["phase"] = "restart_failed"
+            state["restart_required"] = True
+            state["restart_error"] = str(exc)
+            state["restart_exe"] = resolved
+            write_state(state_path, state)
+        return False
 
 
 def main():
@@ -249,8 +283,8 @@ def main():
     if state.get("ok") and args.restart:
         state["phase"] = "restarting"
         write_state(args.state, state)
-        restart_app(args.exe)
-        state["phase"] = "done"
+        if restart_app(args.exe, args.app_dir, args.state, state):
+            state["phase"] = "done"
     write_state(args.state, state)
     return 0 if state.get("ok") else 1
 

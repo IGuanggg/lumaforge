@@ -1,29 +1,29 @@
-# LumaForge ´ò°üÓë²¿Êð
+ï»¿# LumaForge ï¿½ï¿½ï¿½ï¿½ë²¿ï¿½ï¿½
 
-Ä¿±ê°æ±¾£º`2.0.24`
+Ä¿ï¿½ï¿½æ±¾ï¿½ï¿½`2.0.25`
 
-## ×ÀÃæ´°¿Ú°æ
+## ï¿½ï¿½ï¿½æ´°ï¿½Ú°ï¿½
 
 ```powershell
 .\build_desktop.bat
 ```
 
-²úÎï£º
+ï¿½ï¿½ï¿½ï£º
 
 ```text
 dist\LumaForge\LumaForge.exe
 ```
 
-ÍêÕû·¢²¼°ü£¨×ÀÃæ zip¡¢¿ÉÑ¡°²×°Æ÷¡¢¿ÉÑ¡´úÂëÇ©Ãû£©£º
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ zipï¿½ï¿½ï¿½ï¿½Ñ¡ï¿½ï¿½×°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¡ï¿½ï¿½ï¿½ï¿½Ç©ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 ```powershell
 .\scripts\build_desktop_release.ps1
 ```
 
-·¢²¼¸ø×Ô¶¯¸üÐÂÊ¹ÓÃµÄ zip ±ØÐë°üº¬ `LumaForge/` ¸ùÄ¿Â¼£º
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½Ê¹ï¿½Ãµï¿½ zip ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ `LumaForge/` ï¿½ï¿½Ä¿Â¼ï¿½ï¿½
 
 ```text
-LumaForge-2.0.24-desktop.zip
+LumaForge-2.0.25-desktop.zip
   LumaForge\
     LumaForge.exe
     LumaForgeUpdater.exe
@@ -32,86 +32,86 @@ LumaForge-2.0.24-desktop.zip
     workflows\
 ```
 
-Ä¬ÈÏÄ¿Â¼£º
+Ä¬ï¿½ï¿½Ä¿Â¼ï¿½ï¿½
 
 - Runtime: `%APPDATA%\LumaForge`
 - Images: `%USERPROFILE%\Pictures\LumaForge`
 - Logs: `%LOCALAPPDATA%\LumaForge\logs`
 
-## ä¯ÀÀÆ÷°æ EXE
+## ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ EXE
 
 ```powershell
 .\build_windows.bat
 ```
 
-²úÎï£º
+ï¿½ï¿½ï¿½ï£º
 
 ```text
 dist\LumaForge Browser\LumaForge.exe
 ```
 
-ä¯ÀÀÆ÷°æ»á×Ô¶¯Ñ¡Ôñ¶Ë¿Ú¡¢Æô¶¯±¾µØ FastAPI ·þÎñ²¢´ò¿ªÏµÍ³ä¯ÀÀÆ÷¡£Êý¾ÝÔÚ EXE ÅÔ±ßµÄ `userdata/`¡£
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô¶ï¿½Ñ¡ï¿½ï¿½Ë¿Ú¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ FastAPI ï¿½ï¿½ï¿½ñ²¢´ï¿½ÏµÍ³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ EXE ï¿½Ô±ßµï¿½ `userdata/`ï¿½ï¿½
 
-## macOS °æ
+## macOS ï¿½ï¿½
 
-macOS ²úÎï±ØÐëÔÚ macOS ÉÏ¹¹½¨£¬²»ÄÜÔÚ Windows ÉÏ½»²æ±àÒë£º
+macOS ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ macOS ï¿½Ï¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Windows ï¿½Ï½ï¿½ï¿½ï¿½ï¿½ï¿½ë£º
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-VERSION=2.0.24 bash scripts/build_macos_release.sh
+VERSION=2.0.25 bash scripts/build_macos_release.sh
 ```
 
-Ò²¿ÉÒÔÔÚ GitHub Actions ÊÖ¶¯ÔËÐÐ `Build macOS Release` workflow£»ÍÆËÍ `v2.0.24` tag Ê±£¬¸Ã workflow »áÔÚ macOS runner ÉÏ¹¹½¨²¢°Ñ macOS zip ÉÏ´«µ½ GitHub Release¡£
+Ò²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ GitHub Actions ï¿½Ö¶ï¿½ï¿½ï¿½ï¿½ï¿½ `Build macOS Release` workflowï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ `v2.0.25` tag Ê±ï¿½ï¿½ï¿½ï¿½ workflow ï¿½ï¿½ï¿½ï¿½ macOS runner ï¿½Ï¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ macOS zip ï¿½Ï´ï¿½ï¿½ï¿½ GitHub Releaseï¿½ï¿½
 
-²úÎï£º
+ï¿½ï¿½ï¿½ï£º
 
 ```text
-releases/LumaForge-2.0.24-macos.zip
-releases/LumaForge-2.0.24-macos.sha256.txt
+releases/LumaForge-2.0.25-macos.zip
+releases/LumaForge-2.0.25-macos.sha256.txt
 ```
 
-ÕýÊ½·Ö·¢½¨ÒéÔÚ macOS ÉÏ×·¼Ó Apple Developer Ç©ÃûºÍ¹«Ö¤£º
+ï¿½ï¿½Ê½ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ macOS ï¿½ï¿½×·ï¿½ï¿½ Apple Developer Ç©ï¿½ï¿½ï¿½Í¹ï¿½Ö¤ï¿½ï¿½
 
 ```bash
 codesign --deep --force --options runtime --sign "Developer ID Application: YOUR NAME (TEAMID)" "dist/LumaForge.app"
-xcrun notarytool submit "releases/LumaForge-2.0.24-macos.zip" --keychain-profile "notarytool-profile" --wait
+xcrun notarytool submit "releases/LumaForge-2.0.25-macos.zip" --keychain-profile "notarytool-profile" --wait
 ```
 
-## Ô´ÂëÔËÐÐ
+## Ô´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 ```powershell
 pip install -r requirements.txt
 python launcher.py
 ```
 
-## ÔÆºó¶Ë Docker
+## ï¿½Æºï¿½ï¿½ Docker
 
-·þÎñÃû£º`lumaforge-cloud`
+ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½`lumaforge-cloud`
 
-¾µÏñ£º`iguang9881/lumaforge-cloud`
+ï¿½ï¿½ï¿½ï¿½`iguang9881/lumaforge-cloud`
 
-³Ö¾Ã»¯Ä¿Â¼£º`/opt/lumaforge-cloud/cloud-data`
+ï¿½Ö¾Ã»ï¿½Ä¿Â¼ï¿½ï¿½`/opt/lumaforge-cloud/cloud-data`
 
 ```bash
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
-docker pull iguang9881/lumaforge-cloud:2.0.24
+docker pull iguang9881/lumaforge-cloud:2.0.25
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.24 \
+  -e CLOUD_APP_VERSION=2.0.25 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.24
+  iguang9881/lumaforge-cloud:2.0.25
 ```
 
-## ×¢ÒâÊÂÏî
+## ×¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
-- ²»Òª°Ñ `assets/`¡¢`output/`¡¢`data/`¡¢`userdata/`¡¢`cloud-data/` ´ò½øÔ´Âë·¢²¼°ü¡£
-- EXE ×Ô¶¯¸üÐÂÒÀÀµ·¢²¼°üÄÚÍ¬Ê±°üº¬ `LumaForge.exe` ºÍ `LumaForgeUpdater.exe`£¬²»ÒªÖ»ÉÏ´«µ¥¸ö EXE¡£
-- ´úÂëÇ©Ãû½Å±¾Ö»×öÔ¤Áô£»Î´ÅäÖÃÕæÊµÖ¤ÊéÊ±»áÌø¹ýÇ©Ãû¡£Î´Ç©Ãû EXE ÈÔ¿ÉÄÜ´¥·¢ SmartScreen£¬ÕâÊÇÇ©ÃûÎÊÌâ£¬²»ÊÇ´úÂëÎÊÌâ¡£
+- ï¿½ï¿½Òªï¿½ï¿½ `assets/`ï¿½ï¿½`output/`ï¿½ï¿½`data/`ï¿½ï¿½`userdata/`ï¿½ï¿½`cloud-data/` ï¿½ï¿½ï¿½Ô´ï¿½ë·¢ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+- EXE ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¬Ê±ï¿½ï¿½ï¿½ï¿½ `LumaForge.exe` ï¿½ï¿½ `LumaForgeUpdater.exe`ï¿½ï¿½ï¿½ï¿½ÒªÖ»ï¿½Ï´ï¿½ï¿½ï¿½ï¿½ï¿½ EXEï¿½ï¿½
+- ï¿½ï¿½ï¿½ï¿½Ç©ï¿½ï¿½ï¿½Å±ï¿½Ö»ï¿½ï¿½Ô¤ï¿½ï¿½ï¿½Î´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÊµÖ¤ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç©ï¿½ï¿½ï¿½ï¿½Î´Ç©ï¿½ï¿½ EXE ï¿½Ô¿ï¿½ï¿½Ü´ï¿½ï¿½ï¿½ SmartScreenï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç©ï¿½ï¿½ï¿½ï¿½ï¿½â£¬ï¿½ï¿½ï¿½Ç´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½â¡£

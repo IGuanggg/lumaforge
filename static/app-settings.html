@@ -467,7 +467,7 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.0.24 智能画布稳定修复版</div>
+                        <div class="welcome-title">v2.0.25 自动更新紧急修复版</div>
                         <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是多图部分成功、节点 loading 兜底、鼠标操作、连线删除和粘贴体验修复。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
@@ -795,6 +795,7 @@
             extracting: '解压更新包',
             replacing: '替换程序文件',
             restarting: '重启应用',
+            restart_failed: '重启失败',
             done: '完成',
             failed: '失败',
             rollback: '回滚中'
@@ -823,6 +824,7 @@
             if(phase === 'extracting') return 38;
             if(phase === 'replacing') return 72;
             if(phase === 'restarting') return 92;
+            if(phase === 'restart_failed') return 100;
             if(phase === 'done') return 100;
             if(phase === 'rollback') return 50;
             if(phase === 'failed') return downloaded && total ? Math.min(100, Math.round(downloaded * 100 / total)) : 100;
@@ -843,6 +845,8 @@
                 text = `更新包已下载${target ? `：${target}` : ''}，可以继续安装。`;
             } else if(phase === 'failed' || phase === 'rollback') {
                 text = `上次更新未完成：${state?.error || '未知错误'}${backup ? ` · 可检查备份：${backup}` : ''}`;
+            } else if(phase === 'restart_failed') {
+                text = `更新已安装，但自动重启失败：${state?.restart_error || state?.error || '找不到应用'}。请从安装目录手动打开 LumaForge.exe。`;
             }
             box.textContent = text;
             box.classList.toggle('show', !!text);
@@ -880,15 +884,15 @@
             setText('update-state-backup', state.backup_dir || '-');
             const failure = document.getElementById('update-failure');
             if(failure) {
-                const shouldShow = phase === 'failed' || phase === 'rollback' || !!state.error || !!state.rollback_error;
+                const shouldShow = phase === 'failed' || phase === 'rollback' || phase === 'restart_failed' || !!state.error || !!state.rollback_error || !!state.restart_error;
                 failure.classList.toggle('show', shouldShow);
                 failure.textContent = shouldShow
-                    ? `错误：${state.error || '-'}${state.backup_dir ? `。备份目录：${state.backup_dir}` : ''}${state.rollback_error ? `。回滚错误：${state.rollback_error}` : ''}`
+                    ? `错误：${state.error || state.restart_error || '-'}${state.backup_dir ? `。备份目录：${state.backup_dir}` : ''}${state.rollback_error ? `。回滚错误：${state.rollback_error}` : ''}${state.restart_candidates ? `。候选路径：${(state.restart_candidates || []).join('；')}` : ''}`
                     : '';
             }
             renderUpdatePostState(state);
-            if(phase === 'failed' || phase === 'rollback') {
-                setStatus('update-status', phase === 'rollback' ? '更新失败，正在尝试回滚。' : (state.error || '更新失败。'), 'error');
+            if(phase === 'failed' || phase === 'rollback' || phase === 'restart_failed') {
+                setStatus('update-status', phase === 'rollback' ? '更新失败，正在尝试回滚。' : (state.error || state.restart_error || '更新或重启失败。'), 'error');
             }
         }
 
@@ -897,7 +901,7 @@
                 const data = await fetch('/api/app/update-state').then(jsonOrThrow);
                 renderUpdateState(data);
                 const phase = data.phase || data.state?.phase || '';
-                if(['done','failed','downloaded'].includes(phase)) {
+                if(['done','failed','downloaded','restart_failed'].includes(phase)) {
                     if(phase === 'done') await loadInfo();
                     stopUpdatePolling();
                 }
@@ -1085,13 +1089,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.0.24' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.0.25' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.0.24';
+            const version = appInfo?.version || '2.0.25';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }
@@ -1898,7 +1902,7 @@
                 const staticHealth = info.static_health || {};
                 const updateCapability = info.update_capability || {};
                 const checks = [
-                    {label:'当前版本', ok:info.version === '2.0.24', detail:info.version || '-'},
+                    {label:'当前版本', ok:info.version === '2.0.25', detail:info.version || '-'},
                     {label:'前端依赖', ok:!!staticHealth.ok, detail:staticHealth.ok ? `${Number(staticHealth.checked_count || 0)} 项完整` : `缺失 ${Number(staticHealth.missing_count || 0)} 项`},
                     {label:'素材文件', ok:Number(assets.missing_count || 0) === 0, detail:`缺失 ${Number(assets.missing_count || 0)} 个`},
                     {label:'缩略图', ok:Number(assets.thumb_missing_count || 0) === 0, detail:`待重建 ${Number(assets.thumb_missing_count || 0)} 个`, warnOnly:true},
