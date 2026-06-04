@@ -134,13 +134,22 @@
             height: 100vh;
             background: var(--bg);
             position: relative;
+            padding-left: 80px;
+            box-sizing: border-box;
+            overflow: hidden;
             transition: background 0.3s;
         }
 
         /* 侧边栏 */
         .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            bottom: 0;
             width: 80px;
             min-width: 80px;
+            height: 100vh;
+            flex: 0 0 80px;
             background: var(--sidebar-bg);
             display: flex;
             flex-direction: column;
@@ -148,8 +157,10 @@
             border-right: 1px solid var(--border);
             padding: 40px 0;
             transition: width 0.5s var(--fluid-ease) 0.5s, background 0.3s, border-color 0.3s;
-            z-index: 50;
+            z-index: 120;
             overscroll-behavior: contain;
+            box-sizing: border-box;
+            isolation: isolate;
         }
 
         .sidebar:hover {
@@ -165,10 +176,10 @@
             flex: 0 0 auto;
         }
 
-        /* 首次加载时与 iframe 的 0.5s 淡入同步播放，避免侧栏"焊死"在原地造成视觉断层 */
+        /* 首次加载只做淡入，侧栏位置始终固定。 */
         @keyframes sidebar-enter {
-            from { opacity: 0; transform: translateX(-6px); }
-            to { opacity: 1; transform: translateX(0); }
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
         html:not(.studio-route-booting) .sidebar {
             animation: sidebar-enter 0.5s var(--fluid-ease);
@@ -255,6 +266,8 @@
         /* 主舞台区 */
         .stage {
             flex: 1;
+            min-width: 0;
+            height: calc(100vh - 32px);
             background: var(--stage-bg);
             margin: 16px;
             border-radius: 32px;
@@ -262,6 +275,10 @@
             border: 1px solid var(--stage-border);
             position: relative;
             transition: background 0.3s, border-color 0.3s;
+        }
+
+        body.canvas-compact-nav .app-shell {
+            padding-left: 84px;
         }
 
         body.canvas-compact-nav .sidebar,
@@ -2341,6 +2358,19 @@
             if(!event.target?.closest?.('.sidebar')) return;
             event.preventDefault();
             event.stopPropagation();
+            if(!event.altKey) return;
+            const frame = document.querySelector('iframe.active');
+            if(!frame || !/^frame-(smart-canvas|canvas)$/.test(frame.id || '')) return;
+            try {
+                frame.contentWindow?.postMessage({
+                    type: 'canvas-zoom-from-shell',
+                    deltaX: event.deltaX,
+                    deltaY: event.deltaY,
+                    deltaZ: event.deltaZ,
+                    deltaMode: event.deltaMode,
+                    source: 'sidebar'
+                }, '*');
+            } catch(e) {}
         }
         window.addEventListener('wheel', keepSidebarWheelLocal, { passive:false, capture:true });
         document.addEventListener('DOMContentLoaded', restoreActivePage, { once:true });

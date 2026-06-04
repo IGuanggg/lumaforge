@@ -1188,6 +1188,10 @@
                 });
                 if(canvas) syncRemoteCanvasNow();
             }
+            if(event.data?.type === 'canvas-zoom-from-shell' && canvas){
+                const rect = board.getBoundingClientRect();
+                if(zoomViewportAtScreen(rect.left + rect.width / 2, rect.top + rect.height / 2, event.data.deltaY)) scheduleSave();
+            }
             if(event.data?.type === 'asset-add-to-canvas') handleAssetAddMessage(event.data.asset, event.data.message_id);
             if(event.data?.type === 'assets-refresh') loadCanvasAssets().catch(() => {});
         });
@@ -2808,7 +2812,20 @@
             return Math.max(MIN_VIEWPORT_SCALE, Math.min(MAX_VIEWPORT_SCALE, next));
         }
         function shouldKeepWheelLocal(target){
-            return !!target?.closest?.('input, textarea, select, [contenteditable="true"], .node, .modal, .drawer, .agent-panel, .canvas-toolbar, .output-preview, .image-lightbox, .context-menu');
+            return !!target?.closest?.('input, textarea, select, button, [contenteditable="true"], .node, .port, .resize-handle, .selection-hub, .create-menu, .link-create-menu, .node-input-menu, .node-output-menu, .image-node-menu, .asset-dock, .canvas-toolbar, .modal, .drawer, .agent-panel, .output-preview, .image-lightbox, .context-menu');
+        }
+        function zoomViewportAtScreen(clientX, clientY, deltaY){
+            const before = screenToWorld(clientX, clientY);
+            const nextScale = clampViewportScale(viewport.scale * (Number(deltaY) > 0 ? .92 : 1.08));
+            if(nextScale === viewport.scale) return false;
+            const rect = board.getBoundingClientRect();
+            viewport.scale = nextScale;
+            viewport.x = clientX - rect.left - before.x * viewport.scale;
+            viewport.y = clientY - rect.top - before.y * viewport.scale;
+            applyViewport();
+            renderLinks();
+            renderSelectionHub();
+            return true;
         }
         function applyViewport(){ world.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`; }
         function refreshGeometry(){
@@ -10254,7 +10271,7 @@
         function isBlankBoardTarget(target){
             if(!target) return false;
             if(target === board || target === world || target === nodesEl || target === linksEl) return true;
-            if(target.closest?.('.node, .port, .resize-handle, .selection-hub, .create-menu, .link-create-menu, .node-input-menu, .node-output-menu, .image-node-menu, .asset-dock, .canvas-toolbar')) return false;
+            if(shouldKeepWheelLocal(target)) return false;
             return Boolean(target.closest?.('#world, #nodes, #links'));
         }
 
@@ -10307,16 +10324,9 @@
         board.onwheel = e => {
             if(!canvas) return;
             if(shouldKeepWheelLocal(e.target)) return;
+            if(isSmartListMode() && !e.altKey) return;
             e.preventDefault();
-            const before = screenToWorld(e.clientX, e.clientY);
-            viewport.scale = clampViewportScale(viewport.scale * (e.deltaY > 0 ? .92 : 1.08));
-            const rect = board.getBoundingClientRect();
-            viewport.x = e.clientX - rect.left - before.x * viewport.scale;
-            viewport.y = e.clientY - rect.top - before.y * viewport.scale;
-            applyViewport();
-            renderLinks();
-            renderSelectionHub();
-            scheduleSave();
+            if(zoomViewportAtScreen(e.clientX, e.clientY, e.deltaY)) scheduleSave();
         };
         board.addEventListener('dragover', e => {
             if(e.target.closest?.('.image-node')){

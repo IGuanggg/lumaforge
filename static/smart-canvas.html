@@ -1706,9 +1706,13 @@
             toast(`已选择 ${ids.length} 个节点`);
             render();
         }
+        const SMART_CANVAS_GESTURE_UI_SELECTOR = '.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu,.mention-picker,.slash-menu,input,textarea,select,button,[contenteditable="true"]';
+        function isSmartCanvasGestureUiTarget(target){
+            return !!target?.closest?.(SMART_CANVAS_GESTURE_UI_SELECTOR);
+        }
         function isBlankCanvasActionTarget(target){
             if(!target) return false;
-            if(target.closest?.('.image-node,.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return false;
+            if(target.closest?.('.image-node') || isSmartCanvasGestureUiTarget(target)) return false;
             return target === shell || target === world || Boolean(target.closest?.('#world, .connection-layer'));
         }
         function handleBlankCanvasAction(event){
@@ -2666,6 +2670,17 @@
                 x:(event.clientX - rect.left - viewport.x) / viewport.scale,
                 y:(event.clientY - rect.top - viewport.y) / viewport.scale
             };
+        }
+        function zoomViewportAtScreen(clientX, clientY, deltaY){
+            const before = screenToWorld({clientX, clientY});
+            const nextScale = clampViewportScale(viewport.scale * (Number(deltaY) > 0 ? .92 : 1.08));
+            if(nextScale === viewport.scale) return false;
+            const rect = shell.getBoundingClientRect();
+            viewport.scale = nextScale;
+            viewport.x = clientX - rect.left - before.x * viewport.scale;
+            viewport.y = clientY - rect.top - before.y * viewport.scale;
+            applyViewport();
+            return true;
         }
         function viewportCenter(){
             return {
@@ -8740,21 +8755,21 @@
         shell.addEventListener('mousedown', e => {
             if(!zoomPreviewState) return;
             if(e.button !== 0) return;
-            if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            if(isSmartCanvasGestureUiTarget(e.target)) return;
             e.preventDefault();
             e.stopPropagation();
         }, true);
         shell.addEventListener('click', e => {
             if(!zoomPreviewState) return;
             if(e.button !== 0) return;
-            if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            if(isSmartCanvasGestureUiTarget(e.target)) return;
             e.preventDefault();
             e.stopPropagation();
             exitZoomPreview(screenToWorld(e));
         }, true);
         shell.onmousedown = e => {
-            if(zoomPreviewState && e.button === 0 && !e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
-            if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            if(zoomPreviewState && e.button === 0 && !isSmartCanvasGestureUiTarget(e.target)) return;
+            if(isSmartCanvasGestureUiTarget(e.target)) return;
             persistActiveComposerDraft();
             closeCreateMenu();
             if(e.button === 1){
@@ -8775,7 +8790,7 @@
             }
         };
         shell.oncontextmenu = e => {
-            if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            if(isSmartCanvasGestureUiTarget(e.target)) return;
             e.preventDefault();
             e.stopPropagation();
             persistActiveComposerDraft();
@@ -8801,7 +8816,7 @@
         };
         shell.addEventListener('auxclick', e => {
             if(e.button !== 1) return;
-            if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
+            if(isSmartCanvasGestureUiTarget(e.target)) return;
             e.preventDefault();
             e.stopPropagation();
         });
@@ -9077,18 +9092,10 @@
             }
         };
         shell.addEventListener('wheel', e => {
-            if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.image-edit-modal,.asset-panel,.asset-toggle,.smart-param-modal,.smart-text-modal')) return;
+            if(isSmartCanvasGestureUiTarget(e.target)) return;
             if(!e.altKey) return;
             e.preventDefault();
-            const before = screenToWorld(e);
-            const nextScale = clampViewportScale(viewport.scale * (e.deltaY > 0 ? .92 : 1.08));
-            if(nextScale === viewport.scale) return;
-            const rect = shell.getBoundingClientRect();
-            viewport.scale = nextScale;
-            viewport.x = e.clientX - rect.left - before.x * viewport.scale;
-            viewport.y = e.clientY - rect.top - before.y * viewport.scale;
-            applyViewport();
-            scheduleSave();
+            if(zoomViewportAtScreen(e.clientX, e.clientY, e.deltaY)) scheduleSave();
         }, {passive:false});
         shell.ondragover = e => e.preventDefault();
         shell.ondrop = e => {
@@ -9671,6 +9678,10 @@
                 if(!insertPromptSnippet(event.data.prompt || '')) {
                     toast('当前节点未打开可编辑提示词');
                 }
+            }
+            if(event.data?.type === 'canvas-zoom-from-shell') {
+                const rect = shell.getBoundingClientRect();
+                if(zoomViewportAtScreen(rect.left + rect.width / 2, rect.top + rect.height / 2, event.data.deltaY)) scheduleSave();
             }
             if(event.data?.type === 'canvas-focus') {
                 if(promptInput?.dataset?.promptLocked !== '1') promptInput.focus();

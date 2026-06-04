@@ -17,7 +17,7 @@ Last updated: 2026-05-28
 
 ## Current State
 
-- Current local app version in code: 20.0.23
+- Current local app version in code: 2.0.24
 - Current build id: 20260604-v2022-smart-canvas-polish1
 - Main local URL: http://localhost:3010/
 - Main app file: main.py
@@ -114,11 +114,11 @@ The update process must replace program files only. It must not overwrite user d
 
 ## Current User Request / Next Target
 
-Current planned version: 20.0.23
+Current planned version: 2.0.24
 
 Goal:
 
-v20.0.23 smart canvas hotfix: multi-image generation supports partial success, failed task polling can recover completed images from task results or the asset library, mouse interaction is left=select/marquee, middle-drag=pan, right=properties, Alt+wheel=zoom, Ctrl+A=select all nodes, prompt paste is plain text, connection delete hit area is larger and more reliable, and README / release notes / build metadata are bumped for release.
+v2.0.24 smart canvas hotfix: multi-image generation supports partial success, failed task polling can recover completed images from task results or the asset library, mouse interaction is left=select/marquee, middle-drag=pan, right=properties, Alt+wheel=zoom, Ctrl+A=select all nodes, prompt paste is plain text, connection delete hit area is larger and more reliable, and README / release notes / build metadata are bumped for release.
 
 The user specifically asked for:
 

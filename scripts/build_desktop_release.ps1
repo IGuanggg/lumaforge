@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$Version = "20.0.23"
+$Version = "2.0.24"
 
 Write-Host "[1/8] Cleaning dist and build..."
 Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
