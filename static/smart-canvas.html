@@ -43,7 +43,6 @@
         button { border:0; cursor:pointer; }
         button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline:0; box-shadow:0 0 0 4px rgba(37,99,235,.16); }
         .shell { position:relative; width:100vw; height:100vh; overflow:hidden; background-color:var(--page); background-image:radial-gradient(var(--grid) 1px, transparent 1px); background-size:24px 24px; cursor:default; }
-        .shell.space-pan { cursor:grab; }
         .shell.panning { cursor:grabbing; }
         .shell.middle-panning { cursor:grabbing; }
         .shell.zoom-preview { cursor:crosshair; }
@@ -242,14 +241,13 @@
         @keyframes shine { from { transform:translateX(-100%); } to { transform:translateX(100%); } }
         .connection-layer { position:absolute; left:0; top:0; width:6000px; height:4000px; pointer-events:none; z-index:0; overflow:visible; }
         .connection-layer path { transition:stroke-opacity .14s ease, opacity .14s ease; vector-effect:non-scaling-stroke; }
-        .connection-layer .conn-base { stroke-linecap:round; opacity:.42; }
-        .connection-layer .conn-base.conn-active { opacity:.78; }
-        .connection-layer .conn-flow-glow { opacity:.22; stroke-linecap:round; stroke-dasharray:18 102; animation:conn-flow-dash 1.45s linear infinite; filter:drop-shadow(0 0 7px rgba(125,211,252,.30)); }
-        .connection-layer .conn-flow-core { opacity:.56; stroke-linecap:round; stroke-dasharray:7 113; animation:conn-flow-dash .9s linear infinite; filter:drop-shadow(0 0 5px rgba(125,211,252,.46)); }
-        .connection-layer .conn-flow-glow.conn-active { opacity:.52; filter:drop-shadow(0 0 10px rgba(125,211,252,.48)); }
-        .connection-layer .conn-flow-core.conn-active { opacity:1; }
-        .connection-layer .conn-end-dot { opacity:.42; transition:opacity .14s ease, r .14s ease; }
-        .connection-layer .conn-end-dot.conn-active { opacity:.95; animation:conn-dot-pulse 1.5s ease-in-out infinite; }
+        .connection-layer .conn-base { stroke-linecap:round; opacity:.82; }
+        .connection-layer .conn-flow-glow { stroke:#38bdf8; stroke-width:4.5; fill:none; opacity:.34; pointer-events:none; stroke-linecap:round; stroke-dasharray:18 102; stroke-dashoffset:0; animation:conn-flow-dash 1.45s linear infinite; filter:drop-shadow(0 0 8px rgba(56,189,248,.42)); }
+        .connection-layer .conn-flow-core { stroke:#f8fafc; stroke-width:2.2; fill:none; opacity:.82; pointer-events:none; stroke-linecap:round; stroke-dasharray:7 113; stroke-dashoffset:0; animation:conn-flow-dash .9s linear infinite; filter:drop-shadow(0 0 5px rgba(14,165,233,.75)); }
+        .connection-layer .conn-flow-glow.conn-active { opacity:.54; stroke-width:5.2; filter:drop-shadow(0 0 10px rgba(14,165,233,.58)); }
+        .connection-layer .conn-flow-core.conn-active { opacity:1; stroke-width:2.7; }
+        .connection-layer .conn-energy-dot { fill:#38bdf8; opacity:.95; filter:drop-shadow(0 0 7px rgba(14,165,233,.9)); pointer-events:none; }
+        .connection-layer .conn-energy-dot.hot { fill:#ffffff; filter:drop-shadow(0 0 9px rgba(56,189,248,1)); }
         .connection-layer .conn-hit { pointer-events:stroke; cursor:pointer; }
         .connection-layer .conn-cut { pointer-events:auto; cursor:pointer; opacity:.26; transition:opacity .14s ease, transform .14s ease; }
         .connection-layer .conn-cut.conn-active { opacity:.82; }
@@ -257,7 +255,6 @@
         .connection-layer .conn-cut-hit { pointer-events:all; }
         .connection-layer .conn-pending { stroke-dasharray:5 4; animation:dash 1.5s linear infinite; }
         @keyframes conn-flow-dash { to { stroke-dashoffset:-120; } }
-        @keyframes conn-dot-pulse { 0%,100% { r:3.4px; opacity:.72; } 50% { r:4.8px; opacity:1; } }
         @keyframes dash { to { stroke-dashoffset:-18; } }
         .image-node { z-index:2; }
         .image-node.smart-frame-group { z-index:1; }
@@ -343,8 +340,8 @@
         .compare-toggle:hover { border-color:var(--text); }
         .compare-toggle.active { background:var(--strong); color:var(--strong-text); border-color:var(--strong); }
         .compare-toggle i,.compare-toggle svg { width:14px !important; height:14px !important; stroke-width:2; }
-        .composer { --ctrl-font:10.5px; --ctrl-icon:11px; --ctrl-height:26px; --ctrl-gap:4px; --ctrl-xpad:8px; --ctrl-pop-font:10.5px; --ctrl-pop-icon:10px; --ctrl-pop-height:24px; --ctrl-pop-radius:9px; position:absolute; z-index:30; width:520px; transform:translateY(10px); opacity:0; pointer-events:none; transition:opacity .18s cubic-bezier(.4,.0,.2,1), transform .18s cubic-bezier(.4,.0,.2,1); }
-        .composer.open { opacity:1; transform:translateY(0); pointer-events:auto; }
+        .composer { --ctrl-font:10.5px; --ctrl-icon:11px; --ctrl-height:26px; --ctrl-gap:4px; --ctrl-xpad:8px; --ctrl-pop-font:10.5px; --ctrl-pop-icon:10px; --ctrl-pop-height:24px; --ctrl-pop-radius:9px; --composer-zoom-scale:1; position:absolute; z-index:30; width:520px; transform:translateY(10px) scale(var(--composer-zoom-scale)); transform-origin:top center; opacity:0; pointer-events:none; transition:opacity .18s cubic-bezier(.4,.0,.2,1), transform .18s cubic-bezier(.4,.0,.2,1); }
+        .composer.open { opacity:1; transform:translateY(0) scale(var(--composer-zoom-scale)); pointer-events:auto; }
         .composer-card { position:relative; background:var(--panel); border:1px solid var(--line); border-radius:18px; box-shadow:0 20px 56px var(--shadow); backdrop-filter:blur(20px); padding:10px; display:grid; grid-template-columns:minmax(0, 1fr) auto; grid-template-areas:"head head" "thumbs thumbs" "prompt prompt" "params run"; column-gap:10px; row-gap:8px; align-items:start; }
         .composer-expanded { z-index:72; }
         .composer-expanded .composer-card { min-height:min(760px, calc(100vh - 96px)); grid-template-rows:auto auto minmax(0, 1fr) auto; box-shadow:0 28px 86px rgba(15,23,42,.2); }
@@ -776,9 +773,16 @@
             }
             .connection-layer .conn-flow-glow,
             .connection-layer .conn-flow-core,
-            .connection-layer .conn-end-dot.conn-active,
             .connection-layer .conn-pending {
                 animation:none !important;
+            }
+            .connection-layer .conn-flow-glow,
+            .connection-layer .conn-flow-core {
+                stroke-dashoffset:0;
+                opacity:.26;
+            }
+            .connection-layer .conn-energy-dot {
+                display:none;
             }
         }
         @media (max-width:760px) { .composer { width:min(540px, calc(100vw - 28px)); } .composer-card { grid-template-columns:minmax(0, 1fr) auto; } .composer-expanded .composer-card { min-height:calc(100vh - 52px); } .composer-expanded .prompt-input { min-height:280px; height:calc(100vh - 230px) !important; } .smart-minimap { width:148px; height:98px; } .asset-grid { grid-template-columns:repeat(2, minmax(0, 1fr)); } .create-menu-grid,.create-basic-grid { grid-template-columns:1fr; } .create-card,.create-card.feature-card { min-height:74px; grid-template-columns:38px minmax(0,1fr); } .feature-card .create-card-icon { width:38px; height:38px; border-radius:13px; } .slash-command { grid-template-columns:32px minmax(0,1fr); } .slash-command-badge { display:none; } }
@@ -1160,7 +1164,6 @@
         let uploadTargetId = '';
         let mentionRange = null;
         let panState = null;
-        let spacePanActive = false;
         let didPan = false;
         let portDragState = null;
         let connectionPulseTimer = null;
@@ -2559,13 +2562,16 @@
             const el = target || document.activeElement;
             return !!el?.closest?.('input, textarea, select, option, [contenteditable="true"], .prompt-node-control, .prompt-input');
         }
-        function setSpacePanActive(active){
-            spacePanActive = Boolean(active);
-            shell?.classList.toggle('space-pan', spacePanActive && !panState);
-        }
         function safeScale(value){
             const n = Number(value);
             return Number.isFinite(n) && n > 0 ? n : 1;
+        }
+        const MIN_VIEWPORT_SCALE = 0.12;
+        const MAX_VIEWPORT_SCALE = 3;
+        function clampViewportScale(value){
+            const next = Number(value);
+            if(!Number.isFinite(next)) return 1;
+            return Math.max(MIN_VIEWPORT_SCALE, Math.min(MAX_VIEWPORT_SCALE, next));
         }
         function nodeScale(node){
             const v = Number(node?.scale);
@@ -2645,12 +2651,14 @@
             return {x:node.x || 0, y:node.y || 0, width:layout.width, height:layout.height};
         }
         function applyViewport(){
+            viewport.scale = clampViewportScale(viewport.scale);
             world.style.transform = `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale})`;
             shell.style.backgroundSize = '24px 24px';
             shell.style.backgroundPosition = '0 0';
             renderMinimap();
             updateSmartImageToolbar();
             updateSmartSelectionToolbar();
+            if(composer?.classList?.contains('open')) updateComposer();
         }
         function screenToWorld(event){
             const rect = shell.getBoundingClientRect();
@@ -3787,7 +3795,7 @@
                 canvas.connections = Array.isArray(canvas.connections) ? canvas.connections : [];
                 sanitizeCanvasConnections();
                 viewport = {...viewport, ...(canvas.viewport || {})};
-                viewport.scale = safeScale(viewport.scale);
+                viewport.scale = clampViewportScale(viewport.scale);
                 if(canvas.settings) settings = {...settings, ...canvas.settings};
             if(settings.comfy_workflow && !settings.comfyWorkflow) settings.comfyWorkflow = settings.comfy_workflow;
             if(settings.comfy_params && !settings.comfyParams) settings.comfyParams = settings.comfy_params;
@@ -4715,12 +4723,11 @@
                 const isActive = isNodeSelected(conn.from) || isNodeSelected(conn.to) || selectedImage.nodeId === conn.from || selectedImage.nodeId === conn.to || fromNode.pending || toNode.pending;
                 const activeCls = isActive ? 'conn-active' : '';
                 const pendingCls = toNode.pending || fromNode.pending ? 'conn-pending' : '';
-                const baseColor = kind === 'input' || isHistory ? 'rgba(100,116,139,0.58)' : 'rgba(148,163,184,0.52)';
-                const flowColor = kind === 'input' || isHistory ? 'rgba(165,180,252,0.92)' : 'rgba(125,211,252,0.92)';
-                const glowColor = kind === 'input' || isHistory ? 'rgba(165,180,252,0.22)' : 'rgba(125,211,252,0.22)';
-                const baseWidth = kind === 'input' || isHistory ? '1.8' : '1.55';
                 const dataAttrs = `data-from="${escapeHtml(conn.from)}" data-to="${escapeHtml(conn.to)}" data-kind="${escapeHtml(kind)}"`;
-                return `<path class="conn-base ${activeCls} ${pendingCls}" ${dataAttrs} d="${curve}" stroke="${baseColor}" stroke-width="${baseWidth}" fill="none"></path><path class="conn-flow-glow ${activeCls}" ${dataAttrs} d="${curve}" stroke="${glowColor}" stroke-width="7" fill="none"></path><path class="conn-flow-core ${activeCls}" ${dataAttrs} d="${curve}" stroke="${flowColor}" stroke-width="2.2" fill="none"></path><path class="conn-hit" data-conn-index="${conn.index}" ${dataAttrs} d="${curve}" stroke="transparent" stroke-width="14" fill="none"></path><circle class="conn-end-dot ${activeCls}" cx="${tx}" cy="${ty}" r="3.4" fill="${flowColor}"></circle><g class="conn-cut ${activeCls}" data-conn-index="${conn.index}" ${dataAttrs} transform="translate(${mx} ${my})"><circle class="conn-cut-hit" r="18" fill="transparent"></circle><circle r="9" fill="var(--card)" stroke="${baseColor}" stroke-width="1.5"></circle><path d="M-3.5 -3.5 L3.5 3.5 M3.5 -3.5 L-3.5 3.5" stroke="${baseColor}" stroke-width="1.65" stroke-linecap="round"></path></g>`;
+                const energy = isActive
+                    ? `<path class="conn-flow-glow conn-active ${pendingCls}" ${dataAttrs} d="${curve}" pathLength="120"></path><path class="conn-flow-core conn-active ${pendingCls}" ${dataAttrs} d="${curve}" pathLength="120"></path><g class="conn-energy-dots"><circle class="conn-energy-dot" r="3.8"><animateMotion dur="1.35s" begin="0s" repeatCount="indefinite" path="${escapeHtml(curve)}" rotate="auto"></animateMotion></circle><circle class="conn-energy-dot hot" r="2.4"><animateMotion dur="1.35s" begin="-.48s" repeatCount="indefinite" path="${escapeHtml(curve)}" rotate="auto"></animateMotion></circle></g>`
+                    : '';
+                return `<path class="conn-base ${pendingCls}" ${dataAttrs} d="${curve}" stroke="var(--faint)" stroke-width="2.5" fill="none"></path>${energy}<path class="conn-hit" data-conn-index="${conn.index}" ${dataAttrs} d="${curve}" stroke="transparent" stroke-width="18" fill="none"></path><g class="conn-cut ${activeCls}" data-conn-index="${conn.index}" ${dataAttrs} transform="translate(${mx} ${my})"><circle class="conn-cut-hit" r="18" fill="transparent"></circle><circle r="9" fill="var(--card)" stroke="var(--faint)" stroke-width="1.5"></circle><path d="M-3.5 -3.5 L3.5 3.5 M3.5 -3.5 L-3.5 3.5" stroke="var(--faint)" stroke-width="1.65" stroke-linecap="round"></path></g>`;
             }).join('');
             return `<svg class="connection-layer" width="6000" height="4000" viewBox="0 0 6000 4000" xmlns="http://www.w3.org/2000/svg">${paths}</svg>`;
         }
@@ -5606,7 +5613,6 @@
                     port.addEventListener('dblclick', e => { e.stopPropagation(); });
                 });
                 el.onmousedown = e => {
-                    if(e.button === 0 && spacePanActive && !e.target.closest('.mini-x, .node-resize-handle, .node-port, .prompt-node-control, .prompt-node-pill, [data-node-title], textarea, select, input, button')) return;
                     if(e.button !== 0 || e.target.closest('.mini-x, .node-resize-handle, .thumb-item, .node-port, .prompt-node-control, .prompt-node-pill, [data-node-title], textarea, select, input, button')) return;
                     e.preventDefault(); e.stopPropagation();
                     let node = nodes.find(n => n.id === id);
@@ -6531,21 +6537,24 @@
             syncCascadeRunButton(node);
             const rect = nodeRect(node);
             const gap = 14;
-            const visibleWorldW = Math.max(540, shell.clientWidth / safeScale(viewport.scale) - 56);
+            const vpScale = safeScale(viewport.scale);
+            const composerZoomScale = 1 / vpScale;
+            composer.style.setProperty('--composer-zoom-scale', `${composerZoomScale}`);
+            const visibleScreenW = Math.max(320, shell.clientWidth - 56);
             const cardW = composerExpanded
-                ? Math.round(Math.max(860, Math.min(1400, shell.clientWidth / safeScale(viewport.scale) - 96)))
-                : Math.round(Math.max(640, Math.min(760, visibleWorldW)));
+                ? Math.round(Math.max(720, Math.min(1400, shell.clientWidth - 96)))
+                : Math.round(Math.max(360, Math.min(760, visibleScreenW)));
             composer.style.width = `${cardW}px`;
             if(composerExpanded){
-                const viewX = -viewport.x / safeScale(viewport.scale);
-                const viewY = -viewport.y / safeScale(viewport.scale);
-                const viewW = shell.clientWidth / safeScale(viewport.scale);
-                const viewH = shell.clientHeight / safeScale(viewport.scale);
+                const viewX = -viewport.x / vpScale;
+                const viewY = -viewport.y / vpScale;
+                const viewW = shell.clientWidth / vpScale;
                 composer.style.left = `${viewX + (viewW - cardW) / 2}px`;
-                composer.style.top = `${viewY + Math.max(32, Math.min(72, viewH * 0.06))}px`;
+                const topScreen = Math.max(32, Math.min(72, shell.clientHeight * 0.06));
+                composer.style.top = `${viewY + topScreen / vpScale}px`;
             } else {
                 composer.style.left = `${rect.x + rect.width / 2 - cardW / 2}px`;
-                composer.style.top = `${rect.y + rect.height + gap}px`;
+                composer.style.top = `${rect.y + rect.height + gap / vpScale}px`;
             }
             const ph = Math.max(60, Math.min(380, Number(settings.promptH) || 124));
             promptInput.style.setProperty('--prompt-h', `${ph}px`);
@@ -7076,14 +7085,15 @@
                 caretRect = range.getClientRects()[0] || range.getBoundingClientRect();
             }
             const inputRect = promptInput.getBoundingClientRect();
-            // composer 位于 world 内，会受到 viewport.scale 缩放；DOM 坐标要换算回画布坐标。
-            const scale = (typeof viewport !== 'undefined' && Number(viewport?.scale)) || 1;
-            const safeScale = scale > 0 ? scale : 1;
-            const rowLogicalWidth = rowRect.width / safeScale;
+            // composer 会用反向缩放保持屏幕可读性，这里按实际显示缩放换算回局部坐标。
+            const vpScale = (typeof viewport !== 'undefined' && Number(viewport?.scale)) || 1;
+            const localScale = Number(composer?.style?.getPropertyValue('--composer-zoom-scale')) || 1;
+            const effectiveScale = Math.max(0.0001, vpScale * localScale);
+            const rowLogicalWidth = rowRect.width / effectiveScale;
             const pickerWidth = mentionPicker.offsetWidth || 340;
             const maxLeft = Math.max(4, rowLogicalWidth - pickerWidth - 4);
-            const rawLeft = ((caretRect?.left || inputRect.left) - rowRect.left) / safeScale - 6;
-            const rawTop = ((caretRect?.bottom || inputRect.top + 24) - rowRect.top) / safeScale + 2;
+            const rawLeft = ((caretRect?.left || inputRect.left) - rowRect.left) / effectiveScale - 6;
+            const rawTop = ((caretRect?.bottom || inputRect.top + 24) - rowRect.top) / effectiveScale + 2;
             const left = Math.max(4, Math.min(rawLeft, maxLeft));
             const top = Math.max(2, rawTop);
             mentionPicker.style.left = `${left}px`;
@@ -8747,22 +8757,22 @@
             if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
             persistActiveComposerDraft();
             closeCreateMenu();
-            if(e.button === 0 && spacePanActive){
+            if(e.button === 1){
                 e.preventDefault();
                 didPan = false;
-                panState = {button:e.button, mode:'space', startX:e.clientX, startY:e.clientY, ox:viewport.x, oy:viewport.y};
+                panState = {button:e.button, mode:'middle', startX:e.clientX, startY:e.clientY, ox:viewport.x, oy:viewport.y};
                 shell.classList.add('panning');
-                shell.classList.remove('space-pan');
+                shell.classList.add('middle-panning');
                 return;
             }
-            if(e.button === 1){
+            if(e.target.closest('.image-node')) return;
+            if(e.button === 0){
                 e.preventDefault();
                 didPan = false;
                 selectionState = {startScreen:{x:e.clientX, y:e.clientY}, startWorld:screenToWorld(e)};
                 updateSelectionBox(e);
                 return;
             }
-            if(e.target.closest('.image-node')) return;
         };
         shell.oncontextmenu = e => {
             if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.asset-panel,.asset-toggle,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return;
@@ -9003,7 +9013,6 @@
                 panState = null;
                 shell.classList.remove('panning');
                 shell.classList.remove('middle-panning');
-                shell.classList.toggle('space-pan', spacePanActive);
                 if(wasPan) scheduleSave();
                 setTimeout(() => { didPan = false; }, 0);
             }
@@ -9069,15 +9078,15 @@
         };
         shell.addEventListener('wheel', e => {
             if(e.target.closest('.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.image-edit-modal,.asset-panel,.asset-toggle,.smart-param-modal,.smart-text-modal')) return;
+            if(!e.altKey) return;
             e.preventDefault();
+            const before = screenToWorld(e);
+            const nextScale = clampViewportScale(viewport.scale * (e.deltaY > 0 ? .92 : 1.08));
+            if(nextScale === viewport.scale) return;
             const rect = shell.getBoundingClientRect();
-            const sx = e.clientX - rect.left;
-            const sy = e.clientY - rect.top;
-            const before = {x:(sx - viewport.x) / viewport.scale, y:(sy - viewport.y) / viewport.scale};
-            const factor = Math.exp(-e.deltaY * 0.001);
-            viewport.scale = safeScale(viewport.scale * factor);
-            viewport.x = sx - before.x * viewport.scale;
-            viewport.y = sy - before.y * viewport.scale;
+            viewport.scale = nextScale;
+            viewport.x = e.clientX - rect.left - before.x * viewport.scale;
+            viewport.y = e.clientY - rect.top - before.y * viewport.scale;
             applyViewport();
             scheduleSave();
         }, {passive:false});
@@ -9111,7 +9120,6 @@
         });
         window.addEventListener('keydown', e => {
             const key = String(e.key || '').toLowerCase();
-            const isSpaceKey = e.code === 'Space' || e.key === ' ' || key === 'spacebar';
             if(smartTextModal?.classList.contains('open')){
                 if((e.ctrlKey || e.metaKey) && key === 'enter' && !smartTextInput?.readOnly){
                     e.preventDefault();
@@ -9123,11 +9131,6 @@
                     closeSmartTextModal(false);
                     return;
                 }
-            }
-            if(isSpaceKey && !e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget(e.target) && !imageEditModal?.classList.contains('open')){
-                e.preventDefault();
-                if(!e.repeat) setSpacePanActive(true);
-                return;
             }
             if(!e.ctrlKey && !e.metaKey && !e.altKey && !isEditableTarget(e.target)){
                 if(key === 'z'){
@@ -9227,11 +9230,6 @@
                 createFrameGroupFromSelection();
             }
         });
-        window.addEventListener('keyup', e => {
-            const key = String(e.key || '').toLowerCase();
-            if(e.code === 'Space' || e.key === ' ' || key === 'spacebar') setSpacePanActive(false);
-        });
-        window.addEventListener('blur', () => setSpacePanActive(false));
         engineSelect.onchange = () => { settings.engine = engineSelect.value; syncApiKindToggleVisibility(); renderDynamicParams(); scheduleSave(); };
         smartTextSave?.addEventListener('click', e => {
             e.preventDefault();
