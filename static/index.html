@@ -2353,26 +2353,15 @@
             switchUI(trigger, id, { skipRemember:true });
             document.documentElement.classList.remove('studio-route-booting');
         }
-        function keepSidebarWheelLocal(event) {
+        function keepFixedChromeWheelLocal(event) {
             if(!(event.altKey || event.ctrlKey || event.metaKey)) return;
-            if(!event.target?.closest?.('.sidebar')) return;
+            const inSidebar = Boolean(event.target?.closest?.('.sidebar'));
+            const inOuterChrome = !event.target?.closest?.('iframe');
+            if(!inSidebar && !inOuterChrome) return;
             event.preventDefault();
             event.stopPropagation();
-            if(!event.altKey) return;
-            const frame = document.querySelector('iframe.active');
-            if(!frame || !/^frame-(smart-canvas|canvas)$/.test(frame.id || '')) return;
-            try {
-                frame.contentWindow?.postMessage({
-                    type: 'canvas-zoom-from-shell',
-                    deltaX: event.deltaX,
-                    deltaY: event.deltaY,
-                    deltaZ: event.deltaZ,
-                    deltaMode: event.deltaMode,
-                    source: 'sidebar'
-                }, '*');
-            } catch(e) {}
         }
-        window.addEventListener('wheel', keepSidebarWheelLocal, { passive:false, capture:true });
+        window.addEventListener('wheel', keepFixedChromeWheelLocal, { passive:false, capture:true });
         document.addEventListener('DOMContentLoaded', restoreActivePage, { once:true });
         document.addEventListener('DOMContentLoaded', () => {
             applyRememberedAccount();

@@ -436,7 +436,7 @@
         .port::after { content:""; position:absolute; left:15px; top:15px; width:14px; height:14px; border-radius:50%; border:2px solid #fff; background:#111827; box-shadow:0 0 0 1px #94a3b8; transition:transform .14s var(--ease); }
         .port:hover::after { transform:scale(1.25); }
         .port.in { left:-29px; cursor:crosshair; }
-        .port.out { right:-15px; }
+        .port.out { right:-29px; }
         .node > .port { top:50%; }
         .group-node,.promptGroup-node { min-width:260px; background:rgba(255,255,255,.96); border:1px solid #e8edf3; box-shadow:0 16px 42px rgba(15,23,42,.08); z-index:0; }
         .group-node .node-head,.promptGroup-node .node-head { background:#fff; border-bottom:1px solid #f1f5f9; }
@@ -1316,6 +1316,8 @@
         let resizeNode = null;
         let llmPaneDrag = null;
         let tempLink = null;
+        let geometryResizeObserver = null;
+        let geometryRefreshQueued = false;
         let knifeActive = false;
         let knifePoint = null;
         let knifeTrail = [];
@@ -2814,6 +2816,11 @@
         function shouldKeepWheelLocal(target){
             return !!target?.closest?.('input, textarea, select, button, [contenteditable="true"], .node, .port, .resize-handle, .selection-hub, .create-menu, .link-create-menu, .node-input-menu, .node-output-menu, .image-node-menu, .asset-dock, .canvas-toolbar, .modal, .drawer, .agent-panel, .output-preview, .image-lightbox, .context-menu');
         }
+        function blockBrowserZoomWheel(event){
+            if(!(event.ctrlKey || event.metaKey)) return;
+            event.preventDefault();
+            event.stopPropagation();
+        }
         function zoomViewportAtScreen(clientX, clientY, deltaY){
             const before = screenToWorld(clientX, clientY);
             const nextScale = clampViewportScale(viewport.scale * (Number(deltaY) > 0 ? .92 : 1.08));
@@ -2831,6 +2838,20 @@
         function refreshGeometry(){
             renderLinks();
             renderSelectionHub();
+        }
+        function requestGeometryRefresh(){
+            if(geometryRefreshQueued) return;
+            geometryRefreshQueued = true;
+            requestAnimationFrame(() => {
+                geometryRefreshQueued = false;
+                refreshGeometry();
+            });
+        }
+        function observeNodeGeometry(){
+            if(!('ResizeObserver' in window)) return;
+            if(!geometryResizeObserver) geometryResizeObserver = new ResizeObserver(requestGeometryRefresh);
+            geometryResizeObserver.disconnect();
+            nodesEl.querySelectorAll('.node').forEach(el => geometryResizeObserver.observe(el));
         }
         function refreshGeometryAfterLayout(){
             requestAnimationFrame(() => {
@@ -5830,6 +5851,7 @@
             nodesEl.innerHTML = '';
             nodes.forEach(node => nodesEl.appendChild(renderNode(node)));
             restoreOutputScrolls(outputScrolls);
+            observeNodeGeometry();
             refreshGeometry();
             refreshGeometryAfterLayout();
             refreshIcons();
@@ -5852,6 +5874,7 @@
                 current.replaceWith(renderNode(node));
             }
             restoreOutputScrolls(outputScrolls);
+            observeNodeGeometry();
             refreshGeometry();
             refreshGeometryAfterLayout();
             refreshIcons();
@@ -10034,11 +10057,9 @@
                 const a = portPoint(c.from, 'out'), b = portPoint(c.to, 'in');
                 const selectedLink = isConnectionSelected(c);
                 linksEl.appendChild(pathEl(a.x, a.y, b.x, b.y, 'link'));
-                if(selectedLink){
-                    linksEl.appendChild(pathEl(a.x, a.y, b.x, b.y, 'link-energy-glow selected'));
-                    linksEl.appendChild(pathEl(a.x, a.y, b.x, b.y, 'link-energy-core selected'));
-                    linksEl.appendChild(linkEnergyDots(a.x, a.y, b.x, b.y));
-                }
+                linksEl.appendChild(pathEl(a.x, a.y, b.x, b.y, `link-energy-glow ${selectedLink ? 'selected' : ''}`.trim()));
+                linksEl.appendChild(pathEl(a.x, a.y, b.x, b.y, `link-energy-core ${selectedLink ? 'selected' : ''}`.trim()));
+                linksEl.appendChild(linkEnergyDots(a.x, a.y, b.x, b.y));
                 const btn = linkDeleteButton(c, a, b);
                 linkControlsEl.appendChild(btn);
                 linksEl.appendChild(linkHitEl(a.x, a.y, b.x, b.y, c.id));
@@ -10275,6 +10296,7 @@
             return Boolean(target.closest?.('#world, #nodes, #links'));
         }
 
+        window.addEventListener('wheel', blockBrowserZoomWheel, {passive:false, capture:true});
         board.onmousedown = e => {
             if(!canvas) return;
             if(startKnifeDrag(e)) return;
@@ -10324,7 +10346,7 @@
         board.onwheel = e => {
             if(!canvas) return;
             if(shouldKeepWheelLocal(e.target)) return;
-            if(isSmartListMode() && !e.altKey) return;
+            if(!e.altKey) return;
             e.preventDefault();
             if(zoomViewportAtScreen(e.clientX, e.clientY, e.deltaY)) scheduleSave();
         };

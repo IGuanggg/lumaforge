@@ -4713,6 +4713,28 @@
             const rect = shell.getBoundingClientRect();
             return {x:event.clientX - rect.left, y:event.clientY - rect.top};
         }
+        function domPointToWorld(clientX, clientY){
+            const rect = shell.getBoundingClientRect();
+            return {
+                x:(clientX - rect.left - viewport.x) / viewport.scale,
+                y:(clientY - rect.top - viewport.y) / viewport.scale
+            };
+        }
+        function nodePortAnchor(node, port='out'){
+            if(node && world && shell){
+                const nodeEl = world.querySelector?.(`.image-node[data-id="${cssEscapeValue(node.id)}"]`);
+                const portEl = nodeEl?.querySelector?.(`.node-port[data-port="${cssEscapeValue(port)}"]`);
+                if(portEl){
+                    const rect = portEl.getBoundingClientRect();
+                    return domPointToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                }
+            }
+            const r = nodeRect(node || {});
+            if(port === 'in') return {x:r.x, y:r.y + r.height / 2};
+            if(port === 'history-out') return {x:r.x + r.width / 2, y:r.y + r.height};
+            if(port === 'history-in') return {x:r.x + r.width / 2, y:r.y};
+            return {x:r.x + r.width, y:r.y + r.height / 2};
+        }
         function renderConnections(){
             const conns = (canvas?.connections || []).map((conn, index) => ({...conn, index})).filter(c => {
                 const fromNode = nodes.find(n => n.id === c.from);
@@ -4722,13 +4744,14 @@
             const paths = conns.map(conn => {
                 const fromNode = nodes.find(n => n.id === conn.from);
                 const toNode = nodes.find(n => n.id === conn.to);
-                const fr = nodeRect(fromNode), tr = nodeRect(toNode);
                 const kind = conn.kind || 'flow';
                 const isHistory = kind === 'history';
-                const fx = isHistory ? fr.x + fr.width / 2 : fr.x + fr.width;
-                const fy = isHistory ? fr.y + fr.height : fr.y + fr.height / 2;
-                const tx = isHistory ? tr.x + tr.width / 2 : tr.x;
-                const ty = isHistory ? tr.y : tr.y + tr.height / 2;
+                const fromAnchor = nodePortAnchor(fromNode, isHistory ? 'history-out' : 'out');
+                const toAnchor = nodePortAnchor(toNode, isHistory ? 'history-in' : 'in');
+                const fx = fromAnchor.x;
+                const fy = fromAnchor.y;
+                const tx = toAnchor.x;
+                const ty = toAnchor.y;
                 const dx = isHistory ? 0 : Math.max(50, Math.abs(tx - fx) * 0.45);
                 const dy = Math.max(46, Math.abs(ty - fy) * 0.45);
                 const curve = isHistory
@@ -5083,11 +5106,10 @@
                     ${!isFrameGroup ? '<div class="node-port port-in" data-port="in" title="输入"></div><div class="node-port port-out" data-port="out" title="输出"></div>' : ''}
                 </div>`;
             }).join('');
-            const connectionsHtml = renderConnections();
             world.innerHTML = '';
             if(composerEl) world.appendChild(composerEl);
-            world.insertAdjacentHTML('beforeend', connectionsHtml);
             world.insertAdjacentHTML('beforeend', nodesHtml);
+            world.insertAdjacentHTML('beforeend', renderConnections());
             bindNodeEvents();
             bindConnectionEvents();
             updateComposer();
@@ -5414,12 +5436,14 @@
             const fromNode = nodes.find(n => n.id === portDragState.fromId);
             if(!fromNode) return;
             if(isSmartFrameGroup(fromNode)) return;
-            const fr = nodeRect(fromNode);
             const isOut = portDragState.fromPort === 'out';
-            const fx = isOut ? fr.x + fr.width : fr.x;
-            const fy = fr.y + fr.height / 2;
-            const tx = portDragState.currentWorld.x;
-            const ty = portDragState.currentWorld.y;
+            const startAnchor = nodePortAnchor(fromNode, portDragState.fromPort);
+            const targetNode = portDragState.hoverTargetId ? nodes.find(n => n.id === portDragState.hoverTargetId) : null;
+            const endAnchor = targetNode ? nodePortAnchor(targetNode, portDragState.hoverPort) : portDragState.currentWorld;
+            const fx = startAnchor.x;
+            const fy = startAnchor.y;
+            const tx = endAnchor.x;
+            const ty = endAnchor.y;
             const dx = Math.max(50, Math.abs(tx - fx) * 0.45);
             const sign = isOut ? 1 : -1;
             const path = ensurePortDragPathElement();
@@ -9091,6 +9115,12 @@
                 scheduleSave();
             }
         };
+        function blockBrowserZoomWheel(event){
+            if(!(event.ctrlKey || event.metaKey)) return;
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        window.addEventListener('wheel', blockBrowserZoomWheel, {passive:false, capture:true});
         shell.addEventListener('wheel', e => {
             if(isSmartCanvasGestureUiTarget(e.target)) return;
             if(!e.altKey) return;
