@@ -244,9 +244,10 @@
         .connection-layer path { transition:stroke-opacity .14s ease, opacity .14s ease; vector-effect:non-scaling-stroke; }
         .connection-layer .conn-base { stroke-linecap:round; opacity:.42; }
         .connection-layer .conn-base.conn-active { opacity:.78; }
-        .connection-layer .conn-flow-glow { opacity:0; stroke-linecap:round; filter:drop-shadow(0 0 7px rgba(125,211,252,.34)); }
-        .connection-layer .conn-flow-core { opacity:0; stroke-linecap:round; stroke-dasharray:10 18; animation:conn-flow-dash 1.05s linear infinite; }
-        .connection-layer .conn-flow-core.conn-active, .connection-layer .conn-flow-glow.conn-active { opacity:1; }
+        .connection-layer .conn-flow-glow { opacity:.22; stroke-linecap:round; stroke-dasharray:18 102; animation:conn-flow-dash 1.45s linear infinite; filter:drop-shadow(0 0 7px rgba(125,211,252,.30)); }
+        .connection-layer .conn-flow-core { opacity:.56; stroke-linecap:round; stroke-dasharray:7 113; animation:conn-flow-dash .9s linear infinite; filter:drop-shadow(0 0 5px rgba(125,211,252,.46)); }
+        .connection-layer .conn-flow-glow.conn-active { opacity:.52; filter:drop-shadow(0 0 10px rgba(125,211,252,.48)); }
+        .connection-layer .conn-flow-core.conn-active { opacity:1; }
         .connection-layer .conn-end-dot { opacity:.42; transition:opacity .14s ease, r .14s ease; }
         .connection-layer .conn-end-dot.conn-active { opacity:.95; animation:conn-dot-pulse 1.5s ease-in-out infinite; }
         .connection-layer .conn-hit { pointer-events:stroke; cursor:pointer; }
@@ -255,7 +256,7 @@
         .connection-layer .conn-cut:hover { opacity:1; transform:scale(1.08); }
         .connection-layer .conn-cut-hit { pointer-events:all; }
         .connection-layer .conn-pending { stroke-dasharray:5 4; animation:dash 1.5s linear infinite; }
-        @keyframes conn-flow-dash { to { stroke-dashoffset:-56; } }
+        @keyframes conn-flow-dash { to { stroke-dashoffset:-120; } }
         @keyframes conn-dot-pulse { 0%,100% { r:3.4px; opacity:.72; } 50% { r:4.8px; opacity:1; } }
         @keyframes dash { to { stroke-dashoffset:-18; } }
         .image-node { z-index:2; }
@@ -773,6 +774,7 @@
             .image-node.connect-pop.loop-smart-node {
                 animation:none !important;
             }
+            .connection-layer .conn-flow-glow,
             .connection-layer .conn-flow-core,
             .connection-layer .conn-end-dot.conn-active,
             .connection-layer .conn-pending {
@@ -1701,16 +1703,6 @@
             toast(`已选择 ${ids.length} 个节点`);
             render();
         }
-        function selectedComposerHasDraft(){
-            const node = selectedNode();
-            if(!node || node.type !== 'smart-image' || !composer?.classList.contains('open')) return false;
-            persistActiveComposerDraft();
-            return Boolean(
-                promptPlainText()
-                || String(node.promptDraftText || '').trim()
-                || String(node.promptDraftHtml || '').replace(/<br\s*\/?>/gi, '').trim()
-            );
-        }
         function isBlankCanvasActionTarget(target){
             if(!target) return false;
             if(target.closest?.('.image-node,.composer,.smart-back,.smart-task-toggle,.smart-task-panel,.image-edit-modal,.smart-param-modal,.smart-text-modal,.create-menu,.smart-minimap,.smart-image-toolbar,.smart-selection-toolbar,.smart-context-menu,.smart-enhance-menu')) return false;
@@ -1721,11 +1713,10 @@
             if(document.getElementById('imageEditModal')?.classList.contains('open')) return false;
             persistActiveComposerDraft();
             closeCreateMenu();
-            if(selectedComposerHasDraft()){
-                scheduleSave();
-                return true;
-            }
+            closeMentionPicker();
+            closeSlashMenu();
             clearSelection();
+            scheduleSave();
             render();
             return true;
         }
@@ -3763,6 +3754,14 @@
             });
             nodes = nodes.filter(node => !isSmartFrameGroup(node) || groupMemberIds(node).length > 0);
         }
+        function smartNodeHasSuccessfulOutput(node){
+            return Boolean((node?.images || []).length);
+        }
+        function clearResolvedNodeError(node){
+            if(!node?.runError || !smartNodeHasSuccessfulOutput(node)) return false;
+            delete node.runError;
+            return true;
+        }
         async function loadCanvas(){
             await ensureSmartCanvasId();
             if(!canvasId) return;
@@ -3774,11 +3773,14 @@
                 document.title = canvas.title || tr('canvas.smartCanvas');
                 setTextById('smartTitle', canvas.title || tr('canvas.smartCanvas'));
                 nodes = Array.isArray(canvas.nodes) ? canvas.nodes : [];
+                let resolvedErrorChanged = false;
                 nodes.forEach(n => {
                     if(n.pending) n.pending = 0;
                     if(n.running) n.running = false;
+                    if(clearResolvedNodeError(n)) resolvedErrorChanged = true;
                     refreshDefaultNodeTitle(n);
                 });
+                if(resolvedErrorChanged) scheduleSave();
                 if(applySmartNodeDrafts()) scheduleSave();
                 sanitizeFrameGroups();
                 reconcileStuckSmartNodes();
@@ -3812,6 +3814,7 @@
                 if(shouldUsePreferredImageModel(settings.model, models)) settings.model = preferredImageModel(models);
             }
             nodes.forEach(node => {
+                clearResolvedNodeError(node);
                 node.images = (node.images || []).map(img => stripImageGenerationMeta(img));
             });
             sanitizeFrameGroups();
@@ -5033,6 +5036,7 @@
             const composerEl = composer;
             const renderNodes = nodes.slice().sort((a, b) => (isSmartFrameGroup(a) ? 0 : 1) - (isSmartFrameGroup(b) ? 0 : 1));
             const nodesHtml = renderNodes.map(node => {
+                clearResolvedNodeError(node);
                 const imgs = node.images || [];
                 const isFrameGroup = isSmartFrameGroup(node);
                 const scale = nodeScale(node);
@@ -6342,6 +6346,7 @@
             const {node, index} = currentEditImage();
             if(!node || !file) return false;
             node.images[index] = {...(node.images[index] || {}), url:file.url, name:file.name, natural_w:0, natural_h:0};
+            clearResolvedNodeError(node);
             if((node.images || []).length === 1){ delete node.w; delete node.h; }
             selectedId = node.id; selectedImage = {nodeId:node.id, index};
             return true;
@@ -6655,6 +6660,7 @@
                     undoSuppressed = false;
                 }
                 node.images = [...(node.images || []), ...uploaded];
+                clearResolvedNodeError(node);
                 if(node.images.length > 1){ refreshDefaultNodeTitle(node); delete node.w; delete node.h; }
                 else refreshDefaultNodeTitle(node);
                 if(node.images.length === 1){ delete node.w; delete node.h; }
@@ -7463,6 +7469,7 @@
             pushUndo();
             archiveNodeImagesToHistory(source);
             source.images = [stripImageGenerationMeta({...image})];
+            clearResolvedNodeError(source);
             delete source.w;
             delete source.h;
             refreshDefaultNodeTitle(source);
@@ -7510,6 +7517,7 @@
         function restoreFromExtraction(node, extracted){
             if(!node || !extracted) return;
             node.images = extracted.images.slice();
+            clearResolvedNodeError(node);
             if(Number.isFinite(Number(extracted.w))) node.w = extracted.w;
             if(Number.isFinite(Number(extracted.h))) node.h = extracted.h;
             nodes = nodes.filter(n => n.id !== extracted.id);
@@ -7717,6 +7725,7 @@
                 const additions = result.urls.map((url, i) => stripImageGenerationMeta({url, name:`output-${i + 1}.${ext}`, kind:result.kind}));
                 const historyGroup = archiveNodeImagesToHistory(outputNode);
                 outputNode.images = additions;
+                clearResolvedNodeError(outputNode);
                 delete outputNode.w;
                 delete outputNode.h;
                 outputNode.pending = 0;
@@ -7805,6 +7814,7 @@
             if(!additions.length) return [];
             const historyGroup = archiveNodeImagesToHistory(node);
             node.images = additions;
+            clearResolvedNodeError(node);
             delete node.w;
             delete node.h;
             refreshDefaultNodeTitle(node);
