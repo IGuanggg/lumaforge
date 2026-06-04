@@ -1031,7 +1031,7 @@
                 <div id="nodes"></div>
             </div>
         </div>
-        <div class="hint editor-only" data-i18n="canvas.hint">中键拖动画布，左键框选/选择，Ctrl+A 全选节点，右键打开节点属性或菜单。图片/提示词节点右下端口拖线到生成节点。</div>
+        <div class="hint editor-only" data-i18n="canvas.hint">中键拖动画布，左键框选/选择，普通滚轮滚动，Ctrl/Alt+滚轮缩放，Ctrl+A 全选节点，右键打开节点属性或菜单。图片/提示词节点右下端口拖线到生成节点。</div>
         <div id="outputLightbox" class="output-lightbox" onclick="closeOutputLightbox()">
             <div id="outputLightboxShell" class="output-lightbox-shell" onclick="event.stopPropagation()">
             <div id="outputPreview" class="output-preview">
@@ -2819,7 +2819,6 @@
         function blockBrowserZoomWheel(event){
             if(!(event.ctrlKey || event.metaKey)) return;
             event.preventDefault();
-            event.stopPropagation();
         }
         function zoomViewportAtScreen(clientX, clientY, deltaY){
             const before = screenToWorld(clientX, clientY);
@@ -2858,6 +2857,12 @@
                 refreshGeometry();
                 requestAnimationFrame(refreshGeometry);
             });
+        }
+        function scrollViewportByWheel(event){
+            viewport.x -= Number(event.deltaX || 0);
+            viewport.y -= Number(event.deltaY || 0);
+            applyViewport();
+            renderSelectionHub();
         }
         function scheduleSave(){
             if(!canvas || applyingRemoteCanvas) return;
@@ -10346,7 +10351,11 @@
         board.onwheel = e => {
             if(!canvas) return;
             if(shouldKeepWheelLocal(e.target)) return;
-            if(!e.altKey) return;
+            if(!(e.altKey || e.ctrlKey || e.metaKey)){
+                e.preventDefault();
+                scrollViewportByWheel(e);
+                return;
+            }
             e.preventDefault();
             if(zoomViewportAtScreen(e.clientX, e.clientY, e.deltaY)) scheduleSave();
         };

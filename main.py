@@ -33,7 +33,7 @@ APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
 APP_VERSION = os.getenv("APP_VERSION", "2.0.26")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260604-v2026-canvas-gesture-link-hotfix1")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260604-v2026-wheel-link-hotfix1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 

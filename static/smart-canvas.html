@@ -2682,6 +2682,11 @@
             applyViewport();
             return true;
         }
+        function scrollViewportByWheel(event){
+            viewport.x -= Number(event.deltaX || 0);
+            viewport.y -= Number(event.deltaY || 0);
+            applyViewport();
+        }
         function viewportCenter(){
             return {
                 x:(shell.clientWidth / 2 - viewport.x) / viewport.scale,
@@ -9118,12 +9123,15 @@
         function blockBrowserZoomWheel(event){
             if(!(event.ctrlKey || event.metaKey)) return;
             event.preventDefault();
-            event.stopPropagation();
         }
         window.addEventListener('wheel', blockBrowserZoomWheel, {passive:false, capture:true});
         shell.addEventListener('wheel', e => {
             if(isSmartCanvasGestureUiTarget(e.target)) return;
-            if(!e.altKey) return;
+            if(!(e.altKey || e.ctrlKey || e.metaKey)){
+                e.preventDefault();
+                scrollViewportByWheel(e);
+                return;
+            }
             e.preventDefault();
             if(zoomViewportAtScreen(e.clientX, e.clientY, e.deltaY)) scheduleSave();
         }, {passive:false});
