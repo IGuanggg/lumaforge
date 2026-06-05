@@ -18,8 +18,8 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260529-v2014-canvas-polish1"></script>
-    <script src="/static/i18n.js?v=20260529-v2014-canvas-polish1"></script>
+    <script src="/static/theme.js?v=20260605-v2027-resolution-cache-hotfix1"></script>
+    <script src="/static/i18n.js?v=20260605-v2027-resolution-cache-hotfix1"></script>
     <style>
 :root { --ease:cubic-bezier(.4,0,.2,1); --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.92); --card:rgba(255,255,255,.96); --card-solid:#fff; --soft:#f8fafc; --soft-2:#f1f5f9; --line:#e8edf3; --line-2:#cbd5e1; --text:#111827; --muted:#64748b; --faint:#94a3b8; --shadow:rgba(15,23,42,.08); --strong:#111827; --strong-text:#fff; }
         .theme-dark { --page:#0b1020; --grid:rgba(148,163,184,.16); --panel:rgba(17,24,39,.9); --card:rgba(15,23,42,.96); --card-solid:#111827; --soft:#1e293b; --soft-2:#263449; --line:#334155; --line-2:#64748b; --text:#f8fafc; --muted:#cbd5e1; --faint:#94a3b8; --shadow:rgba(0,0,0,.28); --strong:#f8fafc; --strong-text:#0f172a; }
@@ -877,7 +877,7 @@
             .gate-list { grid-template-columns:repeat(3, minmax(0, 1fr)); }
         }
     </style>
-    <link rel="stylesheet" href="/static/theme.css?v=20260529-v2014-canvas-polish1">
+    <link rel="stylesheet" href="/static/theme.css?v=20260605-v2027-resolution-cache-hotfix1">
 </head>
 <body>
     <div id="shell" class="shell no-canvas">
@@ -1031,7 +1031,7 @@
                 <div id="nodes"></div>
             </div>
         </div>
-        <div class="hint editor-only" data-i18n="canvas.hint">中键拖动画布，左键框选/选择，普通滚轮滚动，Ctrl/Alt+滚轮缩放，Ctrl+A 全选节点，右键打开节点属性或菜单。图片/提示词节点右下端口拖线到生成节点。</div>
+        <div class="hint editor-only" data-i18n="canvas.hint">空格+左键或中键拖动画布，左键框选/选择，普通滚轮滚动，Ctrl/Alt+滚轮缩放，Ctrl+A 全选节点，右键打开节点属性或菜单。图片/提示词节点右下端口拖线到生成节点。</div>
         <div id="outputLightbox" class="output-lightbox" onclick="closeOutputLightbox()">
             <div id="outputLightboxShell" class="output-lightbox-shell" onclick="event.stopPropagation()">
             <div id="outputPreview" class="output-preview">
@@ -1270,7 +1270,7 @@
         const logModal = document.getElementById('logModal');
         const logList = document.getElementById('logList');
         const errorModal = document.getElementById('errorModal');
-        const CANVAS_BUILD_ID = '20260529-v2014-canvas-polish1';
+        const CANVAS_BUILD_ID = '20260605-v2027-resolution-cache-hotfix1';
         const CANVAS_LIST_MODE = (() => {
             try {
                 const mode = new URLSearchParams(window.location.search).get('list') || '';
@@ -1313,6 +1313,7 @@
         let viewport = {x: -1800, y: -1000, scale: 1};
         let dragNode = null;
         let dragBoard = null;
+        let spacePanArmed = false;
         let resizeNode = null;
         let llmPaneDrag = null;
         let tempLink = null;
@@ -9944,6 +9945,7 @@
             dragNode = null;
             dragBoard = null;
             board?.classList.remove('panning');
+            if(spacePanArmed) board?.classList.add('panning');
             resizeNode = null;
             llmPaneDrag = null;
             knifeActive = false;
@@ -10300,12 +10302,26 @@
             if(shouldKeepWheelLocal(target)) return false;
             return Boolean(target.closest?.('#world, #nodes, #links'));
         }
+        function isSpaceKey(event){
+            return event?.code === 'Space' || event?.key === ' ' || event?.key === 'Spacebar';
+        }
+        function startBoardPan(e){
+            e.preventDefault();
+            dragBoard = {sx:e.clientX, sy:e.clientY, ox:viewport.x, oy:viewport.y};
+            board.classList.add('panning');
+            window.onmousemove = e2 => { viewport.x = dragBoard.ox + e2.clientX - dragBoard.sx; viewport.y = dragBoard.oy + e2.clientY - dragBoard.sy; applyViewport(); };
+            window.onmouseup = endDrag;
+        }
 
         window.addEventListener('wheel', blockBrowserZoomWheel, {passive:false, capture:true});
         board.onmousedown = e => {
             if(!canvas) return;
             if(startKnifeDrag(e)) return;
             commitAndBlurActiveNodeEditor();
+            if(spacePanArmed && e.button === 0 && !isEditableTarget(e.target)){
+                startBoardPan(e);
+                return;
+            }
             if(!isBlankBoardTarget(e.target)) return;
             closeCreateMenu();
             if(e.button === 0){
@@ -10314,11 +10330,7 @@
                 return;
             }
             if(e.button !== 1) return;
-            e.preventDefault();
-            dragBoard = {sx:e.clientX, sy:e.clientY, ox:viewport.x, oy:viewport.y};
-            board.classList.add('panning');
-            window.onmousemove = e2 => { viewport.x = dragBoard.ox + e2.clientX - dragBoard.sx; viewport.y = dragBoard.oy + e2.clientY - dragBoard.sy; applyViewport(); };
-            window.onmouseup = endDrag;
+            startBoardPan(e);
         };
         board.addEventListener('mousemove', e => {
             const point = screenToWorld(e.clientX, e.clientY);
@@ -10403,6 +10415,14 @@
         });
         window.addEventListener('keydown', e => {
             if(!canvas) return;
+            if(isSpaceKey(e) && !isEditableTarget(document.activeElement)){
+                e.preventDefault();
+                if(!spacePanArmed){
+                    spacePanArmed = true;
+                    board.classList.add('panning');
+                }
+                return;
+            }
             if(e.key === 'Shift' && !isEditableTarget(document.activeElement)) setKnifeMode(true);
             if(e.key === 'Escape' && document.getElementById('imageEditModal').classList.contains('open')) { closeImageEditor(); return; }
             if(outputLightbox.classList.contains('open') && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')){
@@ -10450,9 +10470,17 @@
             }
         });
         window.addEventListener('keyup', e => {
+            if(isSpaceKey(e)){
+                spacePanArmed = false;
+                if(!dragBoard) board.classList.remove('panning');
+            }
             if(e.key === 'Shift') setKnifeMode(false);
         });
-        window.addEventListener('blur', () => setKnifeMode(false));
+        window.addEventListener('blur', () => {
+            spacePanArmed = false;
+            if(!dragBoard) board.classList.remove('panning');
+            setKnifeMode(false);
+        });
         window.addEventListener('blur', () => {
             if(selectDrag){
                 selectionBox.style.display = 'none';

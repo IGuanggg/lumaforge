@@ -17,9 +17,9 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260526-asset-reliability1"></script>
-    <script src="/static/i18n.js?v=20260526-asset-reliability1"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260526-asset-reliability1">
+    <script src="/static/theme.js?v=20260605-v2027-resolution-cache-hotfix1"></script>
+    <script src="/static/i18n.js?v=20260605-v2027-resolution-cache-hotfix1"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260605-v2027-resolution-cache-hotfix1">
     <style>
         :root {
             --bg:#f7f8fa;
@@ -467,16 +467,16 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.0.26 自动更新紧急修复版</div>
-                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是多图部分成功、节点 loading 兜底、鼠标操作、连线删除和粘贴体验修复。</div>
+                        <div class="welcome-title">v2.0.27 更新缓存修复版</div>
+                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是修复升级后版本号已更新、页面仍残留旧验证和旧静态资源的问题。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
                 </div>
                 <div class="welcome-list">
-                    <div class="welcome-item"><i data-lucide="image-plus" class="w-4 h-4"></i><span>多图生成支持部分成功回填，避免成功图片被失败项拖住</span></div>
-                    <div class="welcome-item"><i data-lucide="activity" class="w-4 h-4"></i><span>任务失败会先从结果和素材库回捞图片，减少节点永久 loading</span></div>
-                    <div class="welcome-item"><i data-lucide="mouse-pointer-2" class="w-4 h-4"></i><span>智能画布鼠标操作同步为左键选择、空格拖动画布、滚轮缩放</span></div>
-                    <div class="welcome-item"><i data-lucide="unlink" class="w-4 h-4"></i><span>连线中间删除键命中区域加大，输入框粘贴统一为纯文本</span></div>
+                    <div class="welcome-item"><i data-lucide="refresh-cw" class="w-4 h-4"></i><span>全站静态资源统一使用当前 build id，避免 WebView 继续加载旧 JS/CSS</span></div>
+                    <div class="welcome-item"><i data-lucide="shield-check" class="w-4 h-4"></i><span>HTML 页面增加 no-store 头，升级后入口页会重新读取新文件</span></div>
+                    <div class="welcome-item"><i data-lucide="file-check-2" class="w-4 h-4"></i><span>发布检查会拦截旧 build id 和静态脚本语法错误</span></div>
+                    <div class="welcome-item"><i data-lucide="wand-sparkles" class="w-4 h-4"></i><span>修复智能画布内多处损坏中文字符串，防止页面脚本解析失败</span></div>
                 </div>
                 <div class="welcome-actions">
                     <button class="action-btn primary" id="welcome-run-diagnostics-btn" type="button"><i data-lucide="stethoscope" class="w-4 h-4"></i><span>运行诊断</span></button>
@@ -1089,13 +1089,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.0.26' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.0.27' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.0.26';
+            const version = appInfo?.version || '2.0.27';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }
@@ -1902,7 +1902,7 @@
                 const staticHealth = info.static_health || {};
                 const updateCapability = info.update_capability || {};
                 const checks = [
-                    {label:'当前版本', ok:info.version === '2.0.26', detail:info.version || '-'},
+                    {label:'当前版本', ok:info.version === '2.0.27', detail:info.version || '-'},
                     {label:'前端依赖', ok:!!staticHealth.ok, detail:staticHealth.ok ? `${Number(staticHealth.checked_count || 0)} 项完整` : `缺失 ${Number(staticHealth.missing_count || 0)} 项`},
                     {label:'素材文件', ok:Number(assets.missing_count || 0) === 0, detail:`缺失 ${Number(assets.missing_count || 0)} 个`},
                     {label:'缩略图', ok:Number(assets.thumb_missing_count || 0) === 0, detail:`待重建 ${Number(assets.thumb_missing_count || 0)} 个`, warnOnly:true},
@@ -1946,9 +1946,25 @@
             }
         }
 
+        let accountStateRefreshTimer = null;
+        function scheduleAccountStateRefresh(){
+            clearTimeout(accountStateRefreshTimer);
+            accountStateRefreshTimer = setTimeout(() => {
+                loadLocalDataHealth().catch(() => {});
+            }, 120);
+        }
+
+        try {
+            const accountChannel = new BroadcastChannel('studio-account');
+            accountChannel.onmessage = event => {
+                if(event.data?.type === 'account-state') scheduleAccountStateRefresh();
+            };
+        } catch(e) {}
+
         window.addEventListener('message', event => {
             if(event.data?.type === 'theme') applyTheme(event.data.theme);
             if(event.data?.type === 'language') applyLanguage(event.data.lang);
+            if(event.data?.type === 'account-state') scheduleAccountStateRefresh();
         });
         document.getElementById('save-update-url-btn').addEventListener('click', saveUpdateSettings);
         document.getElementById('check-update-btn').addEventListener('click', checkUpdate);
@@ -1992,6 +2008,7 @@
             loadBackups().catch(() => {});
             checkAssetHealth().catch(() => {});
             refreshUpdateState();
+            try { window.parent?.postMessage({ type:'account-state-request' }, '*'); } catch(e) {}
             setTimeout(() => checkUpdateOnOpen(), 700);
             if(window.lucide) lucide.createIcons();
         });

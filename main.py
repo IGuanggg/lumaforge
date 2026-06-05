@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.26")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260604-v2026-wheel-link-hotfix1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.27")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260605-v2027-resolution-cache-hotfix1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -265,6 +265,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def apply_no_cache_headers(response: Response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
+class NoCacheHtmlStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        clean_path = str(path or "").split("?", 1)[0].lower()
+        if clean_path.endswith((".html", ".htm")):
+            apply_no_cache_headers(response)
+        return response
 
 
 @app.middleware("http")
@@ -1135,7 +1151,7 @@ if os.path.abspath(WORKFLOW_SOURCE_DIR) != os.path.abspath(WORKFLOW_DIR) and os.
             if not os.path.exists(target_path):
                 shutil.copy2(source_path, target_path)
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+app.mount("/static", NoCacheHtmlStaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/output", StaticFiles(directory=OUTPUT_DIR), name="output")
 app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
@@ -1502,17 +1518,43 @@ def index_history_record_assets(record):
             urls.append(value)
     indexed = []
     seen = set()
+    image_meta_items = record.get("image_meta") if isinstance(record.get("image_meta"), list) else []
     for url in urls:
         if url in seen:
             continue
         seen.add(url)
+        metadata = generation_metadata_from_record(record)
+        image_meta = next((item for item in image_meta_items if isinstance(item, dict) and item.get("url") == url), None)
+        if image_meta:
+            metadata = json.loads(json.dumps(metadata, ensure_ascii=False))
+            params = metadata.setdefault("params", {})
+            for key in (
+                "actual_size",
+                "width",
+                "height",
+                "requested_size",
+                "requested_width",
+                "requested_height",
+                "requested_resolution",
+                "requested_aspect_ratio",
+                "size_warning",
+                "resolution_warning",
+            ):
+                value = image_meta.get(key)
+                if value not in ("", None, 0):
+                    if key == "width":
+                        params["actual_width"] = value
+                    elif key == "height":
+                        params["actual_height"] = value
+                    else:
+                        params[key] = value
         item = index_local_asset(
             url,
             source_type=str(record.get("type") or ""),
             prompt=str(record.get("prompt") or ""),
             model=str(record.get("model") or record.get("workflow_json") or ""),
             created_at=record.get("timestamp"),
-            metadata=generation_metadata_from_record(record),
+            metadata=metadata,
         )
         if item:
             indexed.append(item)
@@ -2785,6 +2827,10 @@ GPT_IMAGE2_MIN_PIXELS = 655_360
 def is_gpt_image_2_model(model):
     return str(model or "").strip().lower().startswith("gpt-image-2")
 
+def is_nano_banana_model(model):
+    value = str(model or "").strip().lower().replace("_", "-")
+    return "nano-banana" in value or "nanobanana" in value
+
 def normalize_gpt_image_2_size(size):
     width, height = parse_size_pair(size)
     if not width or not height:
@@ -2835,6 +2881,86 @@ def apimart_size_resolution(size):
     ratio = width / height
     best = min(common, key=lambda item: abs(ratio - item[0] / item[1]))
     return best[2], resolution
+
+def nano_banana_image_params(size):
+    aspect_ratio, resolution = apimart_size_resolution(size)
+    resolution = str(resolution or "1k").upper()
+    return {
+        "resolution": resolution,
+        "aspect_ratio": aspect_ratio,
+        "nanoBananaParams": {
+            "resolution": resolution,
+            "aspect_ratio": aspect_ratio,
+            "output_format": "png",
+        },
+    }
+
+def generation_size_warning(requested_width, requested_height, actual_width, actual_height, model=""):
+    requested_width = int(requested_width or 0)
+    requested_height = int(requested_height or 0)
+    actual_width = int(actual_width or 0)
+    actual_height = int(actual_height or 0)
+    if not (requested_width and requested_height and actual_width and actual_height):
+        return ""
+    requested_long = max(requested_width, requested_height)
+    requested_pixels = requested_width * requested_height
+    actual_long = max(actual_width, actual_height)
+    actual_pixels = actual_width * actual_height
+    is_high_res_request = requested_long >= 3000 or requested_pixels > 4_500_000
+    if not is_high_res_request:
+        return ""
+    long_ratio = actual_long / max(1, requested_long)
+    pixel_ratio = actual_pixels / max(1, requested_pixels)
+    if long_ratio >= 0.9 and pixel_ratio >= 0.75:
+        return ""
+    model_label = str(model or "").strip() or "当前模型"
+    return (
+        f"{model_label} 已按 {requested_width}x{requested_height} 请求高分辨率，"
+        f"但上游实际返回 {actual_width}x{actual_height}。"
+        "这通常是上游模型/通道降级或限制，不是本地保存尺寸。"
+    )
+
+def output_image_meta(local_url, requested_size="", model=""):
+    path = output_file_from_url(local_url)
+    width, height = image_dimensions(path) if path else (0, 0)
+    requested_width, requested_height = parse_size_pair(requested_size)
+    aspect_ratio, requested_resolution = apimart_size_resolution(requested_size)
+    meta = {
+        "url": local_url,
+        "width": width,
+        "height": height,
+        "actual_size": f"{width}x{height}" if width and height else "",
+        "requested_size": requested_size or "",
+        "requested_width": requested_width,
+        "requested_height": requested_height,
+        "requested_resolution": str(requested_resolution or "").upper(),
+        "requested_aspect_ratio": aspect_ratio or "",
+    }
+    warning = generation_size_warning(requested_width, requested_height, width, height, model)
+    if warning:
+        meta["size_warning"] = warning
+        meta["resolution_warning"] = warning
+    return {k: v for k, v in meta.items() if v not in ("", None, 0)}
+
+def apply_nano_banana_image_params(body, size, model):
+    if not is_nano_banana_model(model):
+        return body
+    body.update(nano_banana_image_params(size))
+    return body
+
+def strip_nano_banana_image_params(body):
+    return {k: v for k, v in (body or {}).items() if k not in {"resolution", "aspect_ratio", "nanoBananaParams"}}
+
+async def post_image_generation_json(client, url, headers, body, model):
+    response = await client.post(url, headers=headers, json=body)
+    if not is_nano_banana_model(model) or response.status_code not in {400, 422}:
+        return response
+    text = response.text[:500]
+    lower = text.lower()
+    if any(key in lower for key in ("unknown", "unrecognized", "extra", "unexpected", "invalid parameter", "not permitted", "forbidden")):
+        logger.warning("Nano Banana extra size params rejected; retrying without extras: %s", text[:200])
+        return await client.post(url, headers=headers, json=strip_nano_banana_image_params(body))
+    return response
 
 async def generate_modelscope_provider_image(prompt, size, model, reference_images=None, provider=None):
     clean_token = MODELSCOPE_API_KEY.strip()
@@ -2938,55 +3064,65 @@ async def generate_ai_image(prompt, size, quality, model, reference_images=None,
                 body["image"] = [reference_to_data_url(ref, max_size=1536) for ref in image_refs[:4]]
             response = await client.post(gen_url, headers=api_headers(provider=provider), json=body)
         elif image_refs:
-            # 1) 先用 multipart 提交到 /images/edits（OpenAI / Comfly 风格）
-            files = []
-            opened = []
-            edit_failed_status = None
-            edit_failed_text = ""
-            try:
-                for ref in image_refs[:4]:
-                    path = output_file_from_url(ref.get("url", ""))
-                    if not path:
-                        continue
-                    fh = open(path, "rb")
-                    opened.append(fh)
-                    files.append(("image", (os.path.basename(path), fh, content_type_for_path(path))))
-                if mask_refs:
-                    mask_path = output_file_from_url(mask_refs[0].get("url", ""))
-                    if mask_path:
-                        fh = open(mask_path, "rb")
-                        opened.append(fh)
-                        files.append(("mask", (os.path.basename(mask_path), fh, content_type_for_path(mask_path))))
-                data = {"model": model, "prompt": prompt, "size": size, "quality": quality, "response_format": "url", "n": "1"}
-                try:
-                    response = await client.post(edit_url, headers=api_headers(json_body=False, provider=provider), data=data, files=files)
-                    if response.status_code >= 400:
-                        edit_failed_status = response.status_code
-                        edit_failed_text = response.text[:500]
-                        response = None
-                except httpx.HTTPError as e:
-                    edit_failed_status = -1
-                    edit_failed_text = str(e)
-                    response = None
-            finally:
-                for fh in opened:
-                    fh.close()
-            # 2) edits 失败 → 回退到 /images/generations + JSON image:[urls/base64]（grsai 风格）
-            if response is None:
-                logger.error(f"/images/edits failed ({edit_failed_status}): {edit_failed_text[:200]} → 回退到 /images/generations + image:[] JSON")
+            if is_nano_banana_model(model):
                 image_payload = [reference_to_data_url(ref, max_size=1536) for ref in image_refs[:4]]
-                body = {
+                body = apply_nano_banana_image_params({
                     "model": model, "prompt": prompt, "size": size,
                     "quality": quality, "response_format": "url", "n": 1,
                     "image": image_payload,
-                }
-                response = await client.post(gen_url, headers=api_headers(provider=provider), json=body)
+                }, size, model)
+                response = await post_image_generation_json(client, gen_url, api_headers(provider=provider), body, model)
+            else:
+                # 1) 先用 multipart 提交到 /images/edits（OpenAI / Comfly 风格）
+                files = []
+                opened = []
+                edit_failed_status = None
+                edit_failed_text = ""
+                try:
+                    for ref in image_refs[:4]:
+                        path = output_file_from_url(ref.get("url", ""))
+                        if not path:
+                            continue
+                        fh = open(path, "rb")
+                        opened.append(fh)
+                        files.append(("image", (os.path.basename(path), fh, content_type_for_path(path))))
+                    if mask_refs:
+                        mask_path = output_file_from_url(mask_refs[0].get("url", ""))
+                        if mask_path:
+                            fh = open(mask_path, "rb")
+                            opened.append(fh)
+                            files.append(("mask", (os.path.basename(mask_path), fh, content_type_for_path(mask_path))))
+                    data = {"model": model, "prompt": prompt, "size": size, "quality": quality, "response_format": "url", "n": "1"}
+                    try:
+                        response = await client.post(edit_url, headers=api_headers(json_body=False, provider=provider), data=data, files=files)
+                        if response.status_code >= 400:
+                            edit_failed_status = response.status_code
+                            edit_failed_text = response.text[:500]
+                            response = None
+                    except httpx.HTTPError as e:
+                        edit_failed_status = -1
+                        edit_failed_text = str(e)
+                        response = None
+                finally:
+                    for fh in opened:
+                        fh.close()
+                # 2) edits 失败 → 回退到 /images/generations + image:[] JSON（grsai 风格）
+                if response is None:
+                    logger.error(f"/images/edits failed ({edit_failed_status}): {edit_failed_text[:200]} → 回退到 /images/generations + image:[] JSON")
+                    image_payload = [reference_to_data_url(ref, max_size=1536) for ref in image_refs[:4]]
+                    body = {
+                        "model": model, "prompt": prompt, "size": size,
+                        "quality": quality, "response_format": "url", "n": 1,
+                        "image": image_payload,
+                    }
+                    response = await client.post(gen_url, headers=api_headers(provider=provider), json=body)
         else:
-            response = await client.post(
-                gen_url,
-                headers=api_headers(provider=provider),
-                json={"model": model, "prompt": prompt, "size": size, "quality": quality, "response_format": "url", "n": 1},
+            body = apply_nano_banana_image_params(
+                {"model": model, "prompt": prompt, "size": size, "quality": quality, "response_format": "url", "n": 1},
+                size,
+                model,
             )
+            response = await post_image_generation_json(client, gen_url, api_headers(provider=provider), body, model)
         response.raise_for_status()
         raw = response.json()
         try:
@@ -3939,11 +4075,11 @@ async def fetch_update_source_payload(client: httpx.AsyncClient):
 
 @app.get("/login.html")
 async def login_page():
-    return FileResponse(os.path.join(STATIC_DIR, "login.html"))
+    return apply_no_cache_headers(FileResponse(os.path.join(STATIC_DIR, "login.html")))
 
 @app.get("/")
 async def index():
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    return apply_no_cache_headers(FileResponse(os.path.join(STATIC_DIR, "index.html")))
 
 @app.get("/api/app/info")
 async def app_info():
@@ -6638,6 +6774,37 @@ async def build_online_image_result(payload: OnlineImageRequest, history_type: s
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"请求上游生图接口失败：{exc}") from exc
 
+    image_meta = [output_image_meta(url, payload.size, model) for url in local_urls if url]
+    first_image_meta = image_meta[0] if image_meta else {}
+    size_warnings = [item.get("size_warning") for item in image_meta if item.get("size_warning")]
+    upstream_size_params = nano_banana_image_params(payload.size) if is_nano_banana_model(model) else {}
+    params = {
+        "provider_id": provider["id"],
+        "model": model,
+        "size": payload.size,
+        "quality": payload.quality,
+        "n": count,
+        "reference_images": refs,
+        "task_id": task_id or "",
+        "requested_size": payload.size,
+        "requested_width": first_image_meta.get("requested_width"),
+        "requested_height": first_image_meta.get("requested_height"),
+        "requested_resolution": first_image_meta.get("requested_resolution"),
+        "requested_aspect_ratio": first_image_meta.get("requested_aspect_ratio"),
+        "upstream_request_size": payload.size,
+        "upstream_request_resolution": upstream_size_params.get("resolution") or first_image_meta.get("requested_resolution"),
+        "upstream_request_aspect_ratio": upstream_size_params.get("aspect_ratio") or first_image_meta.get("requested_aspect_ratio"),
+        "upstream_request_nanoBananaParams": upstream_size_params.get("nanoBananaParams"),
+        "actual_size": first_image_meta.get("actual_size"),
+        "actual_width": first_image_meta.get("width"),
+        "actual_height": first_image_meta.get("height"),
+    }
+    if image_meta:
+        params["image_meta"] = image_meta
+    if size_warnings:
+        params["size_warning"] = size_warnings[0]
+        params["resolution_warning"] = size_warnings[0]
+
     result = {
         "prompt": payload.prompt,
         "images": [url for url in local_urls if url],
@@ -6648,9 +6815,13 @@ async def build_online_image_result(payload: OnlineImageRequest, history_type: s
         "provider_name": provider.get("name") or provider["id"],
         "task_id": task_id or (extract_task_id(raw_items[0]) if raw_items and isinstance(raw_items[0], dict) else None),
         "request_id": raw_items[0].get("id") if raw_items and isinstance(raw_items[0], dict) else None,
-        "params": {k: v for k, v in {"provider_id": provider["id"], "model": model, "size": payload.size, "quality": payload.quality, "n": count, "reference_images": refs, "task_id": task_id or ""}.items() if v not in ("", None)},
+        "params": {k: v for k, v in params.items() if v not in ("", None, 0, [])},
+        "image_meta": image_meta,
         "raw_usage": raw_items[0].get("usage") if raw_items and isinstance(raw_items[0], dict) else None,
     }
+    if size_warnings:
+        result["size_warning"] = size_warnings[0]
+        result["resolution_warning"] = size_warnings[0]
     if partial_errors:
         result["partial_errors"] = partial_errors
         result["partial_error"] = "；".join(partial_errors[:2])

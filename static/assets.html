@@ -13,7 +13,7 @@
         })();
     </script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260526-asset-reliability1"></script>
+    <script src="/static/theme.js?v=20260605-v2027-resolution-cache-hotfix1"></script>
     <style>
         :root {
             --bg:#f7f8fb;
@@ -124,6 +124,8 @@
         .detail-grid dt { color:var(--muted); font-weight:950; }
         .detail-grid dd { margin:0; min-width:0; color:var(--text); font-weight:800; word-break:break-word; white-space:pre-wrap; }
         .param-box { margin-top:12px; border:1px solid var(--line); border-radius:12px; padding:10px; background:var(--bg); color:var(--muted); font-size:11.5px; line-height:1.5; max-height:180px; overflow:auto; white-space:pre-wrap; word-break:break-word; }
+        .param-warning { border-color:rgba(245,158,11,.34); background:rgba(245,158,11,.10); color:#92400e; font-weight:850; }
+        .theme-dark .param-warning { color:#fde68a; background:rgba(245,158,11,.14); }
         .preview-actions { position:absolute; right:16px; bottom:16px; display:flex; gap:10px; }
         .preview-close { position:absolute; right:16px; top:16px; }
         @media (max-width:1000px) {
@@ -318,10 +320,13 @@
             if(params && Object.keys(params).length) extra.params = params;
             if(gen.workflow_json) extra.workflow_json = gen.workflow_json;
             if(gen.raw_usage) extra.raw_usage = gen.raw_usage;
+            const sizeWarning = params.size_warning || params.resolution_warning || gen.size_warning || asset.metadata?.size_warning || '';
             const rows = [
                 ['提示词', asset.prompt || gen.prompt || '-'],
                 ['模型', asset.model || gen.model || '-'],
                 ['来源', asset.source_type || gen.source_type || '-'],
+                ['实际请求尺寸', params.requested_size || params.size || '-'],
+                ['上游请求', [params.upstream_request_resolution, params.upstream_request_aspect_ratio, params.upstream_request_size].filter(Boolean).join(' / ') || '-'],
                 ['尺寸', dimsFor(asset)],
                 ['Seed', gen.seed || '-'],
                 ['Provider', gen.provider_name || gen.provider_id || '-'],
@@ -331,6 +336,7 @@
             return `
                 <h3>生成参数</h3>
                 <dl class="detail-grid">${rows.map(([k,v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+                ${sizeWarning ? `<div class="param-box param-warning">${esc(sizeWarning)}</div>` : ''}
                 <div class="param-box">${esc(prettyJson(extra) || '没有额外参数')}</div>
             `;
         }
@@ -845,6 +851,21 @@
             delete $('savePromptBtn').dataset.editing;
         }
 
+        let accountStateRefreshTimer = null;
+        function scheduleAccountStateRefresh(){
+            clearTimeout(accountStateRefreshTimer);
+            accountStateRefreshTimer = setTimeout(() => {
+                loadCloudMediaStatus().catch(() => {});
+            }, 120);
+        }
+
+        try {
+            const accountChannel = new BroadcastChannel('studio-account');
+            accountChannel.onmessage = event => {
+                if(event.data?.type === 'account-state') scheduleAccountStateRefresh();
+            };
+        } catch(e) {}
+
         document.querySelectorAll('.tab').forEach(btn => {
             btn.addEventListener('click', () => {
                 document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -901,8 +922,10 @@
                 document.documentElement.classList.toggle('studio-theme-dark', event.data.theme === 'dark');
             }
             if(event.data?.type === 'assets-refresh') loadAssets().catch(err => showToast(err.message));
+            if(event.data?.type === 'account-state') scheduleAccountStateRefresh();
         });
 
+        try { window.parent?.postMessage({ type:'account-state-request' }, '*'); } catch(e) {}
         Promise.all([loadAssets(), loadPrompts(), loadCloudMediaStatus()]).catch(err => showToast(err.message));
         setInterval(() => loadCloudMediaStatus().catch(() => {}), 30000);
         lucide.createIcons();

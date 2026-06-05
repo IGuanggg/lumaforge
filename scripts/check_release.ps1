@@ -1,5 +1,6 @@
 ﻿param(
-    [string]$Version = "2.0.21"
+    [string]$Version = "2.0.27",
+    [string]$BuildId = "20260605-v2027-resolution-cache-hotfix1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,6 +15,17 @@ function Assert-Contains {
     $content = Get-Content -LiteralPath $Path -Raw
     if (-not $content.Contains($Needle)) {
         throw "Expected '$Path' to contain '$Needle'"
+    }
+}
+
+function Assert-NotContains {
+    param(
+        [string]$Path,
+        [string]$Needle
+    )
+    $content = Get-Content -LiteralPath $Path -Raw
+    if ($content.Contains($Needle)) {
+        throw "Expected '$Path' to not contain stale marker '$Needle'"
     }
 }
 
@@ -38,9 +50,33 @@ Assert-Contains "docker-compose.cloud.yml" "lumaforge-cloud"
 Assert-Contains "docker-compose.cloud.yml" "iguang9881/lumaforge-cloud"
 Assert-Contains "desktop_canvas.spec" 'name="LumaForge"'
 Assert-Contains "static/index.html" "LumaForge"
+Assert-Contains "main.py" "APP_BUILD_ID = os.getenv(`"APP_BUILD_ID`", `"$BuildId`")"
+Assert-Contains "static/index.html" "const APP_BUILD_ID = '$BuildId';"
+Assert-Contains "static/canvas.html" "const CANVAS_BUILD_ID = '$BuildId';"
+Assert-Contains "static/smart-canvas.html" "?v=$BuildId"
+Assert-Contains "static/app-settings.html" "?v=$BuildId"
+
+$staleBuildIds = @(
+    "20260526-asset-reliability1",
+    "20260529-v2014-canvas-polish1",
+    "20260529-v2017-smart-storyboard-workbench1",
+    "20260604-v2022-smart-canvas-polish1",
+    "20260604-v2026-canvas-gesture-link-hotfix1",
+    "20260604-v2026-wheel-link-hotfix1"
+)
+$staticFiles = Get-ChildItem -LiteralPath "static" -Recurse -File | Where-Object { $_.Extension -in ".html", ".js", ".css" }
+foreach ($file in $staticFiles) {
+    $relative = Resolve-Path -LiteralPath $file.FullName -Relative
+    foreach ($staleBuildId in $staleBuildIds) {
+        Assert-NotContains $relative $staleBuildId
+    }
+}
 
 Write-Host "[2/5] Checking Python syntax..."
 python -m py_compile main.py cloud_config_server.py launcher.py desktop_launcher.py desktop_updater.py
+if ($LASTEXITCODE -ne 0) {
+    throw "Python syntax check failed."
+}
 
 Write-Host "[3/5] Checking key HTML script syntax when Node is available..."
 if (Get-Command node -ErrorAction SilentlyContinue) {
@@ -56,12 +92,18 @@ for (const file of files) {
   });
 }
 "@
+    if ($LASTEXITCODE -ne 0) {
+        throw "Node HTML script syntax check failed."
+    }
 } else {
     Write-Host "Node not found; skipped HTML script syntax check."
 }
 
 Write-Host "[4/5] Checking git diff whitespace..."
 git diff --check
+if ($LASTEXITCODE -ne 0) {
+    throw "git diff --check failed."
+}
 
 Write-Host "[5/5] Checking runtime data is not staged..."
 Assert-NotStagedRuntimeData
