@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.27")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260605-v2027-resolution-cache-hotfix1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.28")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260605-v2028-cache-nav-hotfix1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -405,12 +405,14 @@ ASSET_THUMB_DIR = os.path.abspath(os.getenv("APP_ASSET_THUMBS_DIR") or os.path.j
 ASSET_LIBRARY_DIR = os.path.abspath(os.getenv("APP_ASSET_LIBRARY_DIR") or os.path.join(ASSETS_DIR, "library"))
 APP_LOG_DIR = os.path.abspath(os.getenv("APP_LOG_DIR") or os.path.join(RUNTIME_DIR, "logs"))
 APP_CACHE_DIR = os.path.abspath(os.getenv("APP_CACHE_DIR") or os.path.join(RUNTIME_DIR, "cache"))
+APP_WEBVIEW_STORAGE_DIR = os.path.abspath(os.getenv("APP_WEBVIEW_STORAGE_DIR") or "") if os.getenv("APP_WEBVIEW_STORAGE_DIR") else ""
 UPDATE_DIR = os.path.join(RUNTIME_DIR, "updates")
 UPDATE_DOWNLOADS_DIR = os.path.join(UPDATE_DIR, "downloads")
 UPDATE_STAGING_DIR = os.path.join(UPDATE_DIR, "staging")
 UPDATE_BACKUPS_DIR = os.path.join(UPDATE_DIR, "backups")
 HISTORY_FILE = os.path.join(RUNTIME_DIR, "history.json")
 DATA_DIR = os.path.join(RUNTIME_DIR, "data")
+APP_BUILD_MARKER_FILE = os.path.join(DATA_DIR, "app_build_marker.json")
 UPDATE_STATE_FILE = os.path.join(DATA_DIR, "update_state.json")
 ASSET_DB_FILE = os.path.join(DATA_DIR, "assets.db")
 DATA_BACKUPS_DIR = os.path.join(DATA_DIR, "backups")
@@ -1128,6 +1130,96 @@ def remove_api_env_keys(keys):
 
 BACKEND_LOCAL_LOAD = {addr: 0 for addr in COMFYUI_INSTANCES}
 
+def _safe_remove_inside(path: str, root: str) -> bool:
+    if not path or not root:
+        return False
+    target = os.path.abspath(path)
+    base = os.path.abspath(root)
+    try:
+        if os.path.commonpath([target, base]) != base:
+            return False
+    except ValueError:
+        return False
+    if not os.path.exists(target):
+        return False
+    try:
+        if os.path.isdir(target) and not os.path.islink(target):
+            shutil.rmtree(target, ignore_errors=True)
+        else:
+            os.remove(target)
+        return True
+    except Exception as exc:
+        logger.warning("Cache cleanup skipped for %s: %s", target, exc)
+        return False
+
+def _clear_directory_contents(path: str) -> int:
+    if not path or not os.path.isdir(path):
+        return 0
+    removed = 0
+    for name in os.listdir(path):
+        if _safe_remove_inside(os.path.join(path, name), path):
+            removed += 1
+    return removed
+
+def _clear_webview_http_cache(storage_dir: str) -> int:
+    if not storage_dir or not os.path.isdir(storage_dir):
+        return 0
+    removed = 0
+    cache_rel_paths = [
+        "Cache",
+        "Code Cache",
+        "GPUCache",
+        "DawnCache",
+        "GrShaderCache",
+        "ShaderCache",
+        os.path.join("Default", "Cache"),
+        os.path.join("Default", "Code Cache"),
+        os.path.join("Default", "GPUCache"),
+        os.path.join("Default", "DawnCache"),
+        os.path.join("Default", "GrShaderCache"),
+        os.path.join("Default", "ShaderCache"),
+        os.path.join("Default", "Service Worker", "CacheStorage"),
+        os.path.join("Default", "Service Worker", "ScriptCache"),
+        os.path.join("EBWebView", "Default", "Cache"),
+        os.path.join("EBWebView", "Default", "Code Cache"),
+        os.path.join("EBWebView", "Default", "GPUCache"),
+        os.path.join("EBWebView", "Default", "DawnCache"),
+        os.path.join("EBWebView", "Default", "GrShaderCache"),
+        os.path.join("EBWebView", "Default", "ShaderCache"),
+        os.path.join("EBWebView", "Default", "Service Worker", "CacheStorage"),
+        os.path.join("EBWebView", "Default", "Service Worker", "ScriptCache"),
+    ]
+    for rel in cache_rel_paths:
+        if _safe_remove_inside(os.path.join(storage_dir, rel), storage_dir):
+            removed += 1
+    return removed
+
+def clear_versioned_caches_if_needed():
+    try:
+        previous = {}
+        if os.path.isfile(APP_BUILD_MARKER_FILE):
+            with open(APP_BUILD_MARKER_FILE, "r", encoding="utf-8") as f:
+                previous = json.load(f) if f else {}
+        previous_build = str(previous.get("build_id") or "")
+        if previous_build == APP_BUILD_ID:
+            return
+        app_cache_removed = _clear_directory_contents(APP_CACHE_DIR)
+        webview_cache_removed = _clear_webview_http_cache(APP_WEBVIEW_STORAGE_DIR)
+        os.makedirs(os.path.dirname(APP_BUILD_MARKER_FILE), exist_ok=True)
+        with open(APP_BUILD_MARKER_FILE, "w", encoding="utf-8") as f:
+            json.dump({
+                "version": APP_VERSION,
+                "build_id": APP_BUILD_ID,
+                "previous_build_id": previous_build,
+                "cleared_at": int(time.time() * 1000),
+                "app_cache_removed": app_cache_removed,
+                "webview_cache_removed": webview_cache_removed,
+            }, f, ensure_ascii=False, indent=2)
+        if previous_build:
+            logger.info("Cleared versioned caches after build change %s -> %s", previous_build, APP_BUILD_ID)
+    except Exception as exc:
+        logger.warning("Versioned cache cleanup failed: %s", exc)
+
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(ASSETS_DIR, exist_ok=True)
 os.makedirs(OUTPUT_INPUT_DIR, exist_ok=True)
@@ -1139,6 +1231,7 @@ os.makedirs(WORKFLOW_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(CONVERSATION_DIR, exist_ok=True)
 os.makedirs(CANVAS_DIR, exist_ok=True)
+clear_versioned_caches_if_needed()
 
 if os.path.abspath(WORKFLOW_SOURCE_DIR) != os.path.abspath(WORKFLOW_DIR) and os.path.isdir(WORKFLOW_SOURCE_DIR):
     for root, _, files in os.walk(WORKFLOW_SOURCE_DIR):

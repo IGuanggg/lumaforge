@@ -117,6 +117,7 @@ def configure_desktop_environment():
     os.environ.setdefault("APP_OUTPUT_DIR", str(save_dir / "legacy-output"))
     os.environ.setdefault("APP_LOG_DIR", str(logs_dir))
     os.environ.setdefault("APP_CACHE_DIR", str(localappdata_dir() / "cache"))
+    os.environ.setdefault("APP_WEBVIEW_STORAGE_DIR", str(webview_storage_dir))
     os.environ.setdefault("LUMAFORGE_DESKTOP", "1")
     os.environ.setdefault("INFINITE_CANVAS_DESKTOP", "1")
 

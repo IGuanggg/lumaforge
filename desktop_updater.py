@@ -22,6 +22,13 @@ PROTECT_NAMES = {
     "userdata",
 }
 
+OBSOLETE_APP_RESOURCE_NAMES = {
+    "docs",
+    "scripts",
+    "static",
+    "workflows",
+}
+
 CRITICAL_RELATIVE_FILES = (
     "LumaForge.exe",
     os.path.join("_internal", "certifi", "cacert.pem"),
@@ -112,6 +119,22 @@ def copy_entry(src: str, dst: str):
         shutil.copy2(src, dst)
 
 
+def move_obsolete_app_resources(package_root: str, app_dir: str, backup_dir: str):
+    moved = []
+    for name in OBSOLETE_APP_RESOURCE_NAMES:
+        if os.path.exists(os.path.join(package_root, name)):
+            continue
+        target = os.path.join(app_dir, name)
+        if not os.path.exists(target):
+            continue
+        backup_target = os.path.join(backup_dir, f"{name}.__obsolete__")
+        if os.path.exists(backup_target):
+            remove_path(backup_target)
+        shutil.move(target, backup_target)
+        moved.append(name)
+    return moved
+
+
 def replace_app(package_root: str, app_dir: str, state_path: str = "", state: dict | None = None):
     app_abs = os.path.abspath(app_dir)
     package_abs = os.path.abspath(package_root)
@@ -134,13 +157,16 @@ def replace_app(package_root: str, app_dir: str, state_path: str = "", state: di
                 shutil.move(dst, os.path.join(backup_dir, name))
             copy_entry(src, dst)
             replaced.append(name)
+        obsolete = move_obsolete_app_resources(package_root, app_dir, backup_dir)
+        replaced.extend([f"{name}.__obsolete__" for name in obsolete])
     except Exception:
         if state is not None:
             state["phase"] = "rollback"
             state["rollback"] = True
             write_state(state_path, state)
         for name in os.listdir(backup_dir):
-            dst = os.path.join(app_dir, name)
+            restore_name = name[:-len(".__obsolete__")] if name.endswith(".__obsolete__") else name
+            dst = os.path.join(app_dir, restore_name)
             if os.path.exists(dst):
                 remove_path(dst)
             shutil.move(os.path.join(backup_dir, name), dst)

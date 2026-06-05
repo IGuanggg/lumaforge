@@ -1,6 +1,6 @@
 ﻿param(
-    [string]$Version = "2.0.27",
-    [string]$BuildId = "20260605-v2027-resolution-cache-hotfix1"
+    [string]$Version = "2.0.28",
+    [string]$BuildId = "20260605-v2028-cache-nav-hotfix1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -62,7 +62,8 @@ $staleBuildIds = @(
     "20260529-v2017-smart-storyboard-workbench1",
     "20260604-v2022-smart-canvas-polish1",
     "20260604-v2026-canvas-gesture-link-hotfix1",
-    "20260604-v2026-wheel-link-hotfix1"
+    "20260604-v2026-wheel-link-hotfix1",
+    "20260605-v2027-resolution-cache-hotfix1"
 )
 $staticFiles = Get-ChildItem -LiteralPath "static" -Recurse -File | Where-Object { $_.Extension -in ".html", ".js", ".css" }
 foreach ($file in $staticFiles) {

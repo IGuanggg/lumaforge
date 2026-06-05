@@ -2,9 +2,9 @@
 
 LumaForge 是一个本地优先的 AI 创作工作台，核心是无限画布、素材库、Agent 创作、GPT 对话、图像增强、视频生成和云同步。
 
-当前版本：`2.0.27`
+当前版本：`2.0.28`
 
-v2.0.27 是自动更新紧急修复版：重点修复误发布 `v20.0.23` 导致后续 2.0.x 无法继续自动升级的问题，并加固桌面版更新后自动重启的应用路径识别。
+v2.0.28 是自动更新紧急修复版：重点修复误发布 `v20.0.23` 导致后续 2.0.x 无法继续自动升级的问题，并加固桌面版更新后自动重启的应用路径识别。
 
 ## 核心功能
 
@@ -90,16 +90,16 @@ macOS 不能在 Windows 上交叉构建，必须在 Mac 机器或 GitHub Actions
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-VERSION=2.0.27 bash scripts/build_macos_release.sh
+VERSION=2.0.28 bash scripts/build_macos_release.sh
 ```
 
-也可以在 GitHub Actions 里手动运行 `Build macOS Release` workflow，或推送 `v2.0.27` tag 后让 macOS runner 自动构建并上传 macOS 包。
+也可以在 GitHub Actions 里手动运行 `Build macOS Release` workflow，或推送 `v2.0.28` tag 后让 macOS runner 自动构建并上传 macOS 包。
 
 输出：
 
 ```text
-releases/LumaForge-2.0.27-macos.zip
-releases/LumaForge-2.0.27-macos.sha256.txt
+releases/LumaForge-2.0.28-macos.zip
+releases/LumaForge-2.0.28-macos.sha256.txt
 ```
 
 说明：
@@ -115,7 +115,7 @@ releases/LumaForge-2.0.27-macos.sha256.txt
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f Dockerfile.cloud \
-  -t iguang9881/lumaforge-cloud:2.0.27 \
+  -t iguang9881/lumaforge-cloud:2.0.28 \
   -t iguang9881/lumaforge-cloud:latest \
   --push .
 ```
@@ -126,7 +126,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
 
-docker pull iguang9881/lumaforge-cloud:2.0.27
+docker pull iguang9881/lumaforge-cloud:2.0.28
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 
@@ -134,10 +134,10 @@ docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.27 \
+  -e CLOUD_APP_VERSION=2.0.28 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.27
+  iguang9881/lumaforge-cloud:2.0.28
 ```
 
 不要删除 `/opt/lumaforge-cloud/cloud-data`，否则云端账户、SMTP、配置同步和备份记录会丢失。
@@ -147,14 +147,14 @@ docker run -d \
 发布前运行：
 
 ```powershell
-.\scripts\check_release.ps1 -Version 2.0.27
+.\scripts\check_release.ps1 -Version 2.0.28
 ```
 
 GitHub Release 建议同时上传：
 
-- `releases/LumaForge-Setup-2.0.27.exe` 安装器
-- `releases/LumaForge-2.0.27-desktop.zip` 桌面自动更新包
-- `releases/LumaForge-2.0.27-macos.zip` macOS 包（在 macOS 上构建）
+- `releases/LumaForge-Setup-2.0.28.exe` 安装器
+- `releases/LumaForge-2.0.28-desktop.zip` 桌面自动更新包
+- `releases/LumaForge-2.0.28-macos.zip` macOS 包（在 macOS 上构建）
 - 对应 SHA256 校验信息
 
 发布流程和人工回归项见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。

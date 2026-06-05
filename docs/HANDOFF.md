@@ -17,7 +17,7 @@ Last updated: 2026-05-28
 
 ## Current State
 
-- Current local app version in code: 2.0.27
+- Current local app version in code: 2.0.28
 - Current build id: 20260604-v2026-wheel-link-hotfix1
 - Main local URL: http://localhost:3010/
 - Main app file: main.py
@@ -114,11 +114,11 @@ The update process must replace program files only. It must not overwrite user d
 
 ## Current User Request / Next Target
 
-Current planned version: 2.0.27
+Current planned version: 2.0.28
 
 Goal:
 
-v2.0.27 emergency update hotfix: recover from the accidental `v20.0.23` release line by normalizing it to `2.0.23` for comparisons, switch default update checks to the GitHub Releases list, filter for valid `2.0.x` releases, and harden desktop restart path detection so automatic updates can relaunch `LumaForge.exe` reliably.
+v2.0.28 emergency update hotfix: recover from the accidental `v20.0.23` release line by normalizing it to `2.0.23` for comparisons, switch default update checks to the GitHub Releases list, filter for valid `2.0.x` releases, and harden desktop restart path detection so automatic updates can relaunch `LumaForge.exe` reliably.
 
 The user specifically asked for:
 

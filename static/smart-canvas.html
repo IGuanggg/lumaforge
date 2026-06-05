@@ -17,8 +17,8 @@
         })();
     </script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260605-v2027-resolution-cache-hotfix1"></script>
-    <script src="/static/i18n.js?v=20260605-v2027-resolution-cache-hotfix1"></script>
+    <script src="/static/theme.js?v=20260605-v2028-cache-nav-hotfix1"></script>
+    <script src="/static/i18n.js?v=20260605-v2028-cache-nav-hotfix1"></script>
     <style>
 :root {
             --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.9); --card:#fff;
@@ -818,7 +818,7 @@
                         <div id="dynamicParams" class="dynamic-params"></div>
                     </div>
                     <div class="composer-actions">
-                        <button id="cascadeRunBtn" class="run-btn cascade-run-btn" type="button" style="display:none" hidden><i data-lucide="workflow"></i><span>涓€閿繍琛?/span></button>
+                        <button id="cascadeRunBtn" class="run-btn cascade-run-btn" type="button" style="display:none" hidden><i data-lucide="workflow"></i><span>一键运行</span></button>
                         <button id="runBtn" class="run-btn" type="button"><i data-lucide="sparkles"></i><span data-i18n="smart.run">杩愯</span></button>
                     </div>
                 </div>
@@ -829,9 +829,9 @@
         <div id="smartTitle" class="smart-title" data-i18n="smart.title">鏅鸿兘鐢诲竷</div>
         <div id="smartImageToolbar" class="smart-image-toolbar" aria-hidden="true">
             <button id="smartEnhanceBtn" class="smart-tool-btn" type="button" data-smart-tool="enhance"><i data-lucide="scan-search"></i><span>楂樻竻</span></button>
-            <button class="smart-tool-btn" type="button" data-smart-tool="remove-bg"><i data-lucide="scan-face"></i><span>鍘昏儗鏅?/span></button>
+            <button class="smart-tool-btn" type="button" data-smart-tool="remove-bg"><i data-lucide="scan-face"></i><span>去背景</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="brush"><i data-lucide="paintbrush"></i><span>鐢荤瑪</span></button>
-            <button class="smart-tool-btn" type="button" data-smart-tool="same"><i data-lucide="sparkles"></i><span>鐢诲悓娆?/span></button>
+            <button class="smart-tool-btn" type="button" data-smart-tool="same"><i data-lucide="sparkles"></i><span>画同款</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="params"><i data-lucide="scroll-text"></i><span>鍙傛暟</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="download"><i data-lucide="download"></i><span>涓嬭浇</span></button>
         </div>
@@ -846,18 +846,18 @@
         <section id="smartTaskPanel" class="smart-task-panel" aria-hidden="true">
             <div class="smart-task-head">
                 <div>
-                    <div class="smart-task-title">鏅鸿兘鐢诲竷浠诲姟</div>
-                    <div class="smart-task-sub">鏌ョ湅杩愯涓€佸け璐ュ拰鏈€杩戝畬鎴愮殑鑺傜偣锛涙墜鍔ㄤ粠绱犳潗搴撳洖鎹炵粨鏋溿€?/div>
+                    <div class="smart-task-title">智能画布任务</div>
+                    <div class="smart-task-sub">查看运行中、失败和最近完成的节点；也可以手动从素材库回捞结果。</div>
                 </div>
-                <button id="smartTaskClose" class="smart-task-close" type="button" title="鍏抽棴浠诲姟"><i data-lucide="x"></i></button>
+                <button id="smartTaskClose" class="smart-task-close" type="button" title="关闭任务"><i data-lucide="x"></i></button>
             </div>
             <div class="smart-task-bulk">
-                <button class="smart-task-action" type="button" data-smart-task-batch="match-all"><i data-lucide="library"></i><span>鍖归厤鍏ㄩ儴</span></button>
-                <button class="smart-task-action" type="button" data-smart-task-batch="retry-failed"><i data-lucide="refresh-cw"></i><span>閲嶈瘯澶辫触</span></button>
-                <button class="smart-task-action" type="button" data-smart-task-batch="check-missing"><i data-lucide="scan-search"></i><span>妫€鏌ョ己澶?/span></button>
+                <button class="smart-task-action" type="button" data-smart-task-batch="match-all"><i data-lucide="library"></i><span>匹配全部</span></button>
+                <button class="smart-task-action" type="button" data-smart-task-batch="retry-failed"><i data-lucide="refresh-cw"></i><span>重试失败</span></button>
+                <button class="smart-task-action" type="button" data-smart-task-batch="check-missing"><i data-lucide="scan-search"></i><span>检查缺失</span></button>
             </div>
             <div id="smartTaskList" class="smart-task-list">
-                <div class="smart-task-empty">鏆傛棤浠诲姟</div>
+                <div class="smart-task-empty">暂无任务</div>
             </div>
         </section>
         <div id="smartEnhanceMenu" class="smart-enhance-menu" aria-hidden="true"></div>
@@ -866,58 +866,58 @@
             <div class="create-menu-head">
                 <span class="create-menu-mark"><i data-lucide="layout-template"></i></span>
                 <span>
-                    <div class="create-menu-title">閫夋嫨涓€涓敾甯冭捣鐐?/div>
-                    <div class="create-menu-sub">鍏堟斁鐪熷疄鍙敤鐨勫嚭鍥惧伐浣滄祦锛屽啀鎸夐渶琛ュ熀纭€鑺傜偣銆?/div>
+                    <div class="create-menu-title">选择一个画布起点</div>
+                    <div class="create-menu-sub">先放真实可用的出图工作流，再按需补基础节点。</div>
                 </span>
             </div>
             <div class="create-menu-section">
-                <div class="create-menu-section-title"><i data-lucide="sparkles"></i><span>宸ヤ綔娴佹ā鏉?/span></div>
+                <div class="create-menu-section-title"><i data-lucide="sparkles"></i><span>工作流模板</span></div>
                 <div class="create-menu-grid">
                     <button class="create-card feature-card" type="button" data-create-type="script">
                         <span class="create-card-icon"><i data-lucide="scroll-text"></i></span>
                         <span>
-                            <div class="create-card-title">鏁呬簨鑴氭湰鐢熸垚</div>
-                            <div class="create-card-sub">鏁呬簨鎯虫硶 -> 鑴氭湰瑙嗗浘锛岀敓鎴愬彲缁х画鎷嗗垎鐨勫垎闀滆〃銆?/div>
+                            <div class="create-card-title">故事脚本生成</div>
+                            <div class="create-card-sub">故事想法 -> 脚本视图，生成可继续拆分的镜头表。</div>
                         </span>
                     </button>
                     <button class="create-card feature-card" type="button" data-create-type="character">
                         <span class="create-card-icon"><i data-lucide="user-round"></i></span>
                         <span>
-                            <div class="create-card-title">瑙掕壊涓夎鍥?/div>
-                            <div class="create-card-sub">宸︿晶瑙掕壊鍥句綔涓哄弬鑰冿紝鍙充晶鐢熸垚涓€寮犺鑹茶瀹氭澘銆?/div>
+                            <div class="create-card-title">角色三视图</div>
+                            <div class="create-card-sub">左侧角色图作为参考，右侧生成一张角色设定板。</div>
                         </span>
                     </button>
                     <button class="create-card feature-card" type="button" data-create-type="product">
                         <span class="create-card-icon"><i data-lucide="package"></i></span>
                         <span>
-                            <div class="create-card-title">浜у搧涓夎鍥?/div>
-                            <div class="create-card-sub">閾哄紑涓诲浘銆佺粏鑺傘€佸満鏅浘锛岄€傚悎浜у搧瑙嗚鎺㈢储銆?/div>
+                            <div class="create-card-title">产品三视图</div>
+                            <div class="create-card-sub">铺开主图、细节、场景图，适合产品视觉探索。</div>
                         </span>
                     </button>
                 </div>
             </div>
             <div class="create-menu-section">
-                <div class="create-menu-section-title"><i data-lucide="plus"></i><span>鍩虹鑺傜偣</span></div>
+                <div class="create-menu-section-title"><i data-lucide="plus"></i><span>基础节点</span></div>
                 <div class="create-menu-grid create-basic-grid">
                 <button class="create-card" type="button" data-create-type="image">
                     <span class="create-card-icon"><i data-lucide="image-plus"></i></span>
                     <span>
-                        <div class="create-card-title">鍥剧墖</div>
-                        <div class="create-card-sub">涓婁紶銆佺紪杈戞垨鐢熸垚鍥剧墖</div>
+                        <div class="create-card-title">图片</div>
+                        <div class="create-card-sub">上传、编辑或生成图片</div>
                     </span>
                 </button>
                 <button class="create-card" type="button" data-create-type="prompt">
                     <span class="create-card-icon"><i data-lucide="text-cursor-input"></i></span>
                     <span>
-                        <div class="create-card-title">鎻愮ず璇?/div>
-                        <div class="create-card-sub">鎵嬪啓鎴栫敤 LLM 鐢熸垚鏂囨湰</div>
+                        <div class="create-card-title">提示词</div>
+                        <div class="create-card-sub">手写或用 LLM 生成文本</div>
                     </span>
                 </button>
                 <button class="create-card" type="button" data-create-type="loop">
                     <span class="create-card-icon"><i data-lucide="repeat-2"></i></span>
                     <span>
-                        <div class="create-card-title">寰幆鑺傜偣</div>
-                        <div class="create-card-sub">棰勭暀鎵归噺寰幆鍏ュ彛</div>
+                        <div class="create-card-title">循环节点</div>
+                        <div class="create-card-sub">预留批量循环入口</div>
                     </span>
                 </button>
                 </div>
@@ -930,15 +930,15 @@
                 <div id="minimapViewport" class="smart-minimap-viewport"></div>
             </div>
         </div>
-        <button id="assetToggle" class="asset-toggle" type="button"><i data-lucide="library"></i><span data-i18n="smart.assetLibrary">璧勪骇搴?/span></button>
+        <button id="assetToggle" class="asset-toggle" type="button"><i data-lucide="library"></i><span data-i18n="smart.assetLibrary">素材库</span></button>
         <aside id="assetPanel" class="asset-panel">
             <div class="asset-head">
-                <div class="asset-title"><i data-lucide="library"></i><span data-i18n="smart.assetLibrary">璧勪骇搴?/span></div>
+                <div class="asset-title"><i data-lucide="library"></i><span data-i18n="smart.assetLibrary">素材库</span></div>
                 <button id="assetCloseBtn" class="asset-mini-btn" type="button" title="鏀惰捣" data-i18n-title="common.close"><i data-lucide="chevron-right"></i></button>
             </div>
             <div class="asset-tabs">
                 <button class="asset-tab active" type="button" data-asset-tab="image" data-i18n="smart.assetImages">鍥剧墖璧勪骇</button>
-                <button class="asset-tab" type="button" data-asset-tab="workflow" data-i18n="smart.assetWorkflows">宸ヤ綔娴?/button>
+                <button class="asset-tab" type="button" data-asset-tab="workflow" data-i18n="smart.assetWorkflows">工作流</button>
             </div>
             <div id="assetImageControls">
                 <div class="asset-category-row">
@@ -947,9 +947,9 @@
                     <button id="assetRenameCategoryBtn" class="asset-mini-btn" type="button" title="閲嶅懡鍚嶆枃浠跺す" data-i18n-title="smart.assetRenameFolder"><i data-lucide="pencil"></i></button>
                 </div>
             </div>
-            <div id="assetDropZone" class="asset-drop-zone" data-i18n="smart.assetDropHint">鎶婄敾甯冨浘鐗囨嫋鍒拌繖閲屼繚瀛樺埌褰撳墠鏂囦欢澶?/div>
+            <div id="assetDropZone" class="asset-drop-zone" data-i18n="smart.assetDropHint">把画布图片拖到这里保存到当前文件夹</div>
             <div id="assetGrid" class="asset-grid"></div>
-            <div id="workflowEmpty" class="workflow-empty" style="display:none" data-i18n="smart.assetWorkflowEmpty">宸ヤ綔娴佽祫浜т細鏄剧ず鍦ㄨ繖閲?/div>
+            <div id="workflowEmpty" class="workflow-empty" style="display:none" data-i18n="smart.assetWorkflowEmpty">工作流资产会显示在这里</div>
         </aside>
         <div id="assetDialogBackdrop" class="asset-dialog-backdrop">
             <div class="asset-dialog">
@@ -977,7 +977,7 @@
                     </div>
                     <div id="smartParamContent"></div>
                     <div class="smart-param-actions">
-                        <button class="smart-param-action primary" type="button" onclick="copySmartParamPrompt()"><i data-lucide="copy"></i><span>澶嶅埗鎻愮ず璇?/span></button>
+                        <button class="smart-param-action primary" type="button" onclick="copySmartParamPrompt()"><i data-lucide="copy"></i><span>复制提示词</span></button>
                         <button class="smart-param-action" type="button" onclick="copySmartParamAll()"><i data-lucide="clipboard-copy"></i><span>澶嶅埗鍏ㄩ儴鍙傛暟</span></button>
                         <button class="smart-param-action" type="button" onclick="reuseSmartParam()"><i data-lucide="recycle"></i><span>澶嶇敤鍙傛暟</span></button>
                         <button class="smart-param-action" type="button" onclick="regenerateFromSmartParam()"><i data-lucide="sparkles"></i><span>閲嶆柊鐢熸垚</span></button>
@@ -992,7 +992,7 @@
                 <div class="smart-text-head">
                     <div>
                         <div id="smartTextTitle" class="smart-text-title">缂栬緫鏂囨湰</div>
-                        <div id="smartTextSub" class="smart-text-sub">鏀惧ぇ缂栬緫闀挎彁绀鸿瘝锛屼繚瀛樺悗浼氬啓鍥炲綋鍓嶈妭鐐?/div>
+                        <div id="smartTextSub" class="smart-text-sub">放大编辑长提示词，保存后会写回当前节点</div>
                     </div>
                     <button id="smartTextClose" class="smart-text-close" type="button" title="鍏抽棴"><i data-lucide="x"></i></button>
                 </div>
@@ -1041,7 +1041,7 @@
                     <button class="image-edit-btn secondary" type="button" onclick="clearEditDrawing()"><i data-lucide="eraser" class="w-4 h-4"></i><span data-i18n="canvas.clear">娓呯┖</span></button>
                 </div>
                 <div id="imageGridTools" class="image-edit-tools">
-                    <button id="gridCustomToggle" class="image-edit-btn secondary" type="button" onclick="toggleGridCustomMode()" data-i18n="canvas.gridCustom" data-i18n-title="canvas.gridCustomTitle" title="鑷敱璁剧疆鍒囧壊绾?>鑷畾涔?/button>
+                    <button id="gridCustomToggle" class="image-edit-btn secondary" type="button" onclick="toggleGridCustomMode()" data-i18n="canvas.gridCustom" data-i18n-title="canvas.gridCustomTitle" title="自由设置切割线">自定义</button>
                     <div class="grid-preset-row">
                         <span class="image-edit-sub" data-i18n="canvas.gridPresets">棰勮</span>
                         <button class="grid-preset-btn" type="button" onclick="applyGridPreset(1, 2)">1x2</button>
@@ -1052,8 +1052,8 @@
                         <button class="grid-preset-btn" type="button" onclick="applyGridPreset(3, 3)">3x3</button>
                     </div>
                     <span id="gridRegularControls" style="display:contents">
-                        <label><span data-i18n="canvas.gridHLines">妯悜绾?/span> <input id="gridHorizontalLines" type="number" min="0" max="20" value="2"></label>
-                        <label><span data-i18n="canvas.gridVLines">绾靛悜绾?/span> <input id="gridVerticalLines" type="number" min="0" max="20" value="2"></label>
+                        <label><span data-i18n="canvas.gridHLines">横向线</span> <input id="gridHorizontalLines" type="number" min="0" max="20" value="2"></label>
+                        <label><span data-i18n="canvas.gridVLines">纵向线</span> <input id="gridVerticalLines" type="number" min="0" max="20" value="2"></label>
                     </span>
                     <div id="gridCustomControls" style="display:none;align-items:center;gap:6px">
                         <button id="gridOrientH" class="image-edit-btn primary" type="button" onclick="setGridCustomOrientation('h')" data-i18n="canvas.gridOrientH" data-i18n-title="canvas.gridOrientHTitle" title="鐐瑰嚮鍥剧墖璁剧疆姘村钩绾?>姘村钩</button>
@@ -1154,6 +1154,26 @@
         const smartContextMenu = document.getElementById('smartContextMenu');
         const slashMenu = document.getElementById('slashMenu');
         let minimapViewport = document.getElementById('minimapViewport');
+        function ensureFloatingUiMounted(){
+            [
+                createMenu,
+                slashMenu,
+                smartEnhanceMenu,
+                smartContextMenu,
+                smartTaskToggle,
+                smartTaskPanel,
+                smartImageToolbar,
+                smartSelectionToolbar,
+                assetToggle,
+                assetPanel,
+                imageEditModal,
+                selectionBox,
+                fileInput,
+                minimap
+            ].forEach(el => {
+                if(el && !el.isConnected) shell.appendChild(el);
+            });
+        }
         let canvas = null;
         let nodes = [];
         let selectedId = '';
@@ -1416,7 +1436,7 @@
         }
         function backToCanvasList(){
             savePromptDraftForCurrent();
-            const target = `/static/canvas.html?list=smart&v=20260605-v2027-resolution-cache-hotfix1`;
+            const target = `/static/canvas.html?list=smart&v=20260605-v2028-cache-nav-hotfix1`;
             try {
                 if(window.parent && window.parent !== window){
                     window.parent.localStorage?.setItem('studio_active_page', 'smart-canvas');
@@ -3736,7 +3756,7 @@
             try { localStorage.setItem(SMART_CANVAS_ID_KEY, id); } catch(e) {}
             const url = new URL(window.location.href);
             url.searchParams.set('id', id);
-            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260605-v2027-resolution-cache-hotfix1');
+            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260605-v2028-cache-nav-hotfix1');
             history.replaceState(null, '', url.toString());
         }
         async function ensureSmartCanvasId(){
@@ -5095,6 +5115,7 @@
                 </div>`;
             }).join('');
             world.innerHTML = '';
+            ensureFloatingUiMounted();
             if(composerEl) world.appendChild(composerEl);
             world.insertAdjacentHTML('beforeend', nodesHtml);
             world.insertAdjacentHTML('beforeend', renderConnections());

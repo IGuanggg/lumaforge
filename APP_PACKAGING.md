@@ -1,6 +1,6 @@
 ﻿# LumaForge ����벿��
 
-Ŀ��汾��`2.0.27`
+Ŀ��汾��`2.0.28`
 
 ## ���洰�ڰ�
 
@@ -23,7 +23,7 @@ dist\LumaForge\LumaForge.exe
 �������Զ�����ʹ�õ� zip ������� `LumaForge/` ��Ŀ¼��
 
 ```text
-LumaForge-2.0.27-desktop.zip
+LumaForge-2.0.28-desktop.zip
   LumaForge\
     LumaForge.exe
     LumaForgeUpdater.exe
@@ -60,23 +60,23 @@ macOS ��������� macOS �Ϲ����������� W
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-VERSION=2.0.27 bash scripts/build_macos_release.sh
+VERSION=2.0.28 bash scripts/build_macos_release.sh
 ```
 
-Ҳ������ GitHub Actions �ֶ����� `Build macOS Release` workflow������ `v2.0.27` tag ʱ���� workflow ���� macOS runner �Ϲ������� macOS zip �ϴ��� GitHub Release��
+Ҳ������ GitHub Actions �ֶ����� `Build macOS Release` workflow������ `v2.0.28` tag ʱ���� workflow ���� macOS runner �Ϲ������� macOS zip �ϴ��� GitHub Release��
 
 ���
 
 ```text
-releases/LumaForge-2.0.27-macos.zip
-releases/LumaForge-2.0.27-macos.sha256.txt
+releases/LumaForge-2.0.28-macos.zip
+releases/LumaForge-2.0.28-macos.sha256.txt
 ```
 
 ��ʽ�ַ������� macOS ��׷�� Apple Developer ǩ���͹�֤��
 
 ```bash
 codesign --deep --force --options runtime --sign "Developer ID Application: YOUR NAME (TEAMID)" "dist/LumaForge.app"
-xcrun notarytool submit "releases/LumaForge-2.0.27-macos.zip" --keychain-profile "notarytool-profile" --wait
+xcrun notarytool submit "releases/LumaForge-2.0.28-macos.zip" --keychain-profile "notarytool-profile" --wait
 ```
 
 ## Դ������
@@ -97,17 +97,17 @@ python launcher.py
 ```bash
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
-docker pull iguang9881/lumaforge-cloud:2.0.27
+docker pull iguang9881/lumaforge-cloud:2.0.28
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.27 \
+  -e CLOUD_APP_VERSION=2.0.28 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.27
+  iguang9881/lumaforge-cloud:2.0.28
 ```
 
 ## ע������
