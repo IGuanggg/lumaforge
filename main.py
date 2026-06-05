@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.28")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260605-v2028-cache-nav-hotfix1")
+APP_VERSION = os.getenv("APP_VERSION", "2.0.29")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260605-v2029-remove-comfyui-content1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -2015,7 +2015,7 @@ async def download_comfy_output(comfy_address, item, prefix="studio_"):
                 await client.aclose()
         return output_url_for(filename, "output")
     except Exception as e:
-        logger.error("下载 ComfyUI 输出失败: %s", e)
+        logger.error("下载 本地工作流 输出失败: %s", e)
         if comfy_url_path.startswith("/view"):
             return comfy_url_path.replace("/view", "/api/view", 1)
         return full_url
@@ -4936,7 +4936,7 @@ async def view_image(filename: str, type: str = "input", subfolder: str = ""):
             await client.aclose()
     # 后端都拿不到时回退本地 assets/<input|output>/
     # 适用场景：画布通过 /api/ai/upload 把参考图直接落到本地 assets/input/，
-    # 但 ComfyUI 的 input 可能因为重启/清理而丢失，导致 enhance/klein 等页面预览对比图 404
+    # 但 本地工作流 的 input 可能因为重启/清理而丢失，导致 enhance/klein 等页面预览对比图 404
     if not subfolder and type in ("input", "output"):
         safe_name = os.path.basename(filename or "")
         if safe_name:
@@ -8049,7 +8049,7 @@ async def ms_generate(req: MsGenerateRequest):
         logger.error("MS generate error: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- 本地 ComfyUI 生图 ---
+# --- 本地 本地工作流 生图 ---
 
 @app.post("/api/generate")
 async def generate(req: GenerateRequest):
@@ -8158,7 +8158,7 @@ async def generate(req: GenerateRequest):
             resp.raise_for_status()
             prompt_id = resp.json()['prompt_id']
         except httpx.HTTPStatusError as e:
-            raise HTTPException(status_code=502, detail=f"ComfyUI /prompt error {e.response.status_code}: {e.response.text[:300]}")
+            raise HTTPException(status_code=502, detail=f"本地工作流 /prompt error {e.response.status_code}: {e.response.text[:300]}")
 
         history_data = None
         for i in range(COMFYUI_HISTORY_TIMEOUT):
@@ -8172,7 +8172,7 @@ async def generate(req: GenerateRequest):
             await asyncio.sleep(1)
 
         if not history_data:
-            raise HTTPException(status_code=504, detail="ComfyUI 渲染超时")
+            raise HTTPException(status_code=504, detail="本地工作流 渲染超时")
 
         local_images = []
         local_videos = []
@@ -8233,7 +8233,7 @@ async def generate(req: GenerateRequest):
                 if current_task in QUEUE:
                     QUEUE.remove(current_task)
 
-# --- ComfyUI 工作流管理 ---
+# --- 本地工作流 工作流管理 ---
 
 BUILTIN_WORKFLOWS = {"Z-Image.json", "Z-Image-Enhance.json", "2511.json", "klein-enhance.json", "Flux2-Klein.json", "upscale.json"}
 CUSTOM_WORKFLOW_FOLDER = "custom"
@@ -8307,7 +8307,7 @@ def save_comfyui_instances(payload: ComfyInstancesPayload):
             continue
         cleaned.append(s)
     if not cleaned:
-        raise HTTPException(status_code=400, detail="至少保留一个 ComfyUI 后端地址")
+        raise HTTPException(status_code=400, detail="至少保留一个 本地工作流 后端地址")
     # 写入 env 文件
     try:
         update_env_values({"COMFYUI_INSTANCES": ",".join(cleaned)})
@@ -8388,7 +8388,7 @@ def upload_workflow(payload: WorkflowUploadRequest):
     # 简单校验：是 API 格式（节点 id 为 key，含 class_type）
     sample = next(iter(payload.workflow.values()), None)
     if not isinstance(sample, dict) or "class_type" not in sample:
-        raise HTTPException(status_code=400, detail="不是有效的 ComfyUI API 工作流 JSON（需包含 class_type）")
+        raise HTTPException(status_code=400, detail="不是有效的 本地工作流 API 工作流 JSON（需包含 class_type）")
     custom_dir = os.path.join(WORKFLOW_DIR, CUSTOM_WORKFLOW_FOLDER)
     os.makedirs(custom_dir, exist_ok=True)
     stored_name = f"{CUSTOM_WORKFLOW_FOLDER}/{name}"

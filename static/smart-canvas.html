@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="/static/logo.png" type="image/png">
-    <title data-i18n="smart.title">鏅鸿兘鐢诲竷</title>
+    <title data-i18n="smart.title">智能画布</title>
     <script>
         (function(){
             try {
@@ -17,8 +17,8 @@
         })();
     </script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260605-v2028-cache-nav-hotfix1"></script>
-    <script src="/static/i18n.js?v=20260605-v2028-cache-nav-hotfix1"></script>
+    <script src="/static/theme.js?v=20260605-v2029-remove-comfyui-content1"></script>
+    <script src="/static/i18n.js?v=20260605-v2029-remove-comfyui-content1"></script>
     <style>
 :root {
             --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.9); --card:#fff;
@@ -83,7 +83,7 @@
         .image-node.template-character-ref.empty-node .node-body, .image-node.template-character-output.empty-node .node-body, .image-node.template-script-shot-output.empty-node .node-body { height:calc(100% - 74px); min-height:0; align-items:stretch; justify-content:stretch; padding:10px 12px 0; }
         .image-node.template-character-ref.empty-node .node-drop, .image-node.template-character-output.empty-node .node-drop, .image-node.template-script-shot-output.empty-node .node-drop { height:100%; min-height:0; }
         .image-node.template-character-ref.empty-node .node-hint, .image-node.template-character-output.empty-node .node-hint, .image-node.template-script-shot-output.empty-node .node-hint { height:26px; padding:6px 12px 0; }
-        .image-node.template-character-output .node-drop::after { content:"鍗婅韩 / 鍏ㄨ韩 / 渚ц儗 / 琛ㄦ儏"; display:block; margin-top:2px; color:var(--faint); font-size:10px; font-weight:850; }
+        .image-node.template-character-output .node-drop::after { content:"半身 / 全身 / 侧背 / 表情"; display:block; margin-top:2px; color:var(--faint); font-size:10px; font-weight:850; }
         .image-node.smart-frame-group { z-index:1; min-height:0; border:1.5px dashed rgba(15,23,42,.58); border-radius:18px; background:rgba(255,255,255,.08); box-shadow:none; cursor:move; }
         .theme-dark .image-node.smart-frame-group { border-color:rgba(248,250,252,.62); background:rgba(15,23,42,.1); }
         .image-node.smart-frame-group:hover, .image-node.smart-frame-group.selected { border-color:var(--strong); background:rgba(255,255,255,.14); box-shadow:0 0 0 3px rgba(15,23,42,.045); }
@@ -799,49 +799,48 @@
                 <div class="composer-card">
                     <div class="composer-head">
                         <select id="engineSelect" class="engine-select">
-                            <option value="api" data-i18n="smart.engineApi">API鐢熸垚</option>
-                            <option value="modelscope" data-i18n="smart.engineMs">MS鐢熸垚</option>
-                            <option value="comfy" data-i18n="smart.engineComfy">ComfyUI鐢熸垚</option>
+                            <option value="api" data-i18n="smart.engineApi">API生成</option>
+                            <option value="modelscope" data-i18n="smart.engineMs">MS生成</option>
                         </select>
                         <div id="apiKindToggle" class="kind-toggle" style="display:none">
-                            <button type="button" data-kind="image" class="active"><i data-lucide="image"></i><span data-i18n="smart.kindImage">鍥剧墖</span></button>
-                            <button type="button" data-kind="video"><i data-lucide="film"></i><span data-i18n="smart.kindVideo">瑙嗛</span></button>
+                            <button type="button" data-kind="image" class="active"><i data-lucide="image"></i><span data-i18n="smart.kindImage">图片</span></button>
+                            <button type="button" data-kind="video"><i data-lucide="film"></i><span data-i18n="smart.kindVideo">视频</span></button>
                         </div>
                     </div>
                     <div id="inputThumbsRow" class="input-thumbs-row"></div>
                     <div class="prompt-row">
-                        <div id="promptInput" class="prompt-input" contenteditable="true" data-i18n-placeholder="smart.promptPlaceholder" data-placeholder="鎻忚堪浣犳兂鐢熸垚鎴栫紪杈戠殑鍥剧墖..."></div>
+                        <div id="promptInput" class="prompt-input" contenteditable="true" data-i18n-placeholder="smart.promptPlaceholder" data-placeholder="描述你想生成或编辑的图片..."></div>
                         <div id="mentionPicker" class="mention-picker"></div>
-                        <div id="promptResize" class="prompt-resize" data-i18n-title="smart.promptResize" title="鎷栨嫿璋冩暣鏂囨湰妗嗛珮搴?></div>
+                        <div id="promptResize" class="prompt-resize" data-i18n-title="smart.promptResize" title="拖拽调整文本框高度"></div>
                     </div>
                     <div class="param-row">
                         <div id="dynamicParams" class="dynamic-params"></div>
                     </div>
                     <div class="composer-actions">
                         <button id="cascadeRunBtn" class="run-btn cascade-run-btn" type="button" style="display:none" hidden><i data-lucide="workflow"></i><span>一键运行</span></button>
-                        <button id="runBtn" class="run-btn" type="button"><i data-lucide="sparkles"></i><span data-i18n="smart.run">杩愯</span></button>
+                        <button id="runBtn" class="run-btn" type="button"><i data-lucide="sparkles"></i><span data-i18n="smart.run">运行</span></button>
                     </div>
                 </div>
-                <button id="composerExpandBtn" class="composer-expand-btn" type="button" title="鏀惧ぇ鎻愮ず璇嶆" aria-label="鏀惧ぇ鎻愮ず璇嶆"><i data-lucide="expand"></i></button>
+                <button id="composerExpandBtn" class="composer-expand-btn" type="button" title="放大提示词框" aria-label="放大提示词框"><i data-lucide="expand"></i></button>
             </div>
         </div>
-        <button class="smart-back" type="button" onclick="backToCanvasList()" title="杩斿洖鐢诲竷鍒楄〃"><i data-lucide="arrow-left"></i><span>鐢诲竷鍒楄〃</span></button>
-        <div id="smartTitle" class="smart-title" data-i18n="smart.title">鏅鸿兘鐢诲竷</div>
+        <button class="smart-back" type="button" onclick="backToCanvasList()" title="返回画布列表"><i data-lucide="arrow-left"></i><span>画布列表</span></button>
+        <div id="smartTitle" class="smart-title" data-i18n="smart.title">智能画布</div>
         <div id="smartImageToolbar" class="smart-image-toolbar" aria-hidden="true">
-            <button id="smartEnhanceBtn" class="smart-tool-btn" type="button" data-smart-tool="enhance"><i data-lucide="scan-search"></i><span>楂樻竻</span></button>
+            <button id="smartEnhanceBtn" class="smart-tool-btn" type="button" data-smart-tool="enhance"><i data-lucide="scan-search"></i><span>高清</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="remove-bg"><i data-lucide="scan-face"></i><span>去背景</span></button>
-            <button class="smart-tool-btn" type="button" data-smart-tool="brush"><i data-lucide="paintbrush"></i><span>鐢荤瑪</span></button>
+            <button class="smart-tool-btn" type="button" data-smart-tool="brush"><i data-lucide="paintbrush"></i><span>画笔</span></button>
             <button class="smart-tool-btn" type="button" data-smart-tool="same"><i data-lucide="sparkles"></i><span>画同款</span></button>
-            <button class="smart-tool-btn" type="button" data-smart-tool="params"><i data-lucide="scroll-text"></i><span>鍙傛暟</span></button>
-            <button class="smart-tool-btn" type="button" data-smart-tool="download"><i data-lucide="download"></i><span>涓嬭浇</span></button>
+            <button class="smart-tool-btn" type="button" data-smart-tool="params"><i data-lucide="scroll-text"></i><span>参数</span></button>
+            <button class="smart-tool-btn" type="button" data-smart-tool="download"><i data-lucide="download"></i><span>下载</span></button>
         </div>
         <div id="smartSelectionToolbar" class="smart-selection-toolbar" aria-hidden="true">
-            <button class="smart-tool-btn" type="button" data-smart-selection-tool="duplicate"><i data-lucide="copy-plus"></i><span>鍒涘缓鍓湰</span></button>
-            <button class="smart-tool-btn" type="button" data-smart-selection-tool="group"><i data-lucide="group"></i><span>鎵撶粍</span></button>
-            <button class="smart-tool-btn" type="button" data-smart-selection-tool="ungroup"><i data-lucide="ungroup"></i><span>瑙ｇ粍</span></button>
+            <button class="smart-tool-btn" type="button" data-smart-selection-tool="duplicate"><i data-lucide="copy-plus"></i><span>创建副本</span></button>
+            <button class="smart-tool-btn" type="button" data-smart-selection-tool="group"><i data-lucide="group"></i><span>打组</span></button>
+            <button class="smart-tool-btn" type="button" data-smart-selection-tool="ungroup"><i data-lucide="ungroup"></i><span>解组</span></button>
         </div>
         <button id="smartTaskToggle" class="smart-task-toggle" type="button" aria-expanded="false">
-            <i data-lucide="activity"></i><span>浠诲姟</span><span id="smartTaskBadge" class="smart-task-badge">0</span>
+            <i data-lucide="activity"></i><span>任务</span><span id="smartTaskBadge" class="smart-task-badge">0</span>
         </button>
         <section id="smartTaskPanel" class="smart-task-panel" aria-hidden="true">
             <div class="smart-task-head">
@@ -934,17 +933,17 @@
         <aside id="assetPanel" class="asset-panel">
             <div class="asset-head">
                 <div class="asset-title"><i data-lucide="library"></i><span data-i18n="smart.assetLibrary">素材库</span></div>
-                <button id="assetCloseBtn" class="asset-mini-btn" type="button" title="鏀惰捣" data-i18n-title="common.close"><i data-lucide="chevron-right"></i></button>
+                <button id="assetCloseBtn" class="asset-mini-btn" type="button" title="收起" data-i18n-title="common.close"><i data-lucide="chevron-right"></i></button>
             </div>
             <div class="asset-tabs">
-                <button class="asset-tab active" type="button" data-asset-tab="image" data-i18n="smart.assetImages">鍥剧墖璧勪骇</button>
+                <button class="asset-tab active" type="button" data-asset-tab="image" data-i18n="smart.assetImages">图片资产</button>
                 <button class="asset-tab" type="button" data-asset-tab="workflow" data-i18n="smart.assetWorkflows">工作流</button>
             </div>
             <div id="assetImageControls">
                 <div class="asset-category-row">
                     <select id="assetCategorySelect" class="asset-category-select"></select>
-                    <button id="assetAddCategoryBtn" class="asset-mini-btn" type="button" title="鏂板缓鏂囦欢澶? data-i18n-title="smart.assetNewFolder"><i data-lucide="folder-plus"></i></button>
-                    <button id="assetRenameCategoryBtn" class="asset-mini-btn" type="button" title="閲嶅懡鍚嶆枃浠跺す" data-i18n-title="smart.assetRenameFolder"><i data-lucide="pencil"></i></button>
+                    <button id="assetAddCategoryBtn" class="asset-mini-btn" type="button" title="新建文件夹" data-i18n-title="smart.assetNewFolder"><i data-lucide="folder-plus"></i></button>
+                    <button id="assetRenameCategoryBtn" class="asset-mini-btn" type="button" title="重命名文件夹" data-i18n-title="smart.assetRenameFolder"><i data-lucide="pencil"></i></button>
                 </div>
             </div>
             <div id="assetDropZone" class="asset-drop-zone" data-i18n="smart.assetDropHint">把画布图片拖到这里保存到当前文件夹</div>
@@ -953,11 +952,11 @@
         </aside>
         <div id="assetDialogBackdrop" class="asset-dialog-backdrop">
             <div class="asset-dialog">
-                <div class="asset-dialog-title"><i data-lucide="folder-pen"></i><span id="assetDialogTitle">鍛藉悕</span></div>
+                <div class="asset-dialog-title"><i data-lucide="folder-pen"></i><span id="assetDialogTitle">命名</span></div>
                 <input id="assetDialogInput" class="asset-dialog-input" type="text" autocomplete="off">
                 <div class="asset-dialog-actions">
-                    <button id="assetDialogCancel" class="asset-dialog-btn secondary" type="button" data-i18n="common.cancel">鍙栨秷</button>
-                    <button id="assetDialogOk" class="asset-dialog-btn primary" type="button" data-i18n="common.confirm">纭畾</button>
+                    <button id="assetDialogCancel" class="asset-dialog-btn secondary" type="button" data-i18n="common.cancel">取消</button>
+                    <button id="assetDialogOk" class="asset-dialog-btn primary" type="button" data-i18n="common.confirm">确定</button>
                 </div>
             </div>
         </div>
@@ -972,17 +971,17 @@
                 <div id="smartParamMedia" class="smart-param-media"></div>
                 <div class="smart-param-detail">
                     <div class="smart-param-head">
-                        <div class="smart-param-title">鐢熸垚鍙傛暟</div>
-                        <button class="smart-param-close" type="button" onclick="closeSmartParamModal()" title="鍏抽棴"><i data-lucide="x"></i></button>
+                        <div class="smart-param-title">生成参数</div>
+                        <button class="smart-param-close" type="button" onclick="closeSmartParamModal()" title="关闭"><i data-lucide="x"></i></button>
                     </div>
                     <div id="smartParamContent"></div>
                     <div class="smart-param-actions">
                         <button class="smart-param-action primary" type="button" onclick="copySmartParamPrompt()"><i data-lucide="copy"></i><span>复制提示词</span></button>
-                        <button class="smart-param-action" type="button" onclick="copySmartParamAll()"><i data-lucide="clipboard-copy"></i><span>澶嶅埗鍏ㄩ儴鍙傛暟</span></button>
-                        <button class="smart-param-action" type="button" onclick="reuseSmartParam()"><i data-lucide="recycle"></i><span>澶嶇敤鍙傛暟</span></button>
-                        <button class="smart-param-action" type="button" onclick="regenerateFromSmartParam()"><i data-lucide="sparkles"></i><span>閲嶆柊鐢熸垚</span></button>
-                        <button class="smart-param-action" type="button" onclick="downloadSmartParamImage()"><i data-lucide="download"></i><span>涓嬭浇鍥剧墖</span></button>
-                        <button class="smart-param-action" type="button" onclick="closeSmartParamModal()"><span>鍏抽棴</span></button>
+                        <button class="smart-param-action" type="button" onclick="copySmartParamAll()"><i data-lucide="clipboard-copy"></i><span>复制全部参数</span></button>
+                        <button class="smart-param-action" type="button" onclick="reuseSmartParam()"><i data-lucide="recycle"></i><span>复用参数</span></button>
+                        <button class="smart-param-action" type="button" onclick="regenerateFromSmartParam()"><i data-lucide="sparkles"></i><span>重新生成</span></button>
+                        <button class="smart-param-action" type="button" onclick="downloadSmartParamImage()"><i data-lucide="download"></i><span>下载图片</span></button>
+                        <button class="smart-param-action" type="button" onclick="closeSmartParamModal()"><span>关闭</span></button>
                     </div>
                 </div>
             </div>
@@ -991,15 +990,15 @@
             <div class="smart-text-panel" onclick="event.stopPropagation()">
                 <div class="smart-text-head">
                     <div>
-                        <div id="smartTextTitle" class="smart-text-title">缂栬緫鏂囨湰</div>
+                        <div id="smartTextTitle" class="smart-text-title">编辑文本</div>
                         <div id="smartTextSub" class="smart-text-sub">放大编辑长提示词，保存后会写回当前节点</div>
                     </div>
-                    <button id="smartTextClose" class="smart-text-close" type="button" title="鍏抽棴"><i data-lucide="x"></i></button>
+                    <button id="smartTextClose" class="smart-text-close" type="button" title="关闭"><i data-lucide="x"></i></button>
                 </div>
                 <textarea id="smartTextInput" class="smart-text-input" spellcheck="false"></textarea>
                 <div class="smart-text-actions">
-                    <button id="smartTextCancel" class="smart-text-action" type="button">鍙栨秷</button>
-                    <button id="smartTextSave" class="smart-text-action primary" type="button"><i data-lucide="check"></i><span>淇濆瓨</span></button>
+                    <button id="smartTextCancel" class="smart-text-action" type="button">取消</button>
+                    <button id="smartTextSave" class="smart-text-action primary" type="button"><i data-lucide="check"></i><span>保存</span></button>
                 </div>
             </div>
         </div>
@@ -1007,43 +1006,43 @@
             <div class="image-edit-panel">
                 <div class="image-edit-head">
                     <div>
-                        <div id="imageEditTitle" class="image-edit-title" data-i18n="canvas.editImage">缂栬緫鍥剧墖</div>
-                        <div id="imageEditSub" class="image-edit-sub" data-i18n="canvas.editImageSub">閫夋嫨瑁佸壀銆侀伄缃╂垨鐢荤瑪妯″紡</div>
+                        <div id="imageEditTitle" class="image-edit-title" data-i18n="canvas.editImage">编辑图片</div>
+                        <div id="imageEditSub" class="image-edit-sub" data-i18n="canvas.editImageSub">选择裁剪、遮罩或画笔模式</div>
                     </div>
                     <div class="image-edit-mode">
-                        <button type="button" data-image-edit-mode="preview" class="active"><i data-lucide="eye" class="w-3.5 h-3.5"></i><span data-i18n="smart.modePreview">棰勮</span></button>
-                        <button type="button" data-image-edit-mode="crop"><i data-lucide="crop" class="w-3.5 h-3.5"></i><span data-i18n="canvas.modeCrop">瑁佸壀</span></button>
-                        <button type="button" data-image-edit-mode="mask"><i data-lucide="brush" class="w-3.5 h-3.5"></i><span data-i18n="canvas.modeMask">閬僵</span></button>
-                        <button type="button" data-image-edit-mode="brush"><i data-lucide="paintbrush" class="w-3.5 h-3.5"></i><span data-i18n="canvas.modeBrush">鐢荤瑪</span></button>
-                        <button type="button" data-image-edit-mode="grid"><i data-lucide="grid-3x3" class="w-3.5 h-3.5"></i><span data-i18n="canvas.modeGrid">瀹牸鍒囧垎</span></button>
+                        <button type="button" data-image-edit-mode="preview" class="active"><i data-lucide="eye" class="w-3.5 h-3.5"></i><span data-i18n="smart.modePreview">预览</span></button>
+                        <button type="button" data-image-edit-mode="crop"><i data-lucide="crop" class="w-3.5 h-3.5"></i><span data-i18n="canvas.modeCrop">裁剪</span></button>
+                        <button type="button" data-image-edit-mode="mask"><i data-lucide="brush" class="w-3.5 h-3.5"></i><span data-i18n="canvas.modeMask">遮罩</span></button>
+                        <button type="button" data-image-edit-mode="brush"><i data-lucide="paintbrush" class="w-3.5 h-3.5"></i><span data-i18n="canvas.modeBrush">画笔</span></button>
+                        <button type="button" data-image-edit-mode="grid"><i data-lucide="grid-3x3" class="w-3.5 h-3.5"></i><span data-i18n="canvas.modeGrid">宫格切分</span></button>
                     </div>
-                    <button class="preview-icon-btn" type="button" onclick="closeImageEditor()" title="鍏抽棴" data-i18n-title="common.close"><i data-lucide="x" class="w-4 h-4"></i></button>
+                    <button class="preview-icon-btn" type="button" onclick="closeImageEditor()" title="关闭" data-i18n-title="common.close"><i data-lucide="x" class="w-4 h-4"></i></button>
                 </div>
                 <div id="imagePreviewTools" class="image-edit-tools">
                     <span id="previewMetaHint" class="image-edit-sub" style="margin-left:auto"></span>
                 </div>
                 <div id="imageMaskTools" class="image-edit-tools">
-                    <label><span data-i18n="canvas.brushSize">绗斿埛</span> <input id="maskBrushSize" type="range" min="4" max="160" value="42"></label>
-                    <button id="maskUndoBtn" class="image-edit-btn secondary" type="button" onclick="undoEditDrawing()" title="鎾ら攢"><i data-lucide="undo-2" class="w-4 h-4"></i></button>
-                    <button id="maskRedoBtn" class="image-edit-btn secondary" type="button" onclick="redoEditDrawing()" title="鎭㈠"><i data-lucide="redo-2" class="w-4 h-4"></i></button>
-                    <button class="image-edit-btn secondary" type="button" onclick="clearEditDrawing()"><i data-lucide="eraser" class="w-4 h-4"></i><span data-i18n="canvas.clear">娓呯┖</span></button>
-                    <span class="image-edit-sub" data-i18n="canvas.maskHint">鐧借壊鍖哄煙涓洪渶瑕佺紪杈戠殑閬僵</span>
+                    <label><span data-i18n="canvas.brushSize">笔刷</span> <input id="maskBrushSize" type="range" min="4" max="160" value="42"></label>
+                    <button id="maskUndoBtn" class="image-edit-btn secondary" type="button" onclick="undoEditDrawing()" title="撤销"><i data-lucide="undo-2" class="w-4 h-4"></i></button>
+                    <button id="maskRedoBtn" class="image-edit-btn secondary" type="button" onclick="redoEditDrawing()" title="恢复"><i data-lucide="redo-2" class="w-4 h-4"></i></button>
+                    <button class="image-edit-btn secondary" type="button" onclick="clearEditDrawing()"><i data-lucide="eraser" class="w-4 h-4"></i><span data-i18n="canvas.clear">清空</span></button>
+                    <span class="image-edit-sub" data-i18n="canvas.maskHint">白色区域为需要编辑的遮罩</span>
                 </div>
                 <div id="imageBrushTools" class="image-edit-tools">
-                    <button class="image-edit-btn primary" type="button" data-brush-tool="free" onclick="setBrushTool('free')" title="鑷敱鐢荤瑪"><i data-lucide="paintbrush" class="w-4 h-4"></i></button>
-                    <button class="image-edit-btn secondary" type="button" data-brush-tool="rect" onclick="setBrushTool('rect')" title="鐭╁舰"><i data-lucide="square" class="w-4 h-4"></i></button>
-                    <button class="image-edit-btn secondary" type="button" data-brush-tool="ellipse" onclick="setBrushTool('ellipse')" title="妞渾"><i data-lucide="circle" class="w-4 h-4"></i></button>
-                    <button class="image-edit-btn secondary" type="button" data-brush-tool="label" onclick="setBrushTool('label')" title="鏁板瓧鏍囩"><i data-lucide="list-ordered" class="w-4 h-4"></i></button>
-                    <label><span data-i18n="canvas.color">棰滆壊</span> <input id="paintBrushColor" type="color" value="#ff2d55"></label>
-                    <label><span data-i18n="canvas.brushSize">绗斿埛</span> <input id="paintBrushSize" type="range" min="2" max="80" value="14"></label>
-                    <button id="brushUndoBtn" class="image-edit-btn secondary" type="button" onclick="undoEditDrawing()" title="鎾ら攢"><i data-lucide="undo-2" class="w-4 h-4"></i></button>
-                    <button id="brushRedoBtn" class="image-edit-btn secondary" type="button" onclick="redoEditDrawing()" title="鎭㈠"><i data-lucide="redo-2" class="w-4 h-4"></i></button>
-                    <button class="image-edit-btn secondary" type="button" onclick="clearEditDrawing()"><i data-lucide="eraser" class="w-4 h-4"></i><span data-i18n="canvas.clear">娓呯┖</span></button>
+                    <button class="image-edit-btn primary" type="button" data-brush-tool="free" onclick="setBrushTool('free')" title="自由画笔"><i data-lucide="paintbrush" class="w-4 h-4"></i></button>
+                    <button class="image-edit-btn secondary" type="button" data-brush-tool="rect" onclick="setBrushTool('rect')" title="矩形"><i data-lucide="square" class="w-4 h-4"></i></button>
+                    <button class="image-edit-btn secondary" type="button" data-brush-tool="ellipse" onclick="setBrushTool('ellipse')" title="椭圆"><i data-lucide="circle" class="w-4 h-4"></i></button>
+                    <button class="image-edit-btn secondary" type="button" data-brush-tool="label" onclick="setBrushTool('label')" title="数字标签"><i data-lucide="list-ordered" class="w-4 h-4"></i></button>
+                    <label><span data-i18n="canvas.color">颜色</span> <input id="paintBrushColor" type="color" value="#ff2d55"></label>
+                    <label><span data-i18n="canvas.brushSize">笔刷</span> <input id="paintBrushSize" type="range" min="2" max="80" value="14"></label>
+                    <button id="brushUndoBtn" class="image-edit-btn secondary" type="button" onclick="undoEditDrawing()" title="撤销"><i data-lucide="undo-2" class="w-4 h-4"></i></button>
+                    <button id="brushRedoBtn" class="image-edit-btn secondary" type="button" onclick="redoEditDrawing()" title="恢复"><i data-lucide="redo-2" class="w-4 h-4"></i></button>
+                    <button class="image-edit-btn secondary" type="button" onclick="clearEditDrawing()"><i data-lucide="eraser" class="w-4 h-4"></i><span data-i18n="canvas.clear">清空</span></button>
                 </div>
                 <div id="imageGridTools" class="image-edit-tools">
                     <button id="gridCustomToggle" class="image-edit-btn secondary" type="button" onclick="toggleGridCustomMode()" data-i18n="canvas.gridCustom" data-i18n-title="canvas.gridCustomTitle" title="自由设置切割线">自定义</button>
                     <div class="grid-preset-row">
-                        <span class="image-edit-sub" data-i18n="canvas.gridPresets">棰勮</span>
+                        <span class="image-edit-sub" data-i18n="canvas.gridPresets">预设</span>
                         <button class="grid-preset-btn" type="button" onclick="applyGridPreset(1, 2)">1x2</button>
                         <button class="grid-preset-btn" type="button" onclick="applyGridPreset(2, 1)">2x1</button>
                         <button class="grid-preset-btn" type="button" onclick="applyGridPreset(2, 2)">2x2</button>
@@ -1056,12 +1055,12 @@
                         <label><span data-i18n="canvas.gridVLines">纵向线</span> <input id="gridVerticalLines" type="number" min="0" max="20" value="2"></label>
                     </span>
                     <div id="gridCustomControls" style="display:none;align-items:center;gap:6px">
-                        <button id="gridOrientH" class="image-edit-btn primary" type="button" onclick="setGridCustomOrientation('h')" data-i18n="canvas.gridOrientH" data-i18n-title="canvas.gridOrientHTitle" title="鐐瑰嚮鍥剧墖璁剧疆姘村钩绾?>姘村钩</button>
-                        <button id="gridOrientV" class="image-edit-btn secondary" type="button" onclick="setGridCustomOrientation('v')" data-i18n="canvas.gridOrientV" data-i18n-title="canvas.gridOrientVTitle" title="鐐瑰嚮鍥剧墖璁剧疆鍨傜洿绾?>鍨傜洿</button>
-                        <button id="gridUndoBtn" class="image-edit-btn secondary" type="button" onclick="undoGridCustomLine()" data-i18n-title="canvas.gridUndo" title="鎾ら攢涓婁竴鏉＄嚎" disabled style="opacity:.4"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i></button>
-                        <button class="image-edit-btn secondary" type="button" onclick="clearGridCustomLines()" data-i18n-title="canvas.gridClearLines" title="娓呴櫎鎵€鏈夎嚜瀹氫箟绾?><i data-lucide="eraser" class="w-3.5 h-3.5"></i></button>
+                        <button id="gridOrientH" class="image-edit-btn primary" type="button" onclick="setGridCustomOrientation('h')" data-i18n="canvas.gridOrientH" data-i18n-title="canvas.gridOrientHTitle" title="点击图片设置水平线">水平</button>
+                        <button id="gridOrientV" class="image-edit-btn secondary" type="button" onclick="setGridCustomOrientation('v')" data-i18n="canvas.gridOrientV" data-i18n-title="canvas.gridOrientVTitle" title="点击图片设置垂直线">垂直</button>
+                        <button id="gridUndoBtn" class="image-edit-btn secondary" type="button" onclick="undoGridCustomLine()" data-i18n-title="canvas.gridUndo" title="撤销上一条线" disabled style="opacity:.4"><i data-lucide="undo-2" class="w-3.5 h-3.5"></i></button>
+                        <button class="image-edit-btn secondary" type="button" onclick="clearGridCustomLines()" data-i18n-title="canvas.gridClearLines" title="清除所有自定义线"><i data-lucide="eraser" class="w-3.5 h-3.5"></i></button>
                     </div>
-                    <label class="grid-gap-control"><span data-i18n="canvas.gridGap">闂撮殧(px)</span> <input id="gridGapSize" type="range" min="0" max="240" step="1" value="0"><span id="gridGapValue" class="grid-gap-value">0</span></label>
+                    <label class="grid-gap-control"><span data-i18n="canvas.gridGap">间隔(px)</span> <input id="gridGapSize" type="range" min="0" max="240" step="1" value="0"><span id="gridGapValue" class="grid-gap-value">0</span></label>
                     <span id="gridSplitCount" class="image-edit-sub"></span>
                 </div>
                 <div id="imageEditStage" class="image-edit-stage">
@@ -1072,7 +1071,7 @@
                                 <div id="previewCompareLayer" class="preview-compare-layer">
                                     <img id="previewCompareImage" alt="original">
                                 </div>
-                                <div id="previewCompareHandle" class="preview-compare-handle" data-i18n-title="smart.compareDrag" title="鎷栧姩瀵规瘮"></div>
+                                <div id="previewCompareHandle" class="preview-compare-handle" data-i18n-title="smart.compareDrag" title="拖动对比"></div>
                             </div>
                         </div>
                         <div id="cropCanvas" class="crop-canvas">
@@ -1085,13 +1084,13 @@
                     </div>
                     <div class="preview-tools-overlay">
                         <div id="compareThumbs" class="compare-thumbs" style="display:none"></div>
-                        <button id="compareToggleBtn" class="compare-toggle" type="button" onclick="togglePreviewCompare()" style="display:none"><i data-lucide="columns-2" class="w-4 h-4"></i><span data-i18n="smart.compareSource">瀵规瘮鍘熷浘</span></button>
+                        <button id="compareToggleBtn" class="compare-toggle" type="button" onclick="togglePreviewCompare()" style="display:none"><i data-lucide="columns-2" class="w-4 h-4"></i><span data-i18n="smart.compareSource">对比原图</span></button>
                     </div>
                 </div>
                 <div class="image-edit-actions">
-                    <span id="imageEditZoomLabel" style="color:#94a3b8;font-size:11px;font-weight:800;padding:0 4px;margin-right:auto;cursor:pointer;user-select:none" title="鍙屽嚮閲嶇疆缂╂斁" ondblclick="resetImageEditZoom()">100%</span>
-                    <button class="image-edit-btn secondary" type="button" onclick="closeImageEditor()" data-i18n="common.cancel">鍙栨秷</button>
-                    <button id="imageEditApplyBtn" class="image-edit-btn primary" type="button" onclick="applyImageEdit()"><i data-lucide="crop" class="w-4 h-4"></i><span data-i18n="canvas.applyCrop">搴旂敤瑁佸壀</span></button>
+                    <span id="imageEditZoomLabel" style="color:#94a3b8;font-size:11px;font-weight:800;padding:0 4px;margin-right:auto;cursor:pointer;user-select:none" title="双击重置缩放" ondblclick="resetImageEditZoom()">100%</span>
+                    <button class="image-edit-btn secondary" type="button" onclick="closeImageEditor()" data-i18n="common.cancel">取消</button>
+                    <button id="imageEditApplyBtn" class="image-edit-btn primary" type="button" onclick="applyImageEdit()"><i data-lucide="crop" class="w-4 h-4"></i><span data-i18n="canvas.applyCrop">应用裁剪</span></button>
                 </div>
             </div>
         </div>
@@ -1436,7 +1435,7 @@
         }
         function backToCanvasList(){
             savePromptDraftForCurrent();
-            const target = `/static/canvas.html?list=smart&v=20260605-v2028-cache-nav-hotfix1`;
+            const target = `/static/canvas.html?list=smart&v=20260605-v2029-remove-comfyui-content1`;
             try {
                 if(window.parent && window.parent !== window){
                     window.parent.localStorage?.setItem('studio_active_page', 'smart-canvas');
@@ -1619,7 +1618,7 @@
             return fromUrl;
         }
         function defaultNodeTitle(node){
-            if(isSmartFrameGroup(node)) return `鍥剧墖鑺傜偣 ${groupMemberIds(node).length}`;
+            if(isSmartFrameGroup(node)) return `图片节点 ${groupMemberIds(node).length}`;
             if(node?.type === 'smart-prompt') return 'Prompt';
             if(node?.type === 'smart-loop') return 'Loop';
             const count = (node?.images || []).length;
@@ -3061,7 +3060,7 @@
         function renderDynamicParams(){
             if(!dynamicParams) return;
             applySmartDefaultImageSettings();
-            settings.engine = ['api','modelscope','comfy'].includes(settings.engine) ? settings.engine : 'api';
+            settings.engine = ['api','modelscope'].includes(settings.engine) ? settings.engine : 'api';
             settings.apiKind = settings.apiKind === 'video' ? 'video' : 'image';
             engineSelect.value = settings.engine;
             syncApiKindToggleVisibility();
@@ -3159,7 +3158,7 @@
             }
             dynamicParams.innerHTML = `
                 <div class="smart-control comfy-mode-control">
-                    <button class="smart-pill" type="button"><i data-lucide="workflow"></i><span>${escapeHtml(modeOptions.find(([v]) => v === settings.comfyMode)?.[1] || 'ComfyUI')}</span></button>
+                    <button class="smart-pill" type="button"><i data-lucide="workflow"></i><span>${escapeHtml(modeOptions.find(([v]) => v === settings.comfyMode)?.[1] || '本地工作流')}</span></button>
                     <div class="smart-popover compact-popover">
                         <div class="smart-popover-title">${escapeHtml(tr('smart.comfyMode'))}</div>
                         <div class="model-list">
@@ -3385,8 +3384,8 @@
             if(settings[resKey] !== 'custom') return '';
             const wKey = prefix ? `${prefix}CustomWidth` : 'customWidth';
             const hKey = prefix ? `${prefix}CustomHeight` : 'customHeight';
-            return `<input type="number" data-param="${wKey}" value="${escapeHtml(settings[wKey] || '')}" placeholder="瀹藉害">
-                    <input type="number" data-param="${hKey}" value="${escapeHtml(settings[hKey] || '')}" placeholder="楂樺害">`;
+            return `<input type="number" data-param="${wKey}" value="${escapeHtml(settings[wKey] || '')}" placeholder="宽度">
+                    <input type="number" data-param="${hKey}" value="${escapeHtml(settings[hKey] || '')}" placeholder="高度">`;
         }
         function renderComfySettingField(field){
             const value = comfyParamValue(field);
@@ -3637,7 +3636,7 @@
                     </div>
                     <div class="asset-meta">
                         <span class="asset-name" title="${escapeHtml(item.name || '')}">${escapeHtml(item.name || 'asset')}</span>
-                        <button class="asset-mini-btn" type="button" data-send-asset="${escapeHtml(item.id)}" title="鍔犲叆鐢诲竷"><i data-lucide="image-plus"></i></button>
+                        <button class="asset-mini-btn" type="button" data-send-asset="${escapeHtml(item.id)}" title="加入画布"><i data-lucide="image-plus"></i></button>
                         <button class="asset-mini-btn" type="button" data-rename-asset="${escapeHtml(item.id)}" title="${escapeHtml(tr('smart.assetRename'))}"><i data-lucide="pencil"></i></button>
                         <button class="asset-mini-btn" type="button" data-delete-asset="${escapeHtml(item.id)}" title="${escapeHtml(tr('common.delete'))}"><i data-lucide="trash-2"></i></button>
                     </div>
@@ -3756,7 +3755,7 @@
             try { localStorage.setItem(SMART_CANVAS_ID_KEY, id); } catch(e) {}
             const url = new URL(window.location.href);
             url.searchParams.set('id', id);
-            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260605-v2028-cache-nav-hotfix1');
+            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260605-v2029-remove-comfyui-content1');
             history.replaceState(null, '', url.toString());
         }
         async function ensureSmartCanvasId(){
@@ -3789,7 +3788,7 @@
                     return canvasId;
                 }
             } catch(e) {}
-            const title = tr('canvas.smartCanvas') || tr('smart.title') || '鏅鸿兘鐢诲竷';
+            const title = tr('canvas.smartCanvas') || tr('smart.title') || '智能画布';
             const created = await fetch('/api/canvases', {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
@@ -4530,7 +4529,7 @@
         function createFrameGroupFromSelection(){
             const ids = groupableSelectedNodeIds();
             const selected = ids.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-            if(selected.length < 2){ toast('璇峰厛妗嗛€夎嚦灏?2 涓湭鎵撶粍鑺傜偣'); return; }
+            if(selected.length < 2){ toast('请先框选至少 2 个未打组节点'); return; }
             const bounds = groupFrameBoundsForMembers(ids);
             if(!bounds) return;
             pushUndo();
@@ -4598,9 +4597,9 @@
             if(!ref) return;
             if(window.parent && window.parent !== window){
                 window.parent.postMessage({type:'smart-send-to-chat', refs:[ref]}, '*');
-                toast('宸插彂閫佽嚦瀵硅瘽');
+                toast('已发送至对话');
             } else {
-                toast('璇峰湪涓荤晫闈腑鍙戦€佸埌瀵硅瘽');
+                toast('请在主界面中发送到对话');
             }
         }
         async function saveSelectedImageToAssetLibrary(){
@@ -4681,7 +4680,7 @@
                     if(node) return deleteNode(node.id);
                 }
             } catch(err) {
-                toast((err.message || '鎿嶄綔澶辫触').slice(0, 160));
+                toast((err.message || '操作失败').slice(0, 160));
             }
         }
         function duplicateForAltDrag(node){
@@ -4790,10 +4789,10 @@
         }
         function missingSmartMediaHtml(url, compact=false){
             const actions = compact ? '' : `<div class="smart-missing-actions">
-                <button class="smart-missing-action" type="button" data-missing-action="match">鍖归厤绱犳潗</button>
+                <button class="smart-missing-action" type="button" data-missing-action="match">匹配素材</button>
                 <button class="smart-missing-action" type="button" data-missing-action="ignore">蹇界暐</button>
             </div>`;
-            return `<div class="smart-missing-media ${compact ? 'compact' : ''}" data-missing-url="${escapeHtml(url || '')}" title="${escapeHtml(url || '')}"><i data-lucide="image-off"></i><span>鏂囦欢缂哄け</span>${actions}</div>`;
+            return `<div class="smart-missing-media ${compact ? 'compact' : ''}" data-missing-url="${escapeHtml(url || '')}" title="${escapeHtml(url || '')}"><i data-lucide="image-off"></i><span>文件缺失</span>${actions}</div>`;
         }
         function smartCanvasLocalAssetUrls(){
             const urls = new Set();
@@ -4873,7 +4872,7 @@
             smartIgnoredMissingUrls.add(url);
             smartMissingAssetUrls.delete(url);
             render();
-            toast('宸蹭复鏃跺拷鐣ヨ繖寮犵己澶卞浘');
+            toast('已临时忽略这张缺失图');
         }
         async function refreshSmartMissingAssets(options={}){
             clearTimeout(smartMissingCheckTimer);
@@ -4934,7 +4933,7 @@
                 headers:{'Content-Type':'application/json'},
                 body:JSON.stringify({url, filename:name})
             });
-            if(!res.ok) throw new Error('涓嬭浇澶辫触');
+            if(!res.ok) throw new Error('下载失败');
             return await res.json();
         }
         function thumbMediaHtml(img, node=null){
@@ -4953,7 +4952,7 @@
                 ? `<video class="node-img" src="${escapeHtml(url)}" data-smart-media-url="${escapeHtml(url)}" controls muted preload="metadata" playsinline style="width:${w}px;height:${h}px;${transform}"></video>`
                 : `<img class="node-img" src="${escapeHtml(url)}" data-smart-media-url="${escapeHtml(url)}" draggable="false" style="width:${w}px;height:${h}px;${transform}">`;
         }
-        function promptTextExpandButton(field, title='鏀惧ぇ缂栬緫'){
+        function promptTextExpandButton(field, title='放大编辑'){
             return `<button class="prompt-expand-mini prompt-node-control" type="button" data-expand-field="${escapeHtml(field)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}"><i data-lucide="expand"></i></button>`;
         }
         function promptNodeBodyHtml(node){
@@ -5024,7 +5023,7 @@
             if(imgs.length === 0 && node.runError) return `<div class="node-result-placeholder error" style="width:${layout.width}px;height:${layout.height}px"><i data-lucide="circle-alert"></i><span>${escapeHtml(node.runError)}</span></div>`;
             if(imgs.length === 0 && (node.runStartedAt || node.runFinishedAt)) return `<div class="node-result-placeholder empty-result" style="width:${layout.width}px;height:${layout.height}px"><i data-lucide="image-off"></i><span>任务结束，但没有返回图片</span></div>`;
             if(imgs.length > 1) return `<div class="thumb-grid" style="--thumb-cols:${layout.cols}; --thumb-size:${layout.thumb}px">${imgs.map((img, i) => `<div class="thumb-item ${selectedImage.nodeId === node.id && selectedImage.index === i ? 'image-selected' : ''}" data-image-index="${i}">${thumbMediaHtml(img, node)}<button class="mini-x image-delete" type="button" data-image-index="${i}" title="${escapeHtml(tr('smart.deleteImage'))}"><i data-lucide="trash-2"></i></button><button class="mini-x image-param" type="button" data-image-index="${i}" title="查看生成参数"><i data-lucide="scroll-text"></i></button></div>`).join('')}</div>`;
-            if(imgs[0]) return `<div class="image-wrap ${selectedImage.nodeId === node.id && selectedImage.index === 0 ? 'image-selected' : ''}" data-image-index="0" style="--node-img-w:${layout.width}px;--node-img-h:${layout.height}px">${singleMediaHtml(imgs[0], layout.width, layout.height, node)}<button class="mini-x image-delete" type="button" data-image-index="0" title="${escapeHtml(tr('smart.deleteImage'))}"><i data-lucide="trash-2"></i></button><button class="mini-x image-param" type="button" data-image-index="0" title="鏌ョ湅鐢熸垚鍙傛暟"><i data-lucide="scroll-text"></i></button></div>`;
+            if(imgs[0]) return `<div class="image-wrap ${selectedImage.nodeId === node.id && selectedImage.index === 0 ? 'image-selected' : ''}" data-image-index="0" style="--node-img-w:${layout.width}px;--node-img-h:${layout.height}px">${singleMediaHtml(imgs[0], layout.width, layout.height, node)}<button class="mini-x image-delete" type="button" data-image-index="0" title="${escapeHtml(tr('smart.deleteImage'))}"><i data-lucide="trash-2"></i></button><button class="mini-x image-param" type="button" data-image-index="0" title="查看生成参数"><i data-lucide="scroll-text"></i></button></div>`;
             return `<div class="node-drop"><i data-lucide="image-plus"></i><span>${escapeHtml(tr('smart.uploadHint'))}</span></div>`;
         }
         function nowMs(){ return Date.now(); }
@@ -5111,7 +5110,7 @@
                     <div class="node-body">${body}</div>
                     ${!isFrameGroup ? `<div class="node-hint">${escapeHtml(node.runError || (isPending ? tr('smart.hintPending') : (imgs.length > 1 ? tr('smart.hintMulti') : imgs.length ? tr('smart.hintSingle') : tr('smart.hintEmpty'))))}</div>` : ''}
                     ${!isFrameGroup && (imgs.length || hasImageRunState || isPrompt) ? '<div class="node-resize-handle" data-resize="1"></div>' : ''}
-                    ${!isFrameGroup ? '<div class="node-port port-in" data-port="in" title="杈撳叆"></div><div class="node-port port-out" data-port="out" title="杈撳嚭"></div>' : ''}
+                    ${!isFrameGroup ? '<div class="node-port port-in" data-port="in" title="输入"></div><div class="node-port port-out" data-port="out" title="输出"></div>' : ''}
                 </div>`;
             }).join('');
             world.innerHTML = '';
@@ -5177,7 +5176,7 @@
                     const replacement = wrapper.firstElementChild;
                     if(replacement) mediaEl.replaceWith(replacement);
                     if(window.lucide) lucide.createIcons();
-                    if(holder) holder.title = `鏂囦欢缂哄け锛?{url}`;
+                    if(holder) holder.title = `文件缺失：${url}`;
                 };
                 mediaEl.addEventListener('error', onMissing, {once:true});
                 if(mediaEl.tagName === 'IMG' && mediaEl.complete && mediaEl.naturalWidth <= 0) onMissing();
@@ -6539,7 +6538,7 @@
         function updateComposerExpandButton(){
             if(!composerExpandBtn) return;
             composerExpandBtn.innerHTML = `<i data-lucide="${composerExpanded ? 'minimize-2' : 'expand'}"></i>`;
-            composerExpandBtn.title = composerExpanded ? '鏀惰捣鎻愮ず璇嶆' : '鏀惧ぇ鎻愮ず璇嶆';
+            composerExpandBtn.title = composerExpanded ? '收起提示词框' : '放大提示词框';
             composerExpandBtn.setAttribute('aria-label', composerExpandBtn.title);
             if(window.lucide) lucide.createIcons();
         }
@@ -6779,7 +6778,7 @@
         }
         function mentionTokenHtml(img){
             if(!img?.url) return '';
-            const name = img.alias || img.name || '鍥剧墖';
+            const name = img.alias || img.name || '图片';
             return `<span class="mention-image-token" contenteditable="false" data-url="${escapeHtml(img.url)}" data-name="${escapeHtml(name)}" data-node-id="${escapeHtml(img.nodeId || '')}" data-image-index="${escapeHtml(img.imageIndex ?? '')}"><img src="${escapeHtml(img.url)}" alt=""><span>${escapeHtml(name)}</span></span>`;
         }
         function promptHtmlWithMentionTokens(text, refs=[]){
@@ -6980,7 +6979,7 @@
                 seen.add(img.url);
                 refs.push({
                     ...img,
-                    name:img.name || `鍥剧墖${refs.length + 1}`,
+                    name:img.name || `图片${refs.length + 1}`,
                     role:img.role || `image_${refs.length + 1}`,
                     imageIndex:Number.isFinite(Number(img.imageIndex)) ? Number(img.imageIndex) : index
                 });
@@ -7000,7 +6999,7 @@
             }).map((img, index) => ({
                 ...img,
                 mentionId:`mention_${index}_${Math.random().toString(36).slice(2, 7)}`,
-                alias:img.name || `鍥剧墖${index + 1}`
+                alias:img.name || `图片${index + 1}`
             }));
         }
         function assetMentionCandidateImages(categoryId=''){
@@ -7018,8 +7017,8 @@
                 return true;
             }).map((item, index) => ({
                 url:item.url,
-                name:item.name || `璧勪骇${index + 1}`,
-                alias:item.name || `璧勪骇${index + 1}`,
+                name:item.name || `资产${index + 1}`,
+                alias:item.name || `资产${index + 1}`,
                 role:'asset',
                 categoryName:item.categoryName || '',
                 mentionId:`asset_${index}_${Math.random().toString(36).slice(2, 7)}`
@@ -7133,7 +7132,8 @@
                 caretRect = range.getClientRects()[0] || range.getBoundingClientRect();
             }
             const inputRect = promptInput.getBoundingClientRect();
-            // composer 浼氱敤鍙嶅悜缂╂斁淇濇寔灞忓箷鍙鎬э紝杩欓噷鎸夊疄闄呮樉绀虹缉鏀炬崲绠楀洖灞€閮ㄥ潗鏍囥€?            const vpScale = (typeof viewport !== 'undefined' && Number(viewport?.scale)) || 1;
+            // composer 会用反向缩放保持屏幕可读性，这里按实际显示缩放换算回局部坐标。
+            const vpScale = (typeof viewport !== 'undefined' && Number(viewport?.scale)) || 1;
             const localScale = Number(composer?.style?.getPropertyValue('--composer-zoom-scale')) || 1;
             const effectiveScale = Math.max(0.0001, vpScale * localScale);
             const rowLogicalWidth = rowRect.width / effectiveScale;
@@ -7184,7 +7184,7 @@
             token.className = 'mention-image-token';
             token.contentEditable = 'false';
             token.dataset.url = img.url;
-            token.dataset.name = img.alias || img.name || '鍥剧墖';
+            token.dataset.name = img.alias || img.name || '图片';
             token.dataset.nodeId = img.nodeId || '';
             token.dataset.imageIndex = String(img.imageIndex ?? '');
             token.innerHTML = `<img src="${escapeHtml(img.url)}" alt=""><span>${escapeHtml(token.dataset.name)}</span>`;
@@ -7261,7 +7261,7 @@
                 }
                 if(node.nodeType !== Node.ELEMENT_NODE) return;
                 if(node.classList?.contains('mention-image-token')){
-                    parts.push({type:'image', url:node.dataset.url || '', name:node.dataset.name || '鍥剧墖', nodeId:node.dataset.nodeId || '', imageIndex:Number(node.dataset.imageIndex || 0)});
+                    parts.push({type:'image', url:node.dataset.url || '', name:node.dataset.name || '图片', nodeId:node.dataset.nodeId || '', imageIndex:Number(node.dataset.imageIndex || 0)});
                     return;
                 }
                 if(node.tagName === 'BR') parts.push({type:'text', text:'\n'});
@@ -7278,7 +7278,7 @@
                     text += part.text || '';
                     return;
                 }
-                if(part.type === 'image') text += `@${part.name || '鍥剧墖'}`;
+                if(part.type === 'image') text += `@${part.name || '图片'}`;
             });
             return text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
         }
@@ -7298,20 +7298,20 @@
                 if(!part.url) return;
                 if(!refMap.has(part.url)){
                     refMap.set(part.url, refs.length + 1);
-                    refs.push({url:part.url, name:part.name || `鍥?{refs.length + 1}`, nodeId:part.nodeId, imageIndex:part.imageIndex, role:`image_${refs.length + 1}`});
+                    refs.push({url:part.url, name:part.name || `图${refs.length + 1}`, nodeId:part.nodeId, imageIndex:part.imageIndex, role:`image_${refs.length + 1}`});
                 }
-                body += `鍥?{refMap.get(part.url)}`;
+                body += `图${refMap.get(part.url)}`;
             });
             body = body.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
             const inputPrompt = inputPromptTextFor(node).trim();
             if(promptInputNodesFor(node).length) body = inputPrompt;
             const displayPrompt = originalPrompt || body;
             if(refs.length){
-                const mapText = refs.map((img, i) => `鍥?{i + 1}: ${img.name || `鍥剧墖${i + 1}`}`).join('\n');
+                const mapText = refs.map((img, i) => `图${i + 1}: ${img.name || `图片${i + 1}`}`).join('\n');
                 return {
                     prompt:`${tr('smart.refMapHeader')}\n${mapText}\n\n${tr('smart.refUserNeed')}\n${body}`,
                     displayPrompt,
-                    refs:refs.map((img, index) => ({url:img.url, name:img.name || `鍥?{index + 1}`, role:`image_${index + 1}`})),
+                    refs:refs.map((img, index) => ({url:img.url, name:img.name || `图${index + 1}`, role:`image_${index + 1}`})),
                     mentioned:refs.length > defaultRefs.length
                 };
             }
@@ -7394,8 +7394,8 @@
                 x: newX,
                 y: node.y || 0,
                 title: imgs.length > 1 ? 'Group' : 'Image',
-                // 鎶藉嚭鍒颁笂娓告簮鑺傜偣鐨勫浘鐗囧彧淇濈暀鈥滃師濮嬬礌鏉愨€濊涔夛紝娓呯┖鐢熸垚鐩稿叧瀛楁銆?
-                // 閬垮厤涓婃父鍥剧墖缁ф壙涓嬫父杈撳嚭鐨勬彁绀鸿瘝淇℃伅銆?
+                // 抽出到上游源节点的图片只保留“原始素材”语义，清空生成相关字段。
+                // 避免上游图片继承下游输出的提示词信息。
                 images: imgs.map(img => stripImageGenerationMeta({...img})),
                 created_at: Date.now()
             };
@@ -7492,7 +7492,7 @@
                 toast(ok ? `已匹配 ${ok} 个节点` : '素材库暂未找到可匹配结果');
                 return ok;
             } catch(e) {
-                toast((e?.message || '鎵归噺鍖归厤澶辫触').slice(0, 160));
+                toast((e?.message || '批量匹配失败').slice(0, 160));
                 return 0;
             }
         }
@@ -7575,7 +7575,7 @@
             selectedImage = {nodeId:'', index:-1};
             render();
             scheduleSave();
-            toast(`宸插垱寤?{labels[kind] || labels.expression}鑺傜偣`);
+            toast(`已创建${labels[kind] || labels.expression}节点`);
         }
         function restoreFromExtraction(node, extracted){
             if(!node || !extracted) return;
@@ -8141,7 +8141,7 @@
                 node.llmModel = model;
                 scheduleSave();
             } catch(e) {
-                node.runError = (e.message || 'LLM 杩愯澶辫触').slice(0, 160);
+                node.runError = (e.message || 'LLM 运行失败').slice(0, 160);
                 toast(node.runError);
             } finally {
                 node.running = false;
@@ -8153,7 +8153,7 @@
         function comfyFieldKind(field){
             if(field?.type === 'image') return 'image';
             const key = `${field?.input || ''} ${field?.name || ''}`.toLowerCase();
-            if(field?.type === 'textarea' || /prompt|text|鎻愮ず璇峾姝ｅ悜|璐熷悜/.test(key)) return 'prompt';
+            if(field?.type === 'textarea' || /prompt|text|提示词|正向|负向/.test(key)) return 'prompt';
             return 'setting';
         }
         async function runApiGeneration(prompt, refs, pendingNode=null, meta=null){
@@ -8186,7 +8186,7 @@
         async function runApiVideoGeneration(prompt, refs){
             if(!settings.videoModel) throw new Error(tr('smart.errNoVideoModel'));
             const refImages = refs.map((ref, i) => {
-                const item = {url:ref.url, name:ref.name || `鍥剧墖${i + 1}`};
+                const item = {url:ref.url, name:ref.name || `图片${i + 1}`};
                 if(settings.videoUseFrameRoles){
                     if(i === 0) item.role = 'first_frame';
                     else if(i === 1) item.role = 'last_frame';
@@ -8395,8 +8395,8 @@
                 lower.includes('insufficient balance') ||
                 lower.includes('balance not enough') ||
                 lower.includes('quota exceeded') ||
-                text.includes('浣欓涓嶈冻') ||
-                text.includes('棰濆害涓嶈冻')
+                text.includes('余额不足') ||
+                text.includes('额度不足')
             ){
                 return 'API 额度不足：上游返回 credits not enough。请充值或更换 API Key 后再试。';
             }
@@ -8539,7 +8539,7 @@
                 if(node.runError) return;
                 if(node.type === 'smart-prompt'){
                     if(node.running && smartNodeRunAgeMs(node) && smartNodeRunAgeMs(node) > SMART_LLM_PENDING_MAX_MS){
-                        changed = markSmartNodeStale(node, 'LLM 杩愯瓒呮椂锛屽凡鍋滄绛夊緟銆傝妫€鏌ユā鍨嬫垨閲嶆柊杩愯') || changed;
+                        changed = markSmartNodeStale(node, 'LLM 运行超时，已停止等待。请检查模型或重新运行') || changed;
                     }
                     return;
                 }
@@ -9776,7 +9776,7 @@
             }
             if(event.data?.type === 'asset-insert-prompt') {
                 if(!insertPromptSnippet(event.data.prompt || '')) {
-                    toast('褰撳墠鑺傜偣鏈墦寮€鍙紪杈戞彁绀鸿瘝');
+                    toast('当前节点未打开可编辑提示词');
                 }
             }
             if(event.data?.type === 'canvas-zoom-from-shell') {

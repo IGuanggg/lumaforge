@@ -4,7 +4,7 @@ cd /d "%~dp0"
 set "PYEXE=%~dp0python\python.exe"
 if not exist "%PYEXE%" set "PYEXE=python"
 
-echo Starting ComfyUI-API-Modelscope...
+echo Starting 本地工作流-API-Modelscope...
 echo Visit: http://127.0.0.1:3000/
 echo Press Ctrl+C to stop.
 echo.

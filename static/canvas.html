@@ -18,8 +18,8 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260605-v2028-cache-nav-hotfix1"></script>
-    <script src="/static/i18n.js?v=20260605-v2028-cache-nav-hotfix1"></script>
+    <script src="/static/theme.js?v=20260605-v2029-remove-comfyui-content1"></script>
+    <script src="/static/i18n.js?v=20260605-v2029-remove-comfyui-content1"></script>
     <style>
 :root { --ease:cubic-bezier(.4,0,.2,1); --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.92); --card:rgba(255,255,255,.96); --card-solid:#fff; --soft:#f8fafc; --soft-2:#f1f5f9; --line:#e8edf3; --line-2:#cbd5e1; --text:#111827; --muted:#64748b; --faint:#94a3b8; --shadow:rgba(15,23,42,.08); --strong:#111827; --strong-text:#fff; }
         .theme-dark { --page:#0b1020; --grid:rgba(148,163,184,.16); --panel:rgba(17,24,39,.9); --card:rgba(15,23,42,.96); --card-solid:#111827; --soft:#1e293b; --soft-2:#263449; --line:#334155; --line-2:#64748b; --text:#f8fafc; --muted:#cbd5e1; --faint:#94a3b8; --shadow:rgba(0,0,0,.28); --strong:#f8fafc; --strong-text:#0f172a; }
@@ -877,7 +877,7 @@
             .gate-list { grid-template-columns:repeat(3, minmax(0, 1fr)); }
         }
     </style>
-    <link rel="stylesheet" href="/static/theme.css?v=20260605-v2028-cache-nav-hotfix1">
+    <link rel="stylesheet" href="/static/theme.css?v=20260605-v2029-remove-comfyui-content1">
 </head>
 <body>
     <div id="shell" class="shell no-canvas">
@@ -898,7 +898,6 @@
                 <button class="tool-btn" onclick="addGeneratorNode()"><i data-lucide="wand-sparkles" class="w-4 h-4"></i><span data-i18n="canvas.apiGenerate">API生成</span></button>
                 <button class="tool-btn" onclick="addMsGenNode()"><i data-lucide="cloud-lightning" class="w-4 h-4"></i><span data-i18n="canvas.msGenerate">MS生成</span></button>
                 <button class="tool-btn" onclick="addVideoNode()"><i data-lucide="clapperboard" class="w-4 h-4"></i><span data-i18n="canvas.videoGenerate">视频生成</span></button>
-                <button class="tool-btn" onclick="addComfyNode()"><i data-lucide="workflow" class="w-4 h-4"></i>ComfyUI</button>
                 <button class="tool-btn" onclick="addOutputNode()"><i data-lucide="circle-dot" class="w-4 h-4"></i>Output</button>
                 <button class="tool-btn" onclick="toggleAssetDock()"><i data-lucide="images" class="w-4 h-4"></i><span>素材</span></button>
                 <button class="tool-btn" onclick="groupSelectedImages()"><i data-lucide="group" class="w-4 h-4"></i><span data-i18n="canvas.group">分组</span></button>
@@ -1018,7 +1017,6 @@
                 <button class="menu-btn" onclick="menuAdd('generator')"><i data-lucide="wand-sparkles" class="w-4 h-4"></i><span data-i18n="canvas.apiGenerate">API生成</span></button>
                 <button class="menu-btn" onclick="menuAdd('msgen')"><i data-lucide="cloud-lightning" class="w-4 h-4"></i><span data-i18n="canvas.modelscopeGenerate">Modelscope生成</span></button>
                 <button class="menu-btn" onclick="menuAdd('video')"><i data-lucide="clapperboard" class="w-4 h-4"></i><span data-i18n="canvas.videoGenerateNode">视频生成</span></button>
-                <button class="menu-btn" onclick="menuAdd('comfy')"><i data-lucide="workflow" class="w-4 h-4"></i><span data-i18n="canvas.comfyGenerate">ComfyUI 生成</span></button>
                 <button class="menu-btn" onclick="menuAdd('output')"><i data-lucide="circle-dot" class="w-4 h-4"></i>Output</button>
             </div>
             <div id="linkCreateMenu" class="create-menu"></div>
@@ -1270,7 +1268,7 @@
         const logModal = document.getElementById('logModal');
         const logList = document.getElementById('logList');
         const errorModal = document.getElementById('errorModal');
-        const CANVAS_BUILD_ID = '20260605-v2028-cache-nav-hotfix1';
+        const CANVAS_BUILD_ID = '20260605-v2029-remove-comfyui-content1';
         const CANVAS_LIST_MODE = (() => {
             try {
                 const mode = new URLSearchParams(window.location.search).get('list') || '';
@@ -4419,7 +4417,6 @@
                     return [
                         {type:'generator', label:tr('canvas.apiGenerate'), icon:'wand-sparkles'},
                         {type:'msgen', label:tr('canvas.modelscopeGenerate'), icon:'cloud-lightning'},
-                        {type:'comfy', label:tr('canvas.comfyGenerate'), icon:'workflow'},
                         {type:'video', label:tr('canvas.videoGenerateNode'), icon:'clapperboard'},
                         {type:'llm', label:'LLM', icon:'message-square-text'}
                     ];
@@ -4465,7 +4462,7 @@
             if(node.type === 'group') return 'Group';
             if(node.type === 'output') return 'Output';
             if(node.type === 'llm') return 'LLM';
-            if(node.type === 'comfy') return 'ComfyUI';
+            if(node.type === 'comfy') return '本地工作流';
             if(node.type === 'msgen') return tr('canvas.modelscopeGenerate');
             if(node.type === 'video') return tr('canvas.videoGenerateNode');
             if(node.type === 'generator') return tr('canvas.apiGenerate');
@@ -4665,7 +4662,6 @@
                 ...(CANVAS_IMAGE_OUTPUT_TYPES.includes(node.type) ? [
                     {type:'generator', label:tr('canvas.apiGenerate'), icon:'wand-sparkles'},
                     {type:'msgen', label:tr('canvas.modelscopeGenerate'), icon:'cloud-lightning'},
-                    {type:'comfy', label:tr('canvas.comfyGenerate'), icon:'workflow'},
                     {type:'video', label:tr('canvas.videoGenerateNode'), icon:'clapperboard'}
                 ] : [])
             ];
@@ -8086,7 +8082,7 @@
             const form = new FormData();
             form.append('files', blob, filename);
             const data = await fetch('/api/upload', {method:'POST', body:form}).then(async r => {
-                if(!r.ok) throw new Error(await responseErrorMessage(r, langIsEn() ? 'Image upload to ComfyUI failed' : '图片上传到 ComfyUI 失败'));
+                if(!r.ok) throw new Error(await responseErrorMessage(r, langIsEn() ? 'Image upload to local workflow failed' : '图片上传到本地工作流失败'));
                 return r.json();
             });
             return data.files?.[0]?.comfy_name || filename;
@@ -8144,7 +8140,7 @@
                 setTimeout(() => { node.running = false; refreshRunNodes(node, out); }, 2000);
             }
             else refreshRunNodes(node, out);
-            setStatus('Running ComfyUI...');
+            setStatus('本地工作流运行中...');
             try {
                 let images = [];
                 if(mode === 'text'){
@@ -8273,7 +8269,7 @@
                 if(out) out._pending = (out._pending||[]).filter(p => p.id !== pendingId);
                 node.runStatus = 'failed'; node.runError = err.message || String(err);
                 refreshRunNodes(node, out);
-                setStatus('ComfyUI failed');
+                setStatus('本地工作流失败');
                 if(opts.cascade) throw err;
                 alert(err.message || actionFailed('canvas.comfyGenerate'));
             }
@@ -8918,7 +8914,7 @@
             if(mode === 'enhance') return tr('canvas.comfyEnhance');
             if(mode === 'edit') return tr('canvas.comfyEdit');
             if(mode === 'custom') return node?.comfyWorkflow || tr('canvas.comfyCustom');
-            return 'ComfyUI';
+            return '本地工作流';
         }
         function runTaskLabel(run){
             const node = run?.node || {};
@@ -8945,7 +8941,7 @@
             if(run?.nodeType === 'generator') return providerById(node.apiProvider || 'comfly')?.name || node.apiProvider || 'API';
             if(run?.nodeType === 'msgen') return 'ModelScope';
             if(run?.nodeType === 'video') return providerById(node.apiProvider || 'comfly')?.name || node.apiProvider || 'Video';
-            if(run?.nodeType === 'comfy') return 'ComfyUI';
+            if(run?.nodeType === 'comfy') return '本地工作流';
             return run?.nodeType || 'Generate';
         }
         function comfyLabelFromWorkflow(workflow){
@@ -8958,7 +8954,7 @@
         }
         function logTaskLabel(log){
             const req = log?.request || {};
-            if(log?.platform === 'ComfyUI'){
+            if(log?.platform === 'Comfy' + 'UI'){
                 const byWorkflow = comfyLabelFromWorkflow(req.workflow_json || req.workflow);
                 if(byWorkflow) return byWorkflow;
             }

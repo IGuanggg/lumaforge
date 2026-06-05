@@ -104,7 +104,7 @@ After restore or password-changing operations invalidate sessions, clients shoul
 - `GET /api/config`
 - `PUT /api/config`
 
-The config payload includes API providers, model lists, ComfyUI endpoints, canvas/project state, prompts, and user preferences. API keys are included by default for this personal-use app.
+The config payload includes API providers, model lists, canvas/project state, prompts, and user preferences. API keys are included by default for this personal-use app.
 
 ### Cloud Media Sync
 

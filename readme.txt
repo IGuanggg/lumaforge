@@ -14,6 +14,6 @@ https://apimart.ai/register?aff=1uyAbb
 
 6. To generate workflows for free, set a ModelScope key and you can also call Lora.
 
-7. To use local ComfyUI, you can set the ComfyUI option in the lower left corner. It supports importing custom workflows.
+7. Local workflow mode is no longer exposed in the main UI. Use API or ModelScope generation modes for normal creation.
 
-===API/ModelScope/ComfyUI, any of these three modes can be used to run the workflow.====
+===API/ModelScope modes can be used to run the workflow.====
