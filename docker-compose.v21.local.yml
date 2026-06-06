@@ -1,0 +1,14 @@
+services:
+  app:
+    image: lumaforge:2.1.0-local
+    build:
+      context: .
+      dockerfile: Dockerfile.v21
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./assets:/app/assets
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

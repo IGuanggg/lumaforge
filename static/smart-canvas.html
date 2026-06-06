@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -17,8 +17,8 @@
         })();
     </script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260605-v2029-remove-comfyui-content1"></script>
-    <script src="/static/i18n.js?v=20260605-v2029-remove-comfyui-content1"></script>
+    <script src="/static/theme.js?v=20260605-v210-source-refactor1"></script>
+    <script src="/static/i18n.js?v=20260605-v210-source-refactor1"></script>
     <style>
 :root {
             --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.9); --card:#fff;
@@ -1435,7 +1435,7 @@
         }
         function backToCanvasList(){
             savePromptDraftForCurrent();
-            const target = `/static/canvas.html?list=smart&v=20260605-v2029-remove-comfyui-content1`;
+            const target = `/static/canvas.html?list=smart&v=20260605-v210-source-refactor1`;
             try {
                 if(window.parent && window.parent !== window){
                     window.parent.localStorage?.setItem('studio_active_page', 'smart-canvas');
@@ -3755,7 +3755,7 @@
             try { localStorage.setItem(SMART_CANVAS_ID_KEY, id); } catch(e) {}
             const url = new URL(window.location.href);
             url.searchParams.set('id', id);
-            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260605-v2029-remove-comfyui-content1');
+            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260605-v210-source-refactor1');
             history.replaceState(null, '', url.toString());
         }
         async function ensureSmartCanvasId(){
@@ -4790,7 +4790,7 @@
         function missingSmartMediaHtml(url, compact=false){
             const actions = compact ? '' : `<div class="smart-missing-actions">
                 <button class="smart-missing-action" type="button" data-missing-action="match">匹配素材</button>
-                <button class="smart-missing-action" type="button" data-missing-action="ignore">蹇界暐</button>
+                <button class="smart-missing-action" type="button" data-missing-action="ignore">忽略</button>
             </div>`;
             return `<div class="smart-missing-media ${compact ? 'compact' : ''}" data-missing-url="${escapeHtml(url || '')}" title="${escapeHtml(url || '')}"><i data-lucide="image-off"></i><span>文件缺失</span>${actions}</div>`;
         }

@@ -1,12 +1,13 @@
-﻿# LumaForge Release Checklist
+# LumaForge Release Checklist
 
-Version target: `2.0.29`
+Version target: `2.1.0`
 
 Run this checklist before tagging a GitHub release or building Docker/EXE artifacts.
 
 ## 1. Version and Brand
 
-- `main.py` default `APP_VERSION` is the release version.
+- `VERSION`, `service/lumaforge.go`, and `web/package.json` use the release version.
+- `main.py` default `APP_VERSION` is the release version for legacy compatibility.
 - `cloud_config_server.py` default `CLOUD_APP_VERSION` is the release version.
 - `Dockerfile.cloud` uses the same `CLOUD_APP_VERSION`.
 - `docker-compose.cloud.yml` uses service/container `lumaforge-cloud`.
@@ -31,13 +32,12 @@ Upgrade must preserve mounted cloud data under `/opt/lumaforge-cloud`.
 
 ## 3. Local Regression Checks
 
-- Start browser app on `127.0.0.1:3010`.
-- Confirm navigation works: 文生图, 细节增强, 图片编辑, 角度控制, GPT 对话, 无限画布, 素材库, 应用设置.
+- Start Go API and Next app on `127.0.0.1:3000`.
+- Confirm navigation works: 智能画布, 生图工作台, 视频创作台, 提示词库, 我的素材, API 设置, 应用设置.
 - Confirm generated images save locally and appear in 素材库.
 - Confirm download buttons save images from local files first.
 - Confirm chat reference images do not enter 素材库.
-- Confirm status chips show real queue and online counts.
-- Confirm 2.0.29 cache-busted entries load the current GPT 对话, 细节增强, 无限画布, 素材库, and 应用设置 pages.
+- Confirm settings iframes load current 2.1.0 cache-busted static assets.
 
 ## 4. Canvas Checks
 
@@ -59,7 +59,7 @@ Upgrade must preserve mounted cloud data under `/opt/lumaforge-cloud`.
 Browser/source release:
 
 ```powershell
-Compress-Archive -Path main.py,cloud_config_server.py,launcher.py,desktop_launcher.py,static,workflows,requirements.txt,requirements-cloud.txt,Dockerfile,Dockerfile.cloud,docker-compose.yml,docker-compose.cloud.yml,*.spec,*.bat,README.md,APP_PACKAGING.md,RELEASE_CHECKLIST.md,docs,scripts -DestinationPath releases\lumaforge-browser-v2.0.29.zip -Force
+Compress-Archive -Path main.go,go.mod,go.sum,config,handler,middleware,model,repository,router,service,web,VERSION,CHANGELOG.md,CHANGELOG.infinite-canvas.md,LICENSE.infinite-canvas-AGPL,main.py,cloud_config_server.py,launcher.py,desktop_launcher.py,static,workflows,requirements.txt,requirements-cloud.txt,Dockerfile,Dockerfile.v21,Dockerfile.cloud,docker-compose.yml,docker-compose.v21.yml,docker-compose.v21.local.yml,docker-compose.cloud.yml,*.spec,*.bat,README.md,APP_PACKAGING.md,RELEASE_CHECKLIST.md,docs,scripts -DestinationPath releases\lumaforge-browser-v2.1.0.zip -Force
 ```
 
 Desktop EXE:
@@ -68,26 +68,27 @@ Desktop EXE:
 .\scripts\build_desktop_release.ps1
 ```
 
-- GitHub Release must include `releases\LumaForge-2.0.29-desktop.zip`, not only a single EXE.
-- If Inno Setup is installed, confirm `releases\LumaForge-Setup-2.0.29.exe` exists.
-- Recovery for clients that accidentally installed `20.0.23`: publish the normal `v2.0.29` release and, if needed, a temporary compatibility `v20.0.25` release pointing to the same desktop zip so older broken clients can still detect an upgrade.
+- GitHub Release must include `releases\LumaForge-2.1.0-desktop.zip`, not only a single EXE.
+- Desktop zip must contain `LumaForge.exe`, `LumaForgeUpdater.exe`, and v21 runtime files: `v21/server.exe`, `web/server.js`, `node/node.exe` under either package root or `_internal`.
+- If Inno Setup is installed, confirm `releases\LumaForge-Setup-2.1.0.exe` exists.
+- Confirm older desktop installs upgrade through the v2.1.0 desktop zip and do not retain removed static UI after restart.
 - If a real signing certificate is available, set `WINDOWS_SIGN_CERT_PATH` and `WINDOWS_SIGN_CERT_PASSWORD`; otherwise signing is skipped by design.
 - Record SHA256 hashes printed by the release script in the release notes.
 
 macOS package:
 
 ```bash
-VERSION=2.0.29 bash scripts/build_macos_release.sh
+VERSION=2.1.0 bash scripts/build_macos_release.sh
 ```
 
 - macOS must be built on macOS; Windows cannot produce a real `.app`.
-- GitHub Release should include `releases/LumaForge-2.0.29-macos.zip` when built on a Mac or macOS CI runner.
+- GitHub Release should include `releases/LumaForge-2.1.0-macos.zip` when built on a Mac or macOS CI runner.
 - For public distribution, sign and notarize with Apple Developer `codesign` and `xcrun notarytool`.
 
 Cloud Docker:
 
 ```bash
-docker buildx build --platform linux/amd64,linux/arm64 -f Dockerfile.cloud -t iguang9881/lumaforge-cloud:2.0.29 -t iguang9881/lumaforge-cloud:latest --push .
+docker buildx build --platform linux/amd64,linux/arm64 -f Dockerfile.cloud -t iguang9881/lumaforge-cloud:2.1.0 -t iguang9881/lumaforge-cloud:latest --push .
 ```
 
 Server upgrade command:
@@ -95,15 +96,15 @@ Server upgrade command:
 ```bash
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
-docker pull iguang9881/lumaforge-cloud:2.0.29
+docker pull iguang9881/lumaforge-cloud:2.1.0
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.29 \
+  -e CLOUD_APP_VERSION=2.1.0 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.29
+  iguang9881/lumaforge-cloud:2.1.0
 ```

@@ -13,25 +13,25 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [1/3] Installing dependencies...
-pip install -r requirements.txt pyinstaller -q
+where pwsh >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Failed to install dependencies.
+    echo [ERROR] PowerShell 7 (pwsh) not found. Install PowerShell 7 or run scripts\build_desktop_release.ps1 manually.
     pause
     exit /b 1
 )
 
-echo [2/3] Building desktop EXE with PyInstaller...
-pyinstaller desktop_canvas.spec --noconfirm
+echo [1/1] Building LumaForge v2.1 desktop release...
+pwsh -NoProfile -ExecutionPolicy Bypass -File scripts\build_desktop_release.ps1
 if errorlevel 1 (
-    echo [ERROR] Desktop build failed.
+    echo [ERROR] Desktop release build failed.
     pause
     exit /b 1
 )
 
-echo [3/3] Build complete!
+echo Build complete!
 echo.
 echo Output: dist\LumaForge\LumaForge.exe
+echo Release zip: releases\LumaForge-2.1.0-desktop.zip
 echo.
 echo Desktop data:
 echo   Runtime: %%APPDATA%%\LumaForge

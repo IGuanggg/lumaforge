@@ -2,9 +2,11 @@
 
 LumaForge 是一个本地优先的 AI 创作工作台，核心是无限画布、素材库、Agent 创作、GPT 对话、图像增强、视频生成和云同步。
 
-当前版本：`2.0.29`
+当前版本：`2.1.0`
 
-v2.0.29 是自动更新紧急修复版：重点修复误发布 `v20.0.23` 导致后续 2.0.x 无法继续自动升级的问题，并加固桌面版更新后自动重启的应用路径识别。
+v2.1.0 是源码主线重构版：以 Go + Next.js 无限画布主体作为新创作界面，同时保留 LumaForge 原有云端账户同步、API 设置、设置页自动检测更新/更新模块、桌面 EXE 与自动更新基础。桌面模式会同步启动 legacy FastAPI 兼容服务，确保自动更新、备份、诊断和深度素材维护能力在迁移期继续可用。
+
+> v2.1.0 引入了 `new新的infinite-canvas-0.2.4-copy.zip` 的 Go/Next 主体能力，并保留原项目 AGPL 授权文件 `LICENSE.infinite-canvas-AGPL`。LumaForge 云端账户与同步仍以现有 Python `cloud_config_server.py` 为权威服务，不迁移云端数据库结构。
 
 ## 核心功能
 
@@ -39,6 +41,22 @@ v2.0.29 是自动更新紧急修复版：重点修复误发布 `v20.0.23` 导致
 
 ## 本地运行
 
+### 2.1.0 Go + Next 主体
+
+```powershell
+go run .
+cd web
+bun install
+bun run dev
+```
+
+Next 默认代理到 `http://127.0.0.1:8080` 的 Go API。旧 API 设置和应用设置页面保留在：
+
+- `http://localhost:3000/api-settings`
+- `http://localhost:3000/app-settings`
+
+### 2.0.x 兼容 Python 本地服务
+
 ```powershell
 pip install -r requirements.txt
 python launcher.py
@@ -52,6 +70,15 @@ python main.py
 
 ## 桌面版构建
 
+v2.1.0 桌面版需要先构建 Go API、Next standalone，并把 Node runtime 一起放进 EXE 目录。Windows 构建机需要：
+
+- Go 1.25+
+- Bun
+- Node.js
+- Python 3.10+
+- PyInstaller
+- 可选：Inno Setup 6（用于一键安装器）
+
 ```powershell
 .\build_desktop.bat
 ```
@@ -60,7 +87,11 @@ python main.py
 
 ```text
 dist\LumaForge\LumaForge.exe
+releases\LumaForge-2.1.0-desktop.zip
+releases\LumaForge-Setup-2.1.0.exe
 ```
+
+说明：`LumaForge.exe` 会优先启动 v2.1.0 的 Go + Next 主体；如果发布包里缺少 `v21/server.exe`、`web/server.js` 或 `node/node.exe`，才会回退到旧 Python 本地服务。
 
 桌面版默认数据目录：
 
@@ -90,16 +121,16 @@ macOS 不能在 Windows 上交叉构建，必须在 Mac 机器或 GitHub Actions
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-VERSION=2.0.29 bash scripts/build_macos_release.sh
+VERSION=2.1.0 bash scripts/build_macos_release.sh
 ```
 
-也可以在 GitHub Actions 里手动运行 `Build macOS Release` workflow，或推送 `v2.0.29` tag 后让 macOS runner 自动构建并上传 macOS 包。
+也可以在 GitHub Actions 里手动运行 `Build macOS Release` workflow，或推送 `v2.1.0` tag 后让 macOS runner 自动构建并上传 macOS 包。
 
 输出：
 
 ```text
-releases/LumaForge-2.0.29-macos.zip
-releases/LumaForge-2.0.29-macos.sha256.txt
+releases/LumaForge-2.1.0-macos.zip
+releases/LumaForge-2.1.0-macos.sha256.txt
 ```
 
 说明：
@@ -115,7 +146,7 @@ releases/LumaForge-2.0.29-macos.sha256.txt
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f Dockerfile.cloud \
-  -t iguang9881/lumaforge-cloud:2.0.29 \
+  -t iguang9881/lumaforge-cloud:2.1.0 \
   -t iguang9881/lumaforge-cloud:latest \
   --push .
 ```
@@ -126,7 +157,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
 
-docker pull iguang9881/lumaforge-cloud:2.0.29
+docker pull iguang9881/lumaforge-cloud:2.1.0
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 
@@ -134,10 +165,10 @@ docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.29 \
+  -e CLOUD_APP_VERSION=2.1.0 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.29
+  iguang9881/lumaforge-cloud:2.1.0
 ```
 
 不要删除 `/opt/lumaforge-cloud/cloud-data`，否则云端账户、SMTP、配置同步和备份记录会丢失。
@@ -147,14 +178,14 @@ docker run -d \
 发布前运行：
 
 ```powershell
-.\scripts\check_release.ps1 -Version 2.0.29
+.\scripts\check_release.ps1 -Version 2.1.0
 ```
 
 GitHub Release 建议同时上传：
 
-- `releases/LumaForge-Setup-2.0.29.exe` 安装器
-- `releases/LumaForge-2.0.29-desktop.zip` 桌面自动更新包
-- `releases/LumaForge-2.0.29-macos.zip` macOS 包（在 macOS 上构建）
+- `releases/LumaForge-Setup-2.1.0.exe` 安装器
+- `releases/LumaForge-2.1.0-desktop.zip` 桌面自动更新包
+- `releases/LumaForge-2.1.0-macos.zip` macOS 包（在 macOS 上构建）
 - 对应 SHA256 校验信息
 
 发布流程和人工回归项见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。

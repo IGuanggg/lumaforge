@@ -1,0 +1,126 @@
+package router
+
+import (
+	"net/http"
+
+	"github.com/basketikun/infinite-canvas/handler"
+	"github.com/basketikun/infinite-canvas/middleware"
+	"github.com/gin-gonic/gin"
+)
+
+func New() *gin.Engine {
+	router := gin.Default()
+	router.RedirectTrailingSlash = false
+	_ = router.SetTrustedProxies(nil)
+	api := router.Group("/api")
+	api.GET("/health", func(c *gin.Context) {
+		c.String(http.StatusOK, "ok")
+	})
+	api.POST("/auth/register", gin.WrapF(handler.LumaAuthRegister))
+	api.POST("/auth/login", gin.WrapF(handler.LumaAuthLogin))
+	api.GET("/auth/linux-do/authorize", gin.WrapF(handler.LinuxDoAuthorize))
+	api.GET("/auth/linux-do/callback", gin.WrapF(handler.LinuxDoCallback))
+	api.GET("/auth/me", gin.WrapF(handler.LumaCurrentUser))
+	api.GET("/settings", gin.WrapF(handler.LumaSettings))
+	api.GET("/config", gin.WrapF(handler.LumaConfig))
+	api.GET("/config/token", gin.WrapF(handler.LumaConfigToken))
+	api.GET("/providers", gin.WrapF(handler.LumaProviders))
+	api.PUT("/providers", gin.WrapF(handler.LumaProviders))
+	api.GET("/providers/key-diagnostics", gin.WrapF(handler.LumaProviderKeyDiagnostics))
+	api.POST("/providers/key-diagnostics/clear", gin.WrapF(handler.LumaProviderKeyDiagnosticsClear))
+	api.POST("/providers/test-connection", gin.WrapF(handler.LumaProviderTestConnection))
+	api.POST("/providers/probe-async", gin.WrapF(handler.LumaProviderProbeAsync))
+	api.GET("/providers/:id/fetch-models", func(c *gin.Context) {
+		handler.LumaProviderFetchModels(c.Writer, c.Request, c.Param("id"))
+	})
+	api.GET("/cloud/status", gin.WrapF(handler.LumaCloudStatus))
+	api.POST("/cloud/login", gin.WrapF(handler.LumaCloudLogin))
+	api.POST("/cloud/register", gin.WrapF(handler.LumaCloudRegister))
+	api.POST("/cloud/logout", gin.WrapF(handler.LumaCloudLogout))
+	api.GET("/cloud/profile", gin.WrapF(handler.LumaCloudProfile))
+	api.POST("/cloud/upload", gin.WrapF(handler.LumaCloudUpload))
+	api.POST("/cloud/download", gin.WrapF(handler.LumaCloudDownload))
+	api.GET("/cloud/media/status", gin.WrapF(handler.LumaCloudMediaStatus))
+	api.POST("/cloud/media/sync", gin.WrapF(handler.LumaCloudMediaNoop))
+	api.POST("/cloud/media/restore", gin.WrapF(handler.LumaCloudMediaNoop))
+	api.GET("/app/info", gin.WrapF(handler.LumaAppInfo))
+	api.GET("/app/update-state", gin.WrapF(handler.LumaUpdateState))
+	api.GET("/app/update-check", gin.WrapF(handler.LumaUpdateCheck))
+	api.POST("/app/update-settings", gin.WrapF(handler.LumaUpdateSettings))
+	api.GET("/app/update-preflight", gin.WrapF(handler.LumaUpdatePreflight))
+	api.POST("/app/update-download", gin.WrapF(handler.LumaUpdateDownload))
+	api.POST("/app/update-install", gin.WrapF(handler.LumaUpdateInstall))
+	api.POST("/app/update-auto", gin.WrapF(handler.LumaUpdateAuto))
+	api.GET("/app/local-data-health", gin.WrapF(handler.LumaLocalDataHealth))
+	api.GET("/app/diagnostics", gin.WrapF(handler.LumaDiagnostics))
+	api.GET("/app/backups", gin.WrapF(handler.LumaBackups))
+	api.POST("/app/backup-create", gin.WrapF(handler.LumaBackupNoop))
+	api.POST("/app/backup-restore", gin.WrapF(handler.LumaBackupNoop))
+	api.GET("/app/cleanup-preview", gin.WrapF(handler.LumaDiagnostics))
+	api.POST("/app/cleanup-run", gin.WrapF(handler.LumaBackupNoop))
+	api.POST("/app/open-path", gin.WrapF(handler.LumaBackupNoop))
+	api.POST("/app/open-url", gin.WrapF(handler.LumaBackupNoop))
+	api.POST("/app/restart", gin.WrapF(handler.LumaBackupNoop))
+	api.POST("/app/exit", gin.WrapF(handler.LumaBackupNoop))
+	api.GET("/assets/health", gin.WrapF(handler.LumaAssetsHealth))
+	api.POST("/assets/rebuild-thumbnails", gin.WrapF(handler.LumaAssetsNoop))
+	api.POST("/assets/bulk-delete", gin.WrapF(handler.LumaAssetsNoop))
+	api.GET("/media/references/:id", func(c *gin.Context) {
+		handler.ReferenceMedia(c.Writer, c.Request, c.Param("id"))
+	})
+	api.HEAD("/media/references/:id", func(c *gin.Context) {
+		handler.ReferenceMedia(c.Writer, c.Request, c.Param("id"))
+	})
+	v1 := api.Group("/v1", middleware.UserAuth)
+	v1.POST("/images/generations", gin.WrapF(handler.AIImagesGenerations))
+	v1.POST("/images/edits", gin.WrapF(handler.AIImagesEdits))
+	v1.POST("/chat/completions", gin.WrapF(handler.AIChatCompletions))
+	v1.POST("/audio/speech", gin.WrapF(handler.AIAudioSpeech))
+	v1.POST("/videos", gin.WrapF(handler.AIVideos))
+	v1.POST("/media/references", gin.WrapF(handler.UploadReferenceMedia))
+	v1.GET("/videos/:id", func(c *gin.Context) {
+		handler.AIVideo(c.Writer, c.Request, c.Param("id"))
+	})
+	v1.GET("/videos/:id/content", func(c *gin.Context) {
+		handler.AIVideoContent(c.Writer, c.Request, c.Param("id"))
+	})
+	api.GET("/prompts", middleware.OptionalAuth, gin.WrapF(handler.Prompts))
+	api.GET("/assets", middleware.OptionalAuth, gin.WrapF(handler.Assets))
+	api.POST("/admin/login", gin.WrapF(handler.AdminLogin))
+
+	admin := api.Group("/admin", middleware.AdminAuth)
+	admin.GET("/users", gin.WrapF(handler.AdminUsers))
+	admin.POST("/users", gin.WrapF(handler.AdminSaveUser))
+	admin.POST("/users/:id/credits", func(c *gin.Context) {
+		handler.AdminAdjustUserCredits(c.Writer, c.Request, c.Param("id"))
+	})
+	admin.DELETE("/users/:id", func(c *gin.Context) {
+		handler.AdminDeleteUser(c.Writer, c.Request, c.Param("id"))
+	})
+	admin.GET("/credit-logs", gin.WrapF(handler.AdminCreditLogs))
+	admin.POST("/credit-logs", gin.WrapF(handler.AdminSaveCreditLog))
+	admin.DELETE("/credit-logs/:id", func(c *gin.Context) {
+		handler.AdminDeleteCreditLog(c.Writer, c.Request, c.Param("id"))
+	})
+	admin.GET("/settings", gin.WrapF(handler.AdminSettings))
+	admin.POST("/settings", gin.WrapF(handler.AdminSaveSettings))
+	admin.POST("/settings/channel-models", gin.WrapF(handler.AdminChannelModels))
+	admin.POST("/settings/channel-test", gin.WrapF(handler.AdminTestChannelModel))
+	admin.GET("/prompt-categories", gin.WrapF(handler.AdminPromptCategories))
+	admin.POST("/prompt-categories/sync", gin.WrapF(handler.AdminSyncPromptCategories))
+	admin.GET("/prompts", gin.WrapF(handler.AdminPrompts))
+	admin.POST("/prompts", gin.WrapF(handler.AdminSavePrompt))
+	admin.POST("/prompts/batch-delete", gin.WrapF(handler.AdminDeletePrompts))
+	admin.DELETE("/prompts/:id", func(c *gin.Context) {
+		handler.AdminDeletePrompt(c.Writer, c.Request, c.Param("id"))
+	})
+	admin.GET("/assets", gin.WrapF(handler.AdminAssets))
+	admin.POST("/assets", gin.WrapF(handler.AdminSaveAsset))
+	admin.DELETE("/assets/:id", func(c *gin.Context) {
+		handler.AdminDeleteAsset(c.Writer, c.Request, c.Param("id"))
+	})
+
+	router.NoRoute(middleware.NotFoundJSON)
+
+	return router
+}

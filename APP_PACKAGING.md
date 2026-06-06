@@ -1,6 +1,6 @@
 # LumaForge 打包与部署
 
-目标版本：`2.0.29`
+目标版本：`2.1.0`
 
 ## 桌面窗口版
 
@@ -23,14 +23,25 @@ dist\LumaForge\LumaForge.exe
 发布给自动更新使用的 zip 必须包含 `LumaForge/` 根目录：
 
 ```text
-LumaForge-2.0.29-desktop.zip
+LumaForge-2.1.0-desktop.zip
   LumaForge\
     LumaForge.exe
     LumaForgeUpdater.exe
     _internal\
+      v21\
+        server.exe
+      web\
+        server.js
+        .next\
+        public\
+      node\
+        node.exe
     static\
     workflows\
 ```
+
+说明：启动器会同时检查根目录和 `_internal`，PyInstaller one-dir 默认会把上述 v21 运行文件放在 `_internal`。
+v2.1.0 桌面模式会优先启动 Go + Next 主体，同时在隐藏本地端口启动 legacy FastAPI 兼容服务，并把地址写入 `LUMAFORGE_LEGACY_API_URL`。设置页自动更新、备份、诊断和深度素材维护接口先通过该兼容层保留。
 
 默认目录：
 
@@ -60,26 +71,35 @@ macOS 产物必须在 macOS 上构建，不能在 Windows 上交叉编译：
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-VERSION=2.0.29 bash scripts/build_macos_release.sh
+VERSION=2.1.0 bash scripts/build_macos_release.sh
 ```
 
-也可以在 GitHub Actions 手动运行 `Build macOS Release` workflow；推送 `v2.0.29` tag 时，该 workflow 会在 macOS runner 上构建并把 macOS zip 上传到 GitHub Release。
+也可以在 GitHub Actions 手动运行 `Build macOS Release` workflow；推送 `v2.1.0` tag 时，该 workflow 会在 macOS runner 上构建并把 macOS zip 上传到 GitHub Release。
 
 产物：
 
 ```text
-releases/LumaForge-2.0.29-macos.zip
-releases/LumaForge-2.0.29-macos.sha256.txt
+releases/LumaForge-2.1.0-macos.zip
+releases/LumaForge-2.1.0-macos.sha256.txt
 ```
 
 正式分发建议在 macOS 上追加 Apple Developer 签名和公证：
 
 ```bash
 codesign --deep --force --options runtime --sign "Developer ID Application: YOUR NAME (TEAMID)" "dist/LumaForge.app"
-xcrun notarytool submit "releases/LumaForge-2.0.29-macos.zip" --keychain-profile "notarytool-profile" --wait
+xcrun notarytool submit "releases/LumaForge-2.1.0-macos.zip" --keychain-profile "notarytool-profile" --wait
 ```
 
 ## 源码运行
+
+```powershell
+go run .
+cd web
+bun install
+bun run dev
+```
+
+旧 Python 兼容服务仍可用：
 
 ```powershell
 pip install -r requirements.txt
@@ -97,17 +117,17 @@ python launcher.py
 ```bash
 mkdir -p /opt/lumaforge-cloud/cloud-data
 cd /opt/lumaforge-cloud
-docker pull iguang9881/lumaforge-cloud:2.0.29
+docker pull iguang9881/lumaforge-cloud:2.1.0
 docker stop lumaforge-cloud || true
 docker rm lumaforge-cloud || true
 docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.0.29 \
+  -e CLOUD_APP_VERSION=2.1.0 \
   -p 127.0.0.1:8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.0.29
+  iguang9881/lumaforge-cloud:2.1.0
 ```
 
 ## 注意事项

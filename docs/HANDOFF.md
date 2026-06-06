@@ -1,6 +1,6 @@
-﻿# LumaForge Project Handoff
+# LumaForge Project Handoff
 
-Last updated: 2026-05-28
+Last updated: 2026-06-05
 
 ## Project Identity
 
@@ -8,370 +8,155 @@ Last updated: 2026-05-28
 - English brand: LumaForge
 - GitHub repository name: lumaforge
 - Frontend package/app name: lumaforge
-- Backend cloud service: lumaforge-cloud
+- Cloud backend service: lumaforge-cloud
 - Docker image: iguang9881/lumaforge-cloud
-- Docker container: lumaforge-cloud
-- Cloud data directory: /opt/lumaforge-cloud
 - Desktop exe: LumaForge.exe
 - Desktop updater exe: LumaForgeUpdater.exe
 
-## Current State
+## Current Version
 
-- Current local app version in code: 2.0.29
-- Current build id: 20260604-v2026-wheel-link-hotfix1
-- Main local URL: http://localhost:3010/
-- Main app file: main.py
-- Desktop launcher: desktop_launcher.py
-- Browser launcher: launcher.py
-- Desktop updater: desktop_updater.py
-- Desktop PyInstaller spec: desktop_canvas.spec
-- Updater PyInstaller spec: desktop_updater.spec
+- App version: 2.1.0
+- Build ID: 20260605-v210-source-refactor1
+- New main backend: `main.go`
+- New main frontend: `web/`
+- Legacy compatibility backend: `main.py`
+- Desktop launcher: `desktop_launcher.py`
+- Desktop updater: `desktop_updater.py`
+- Release check: `scripts/check_release.ps1`
 
-The project is a local-first AI creation studio with:
+## v2.1.0 Direction
 
-- Text-to-image
-- Image enhancement
-- Image editing
-- Angle control
-- GPT chat
-- Smart canvas
-- Infinite canvas
-- Asset library
-- Cloud sync / backup
-- API provider management
-- Desktop EXE packaging
-- Docker backend deployment
+v2.1.0 is a source-main refactor. The Go + Next.js project imported from `new新的infinite-canvas-0.2.4-copy.zip` is now the new main canvas/application body.
 
-## Important User Preferences
+The following LumaForge assets must remain authoritative:
 
-- The user wants a normal desktop-app experience, not a manual deployment workflow.
-- EXE is the priority, browser/local mode remains useful for development.
-- Local data must survive upgrades.
-- Do not make the user manually download and replace every release.
-- Downloads should prioritize local files.
-- Cloud storage exists, but should not be assumed unlimited.
-- Do not add random new features while fixing release/stability issues.
-- Keep UI consistent with the current LumaForge style.
-- Do not regress recently fixed modules such as GPT chat, smart canvas, enhance, asset library, and download behavior.
+- Cloud account and sync backend:
+  - `cloud_config_server.py`
+  - `Dockerfile.cloud`
+  - `docker-compose.cloud.yml`
+  - `requirements-cloud.txt`
+- API provider settings:
+  - `data/api_providers.json`
+  - `api_provider_keys.json`
+  - model fetch
+  - connection test/manual probe
+  - VIP and non-VIP image model choices
+- App settings/update module:
+  - current version and Build ID
+  - GitHub Release update check
+  - update state
+  - desktop zip download/install/restart flow
+  - ignore 3 days / never remind update notice state
+- Desktop packaging and update safety:
+  - Windows desktop zip is required for auto-update
+  - installer EXE alone is not enough
+  - updater must replace program files only
+  - user data must never be overwritten
 
-## Data Directory Rules
+## Desktop Runtime
 
-Desktop mode must not keep user data inside the program install directory.
+The v2.1.0 desktop launcher starts the new runtime first:
 
-Current intended desktop paths:
+- Go API server: `v21/server.exe`
+- Next standalone app: `web/server.js`
+- Node runtime: `node/node.exe`
 
-- Runtime/data/config: `%APPDATA%\LumaForge`
-- Assets: `%USERPROFILE%\Pictures\LumaForge`
+When the v2.1 runtime is available, `desktop_launcher.py` also starts a hidden legacy FastAPI compatibility server on a local port and passes it to the Go API through `LUMAFORGE_LEGACY_API_URL`.
+
+This keeps existing update, backup, diagnostics, and deep asset maintenance routes available while the new Go + Next main body is being migrated.
+
+If v2.1 runtime artifacts are missing, the launcher falls back to the legacy Python app.
+
+## Data Rules
+
+Desktop mode must not keep user data inside the install directory.
+
+Protected user locations:
+
+- Runtime/config/data: `%APPDATA%\LumaForge`
+- Images/assets: `%USERPROFILE%\Pictures\LumaForge`
 - Logs/cache/webview storage: `%LOCALAPPDATA%\LumaForge`
 
-Protected directories during update:
+Protected runtime directories during update:
 
-- API
-- data
-- assets
-- logs
-- cache
-- cloud-data
-- releases
-- updates
-- userdata
-- output
+- `API`
+- `data`
+- `assets`
+- `logs`
+- `cache`
+- `cloud-data`
+- `releases`
+- `updates`
+- `userdata`
+- `output`
 
-The update process must replace program files only. It must not overwrite user data.
+Migration rule:
 
-## Completed Recently
+- First v2.1 startup writes `migration-2.1.0.json`.
+- Existing data is reused or copied only.
+- Never delete old canvas, asset, API provider, cloud session, backup, update, or log files during migration.
 
-### v2.0.5 Stability Work
+## API Compatibility
 
-- Vendored frontend runtime dependencies under `static/vendor`.
-- Removed runtime CDN dependency for core frontend libraries.
-- Added static dependency health checks.
-- Added local data health checks.
-- Added cache and old canvas backup cleanup preview/run.
-- Hardened API liveness checks with timeout and caching.
-- Fixed project-wide download buttons to route through local backend.
-- Fixed API signup button to open external browser instead of trapping user inside app.
-- Removed confusing “新增百炼” shortcut button from API settings.
+Keep these LumaForge routes:
 
-### v2.0.6 Desktop Auto-Update Foundation
+- `/api/providers/*`
+- `/api/providers/test-connection`
+- `/api/providers/probe-async`
+- `/api/providers/{provider_id}/fetch-models`
+- `/api/config/token`
+- `/api/cloud/*`
+- `/api/assets/*`
+- `/api/app/info`
+- `/api/app/update-check`
+- `/api/app/update-state`
+- `/api/app/update-download`
+- `/api/app/update-install`
 
-- Added independent updater:
-  - `desktop_updater.py`
-  - `desktop_updater.spec`
-- Desktop update flow:
-  1. Main app checks GitHub Release.
-  2. Main app downloads desktop `.zip`.
-  3. Main app starts `LumaForgeUpdater.exe`.
-  4. Main app exits.
-  5. Updater waits for old process to exit.
-  6. Updater replaces program files.
-  7. Updater restarts `LumaForge.exe`.
-- `desktop_launcher.py` now sets stable desktop data paths.
-- `launcher.py` also uses stable user data paths.
-- Launcher attempts to migrate old `userdata` and `assets` from app directory when possible.
-- App settings page now displays update capability.
-- `desktop_canvas.spec` includes `LumaForgeUpdater.exe` when it exists in `dist`.
+New source routes may remain:
 
-## Current User Request / Next Target
+- `/api/v1/images/generations`
+- `/api/v1/images/edits`
+- `/api/v1/chat/completions`
+- `/api/v1/videos`
+- `/api/prompts`
 
-Current planned version: 2.0.29
+`/api/auth/*` maps to the LumaForge cloud account flow. Do not switch the real account source to the imported local user table.
 
-Goal:
+Image generation defaults:
 
-v2.0.29 emergency update hotfix: recover from the accidental `v20.0.23` release line by normalizing it to `2.0.23` for comparisons, switch default update checks to the GitHub Releases list, filter for valid `2.0.x` releases, and harden desktop restart path detection so automatic updates can relaunch `LumaForge.exe` reliably.
+- Model: `gpt-image-2-vip`
+- Ratio: `16:9`
+- Quality: `1K`
+- VIP and non-VIP image model choices must both remain selectable.
 
-The user specifically asked for:
+## Release Validation
 
-- Material detail page displays generation parameters.
-- Reuse parameters to regenerate.
-- Local lightweight backup/restore.
-- Post-update status prompt.
-- Startup diagnostics page.
-- Asset library missing-file check.
-- Thumbnail rebuild.
-- Final interface/UI/API check and hardening.
-
-Implemented polish:
-
-- Smart Canvas "back to list" now opens the shared canvas manager in `list=smart` mode.
-- The shared canvas manager filters and labels smart canvases when opened through that mode.
-- Smart Canvas is now the first-run landing page as a list selector (`/static/canvas.html?list=smart`), not a direct editor route.
-- App Settings shows a one-time v2.0.10 welcome card with quick links to diagnostics and asset checks.
-- Asset health results are grouped into checked / missing files / thumbnail rebuild counts, with quick actions for thumbnail rebuild and removing missing references.
-- Backup restore now has a clearer overwrite warning and visible risk note.
-- Diagnostics output is grouped into OK / auto-fixable / manual-action buckets.
-- App Settings now blocks direct `file://` use with a clear local-service warning.
-- Backup restore creates a new lightweight snapshot before applying the selected backup.
-- Version/update panel includes a publish check button covering app version, static assets, asset health, thumbnails, backup presence, update capability, and update-check URL.
-
-## v2.0.7 Recommended Scope
-
-### 1. Update UX
-
-Improve `static/app-settings.html`:
-
-- Add update progress UI.
-- Show phases:
-  - checking
-  - found
-  - downloading
-  - verifying
-  - downloaded
-  - waiting_for_exit
-  - extracting
-  - replacing
-  - restarting
-  - done
-  - failed
-  - rollback
-- Add Release Notes modal.
-- Show:
-  - current version
-  - latest version
-  - selected asset name
-  - package size
-  - update mode
-  - SHA256 verification status
-- If failure state exists, show clear error and backup directory.
-
-### 2. Backend Update State
-
-Enhance `main.py`:
-
-- Add or improve `GET /api/app/update-state`.
-- Return:
-  - current version
-  - build id
-  - update capability
-  - update_state.json content
-  - app dir
-  - data dir
-  - assets dir
-- During download, write update state:
-  - phase
-  - downloaded bytes
-  - total bytes if available
-  - file name
-  - SHA256
-  - error
-- During install/updater handoff, write a clear pending external updater state.
-
-### 3. Desktop Updater State
-
-Enhance `desktop_updater.py`:
-
-- Write state phases while running:
-  - waiting_for_exit
-  - extracting
-  - replacing
-  - rollback
-  - done
-  - failed
-- Keep the state JSON UTF-8.
-- Preserve rollback behavior.
-- Never touch protected user-data directories.
-
-### 4. Installer
-
-Add Inno Setup script:
-
-- Suggested path: `installer/LumaForge.iss`
-- Output: `LumaForge-Setup-2.0.7.exe`
-- Default install dir: `{autopf}\LumaForge`
-- Include:
-  - `dist\LumaForge\**`
-  - `LumaForge.exe`
-  - `LumaForgeUpdater.exe`
-- Add Start Menu shortcut.
-- Add optional desktop shortcut.
-- Uninstall must not delete `%APPDATA%\LumaForge` or `%LOCALAPPDATA%\LumaForge`.
-
-### 5. Code Signing Preparation
-
-Add script:
-
-- Suggested path: `scripts/sign_windows.ps1`
-
-Use environment variables:
-
-- `WINDOWS_SIGN_CERT_PATH`
-- `WINDOWS_SIGN_CERT_PASSWORD`
-- `WINDOWS_SIGN_TIMESTAMP_URL`
-
-Default timestamp URL:
-
-- `http://timestamp.digicert.com`
-
-Behavior:
-
-- If certificate variables are missing, do not fail. Print that signing was skipped.
-- If configured, sign:
-  - `dist\LumaForge\LumaForge.exe`
-  - `dist\LumaForge\LumaForgeUpdater.exe`
-  - `releases\LumaForge-Setup-2.0.7.exe` if it exists
-
-### 6. Desktop Release Script
-
-Add script:
-
-- Suggested path: `scripts/build_desktop_release.ps1`
-
-Flow:
-
-1. Clean `build`, `dist`, and create `releases`.
-2. Run `pyinstaller desktop_updater.spec --noconfirm`.
-3. Run `pyinstaller desktop_canvas.spec --noconfirm`.
-4. Assert:
-   - `dist\LumaForge\LumaForge.exe`
-   - `dist\LumaForge\LumaForgeUpdater.exe`
-5. Create:
-   - `releases\LumaForge-2.0.7-desktop.zip`
-6. If `ISCC.exe` exists, build installer:
-   - `releases\LumaForge-Setup-2.0.7.exe`
-7. Run `scripts/sign_windows.ps1`.
-8. Print SHA256 hashes for release assets.
-
-## Release Asset Rule
-
-For auto-update to work, GitHub Release must include a desktop zip asset.
-
-Do not upload only a single EXE.
-
-Required asset shape:
-
-```text
-LumaForge-2.0.7-desktop.zip
-  LumaForge/
-    LumaForge.exe
-    LumaForgeUpdater.exe
-    _internal/
-    static/
-    workflows/
-```
-
-The app currently selects `.zip` release assets for auto update.
-
-## Key Files
-
-- `main.py`: FastAPI backend, app config, update endpoints, cloud sync, asset APIs, canvas APIs.
-- `static/index.html`: main shell/navigation/status bar.
-- `static/app-settings.html`: app paths, local data health, update UI.
-- `static/api-settings.html`: API provider configuration.
-- `static/smart-canvas.html`: smart canvas.
-- `static/canvas.html`: infinite canvas.
-- `static/assets.html`: asset library.
-- `desktop_launcher.py`: desktop window mode using pywebview.
-- `launcher.py`: browser/local mode.
-- `desktop_updater.py`: external updater for EXE replacement.
-- `desktop_canvas.spec`: PyInstaller desktop app spec.
-- `desktop_updater.spec`: PyInstaller updater spec.
-- `README.md`, `RELEASE_CHECKLIST.md`, `APP_PACKAGING.md`: release documentation.
-
-## Validation Commands
-
-Run these before claiming release readiness:
+Run before publishing:
 
 ```powershell
-python -m py_compile main.py desktop_launcher.py launcher.py desktop_updater.py
+python -m py_compile main.py cloud_config_server.py launcher.py desktop_launcher.py desktop_updater.py
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\check_release.ps1 -Version 2.1.0 -BuildId 20260605-v210-source-refactor1
+git diff --check
 ```
 
-Check inline scripts:
+If local Go/Bun are unavailable, validate with Docker:
 
 ```powershell
-@'
-const fs = require('fs');
-const path = require('path');
-const files = fs.readdirSync('static').filter(f => f.endsWith('.html')).map(f => path.join('static', f));
-let failed = false;
-for (const file of files) {
-  const html = fs.readFileSync(file, 'utf8');
-  const matches = [...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/gi)];
-  let checked = 0;
-  matches.forEach((m, i) => {
-    const attrs = m[1] || '';
-    if (/\bsrc\s*=/.test(attrs)) return;
-    const type = (attrs.match(/\btype\s*=\s*["']?([^"'\s>]+)/i)?.[1] || '').toLowerCase();
-    if (type && type !== 'text/javascript' && type !== 'application/javascript') return;
-    checked += 1;
-    try { new Function(m[2]); }
-    catch (err) { console.error(`${file} inline script #${i + 1}: ${err.message}`); failed = true; }
-  });
-  console.log(`${file}: ${checked} normal inline scripts OK`);
-}
-if (failed) process.exit(1);
-'@ | node -
+docker build -f Dockerfile.v21 -t lumaforge:v21-check --progress=plain .
+docker run --rm -v ${PWD}:/src -w /src golang:1.25-alpine /usr/local/go/bin/go test ./...
 ```
 
-Desktop smoke:
+Expected release artifacts:
 
-```powershell
-$env:APP_PORT='3021'
-python desktop_launcher.py --smoke-test
-```
+- `lumaforge-browser-v2.1.0.zip`
+- `LumaForge-2.1.0-desktop.zip`
+- `LumaForge-Setup-2.1.0.exe`
+- macOS zip from macOS local build or GitHub Actions macOS workflow
 
-Local service check:
+## Current Caveats
 
-```powershell
-$env:APP_PORT='3010'
-python main.py
-```
-
-Then verify:
-
-- `GET /api/app/info`
-- `GET /api/app/static-health`
-- `GET /api/app/local-data-health`
-- `GET /api/app/update-check`
-- `GET /api/app/update-state` once added
-
-## Important Cautions
-
-- Do not run destructive git commands.
-- Do not reset or revert user changes without permission.
-- Use `rg` for search.
-- Use `apply_patch` for manual file edits.
-- Be careful with Chinese text encoding. Prefer UTF-8 reads/writes and avoid PowerShell `Set-Content` on HTML files.
-- Do not rewrite the whole UI. Keep style consistent.
-- Do not move data directories again unless explicitly planned.
-- Do not promise SmartScreen is solved without a real code-signing certificate.
-- Do not claim EXE auto-update works until a release zip containing `LumaForgeUpdater.exe` is tested.
+- This is an architecture-level start, not a small hotfix.
+- Keep the legacy compatibility layer until update, backup, cloud media sync, and deep asset migration are fully implemented in Go.
+- Do not mass-rename internal legacy `comfy*` identifiers without a dedicated test pass. Visible UI should say “本地工作流”, but internal compatibility names can remain temporarily.
+- Stability is higher priority than adding new canvas features.

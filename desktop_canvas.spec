@@ -18,6 +18,19 @@ datas = [
     (certifi.where(), "certifi"),
 ] + updater_datas
 
+if os.path.isfile("build/v21/server.exe"):
+    datas.append(("build/v21/server.exe", "v21"))
+if os.path.isfile("build/v21/server"):
+    datas.append(("build/v21/server", "v21"))
+if os.path.isdir("build/v21/node"):
+    datas.append(("build/v21/node", "node"))
+if os.path.isdir("web/.next/standalone"):
+    datas.append(("web/.next/standalone", "web"))
+if os.path.isdir("web/.next/static"):
+    datas.append(("web/.next/static", "web/.next/static"))
+if os.path.isdir("web/public"):
+    datas.append(("web/public", "web/public"))
+
 hiddenimports = (
     collect_submodules("uvicorn")
     + collect_submodules("fastapi")

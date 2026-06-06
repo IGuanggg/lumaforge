@@ -1,6 +1,6 @@
 ﻿param(
-    [string]$Version = "2.0.29",
-    [string]$BuildId = "20260605-v2029-remove-comfyui-content1"
+    [string]$Version = "2.1.0",
+    [string]$BuildId = "20260605-v210-source-refactor1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,8 +33,16 @@ function Assert-NotStagedRuntimeData {
     $runtimeDirs = @("assets/", "output/", "data/", "userdata/", "cloud-data/", "cache/", "logs/", "releases/", "updates/")
     $status = git status --short
     foreach ($line in $status) {
+        if ($line.Length -lt 4) {
+            continue
+        }
+        $path = $line.Substring(3).Trim()
+        if ($path.Contains(" -> ")) {
+            $path = ($path -split " -> ")[-1].Trim()
+        }
+        $path = $path.Replace("\", "/")
         foreach ($dir in $runtimeDirs) {
-            if ($line -match [regex]::Escape($dir)) {
+            if ($path.StartsWith($dir, [System.StringComparison]::OrdinalIgnoreCase)) {
                 throw "Runtime data appears in git status: $line"
             }
         }
@@ -46,11 +54,24 @@ Assert-Contains "main.py" "APP_VERSION = os.getenv(`"APP_VERSION`", `"$Version`"
 Assert-Contains "Dockerfile" "APP_VERSION=$Version"
 Assert-Contains "cloud_config_server.py" "CLOUD_APP_VERSION = os.getenv(`"CLOUD_APP_VERSION`", `"$Version`")"
 Assert-Contains "Dockerfile.cloud" "ENV CLOUD_APP_VERSION=$Version"
+Assert-Contains "VERSION" $Version
+Assert-Contains "service/lumaforge.go" "LumaForgeVersion = `"$Version`""
+Assert-Contains "service/lumaforge.go" "LumaForgeBuildID = `"$BuildId`""
+Assert-Contains "web/package.json" "`"version`": `"$Version`""
+Assert-Contains "Dockerfile.v21" "COPY CHANGELOG.md /app/CHANGELOG.md"
+Assert-Contains "installer/LumaForge.iss" "#define MyAppVersion `"$Version`""
+Assert-Contains "CHANGELOG.md" "v$Version"
 Assert-Contains "docker-compose.cloud.yml" "lumaforge-cloud"
 Assert-Contains "docker-compose.cloud.yml" "iguang9881/lumaforge-cloud"
 Assert-Contains "desktop_canvas.spec" 'name="LumaForge"'
 Assert-Contains "static/index.html" "LumaForge"
 Assert-Contains "main.py" "APP_BUILD_ID = os.getenv(`"APP_BUILD_ID`", `"$BuildId`")"
+Assert-Contains "main.py" "IMAGE_MODEL = os.getenv(`"IMAGE_MODEL`", `"gpt-image-2-vip`")"
+Assert-Contains "main.py" 'IMAGE_MODELS = model_list("IMAGE_MODELS", IMAGE_MODEL, ["gpt-image-2", "nano-banana-pro"])'
+Assert-Contains "web/src/stores/use-config-store.ts" "imageModel: `"gpt-image-2-vip`""
+Assert-Contains "web/src/hooks/use-version-check.ts" "https://raw.githubusercontent.com/IGuanggg/lumaforge/main/VERSION"
+Assert-Contains "web/src/components/layout/github-link.tsx" "https://github.com/IGuanggg/lumaforge"
+Assert-Contains "web/src/constant/env.ts" "https://github.com/IGuanggg/lumaforge#readme"
 Assert-Contains "static/index.html" "const APP_BUILD_ID = '$BuildId';"
 Assert-Contains "static/canvas.html" "const CANVAS_BUILD_ID = '$BuildId';"
 Assert-Contains "static/smart-canvas.html" "?v=$BuildId"
@@ -64,7 +85,8 @@ $staleBuildIds = @(
     "20260604-v2026-canvas-gesture-link-hotfix1",
     "20260604-v2026-wheel-link-hotfix1",
     "20260605-v2027-resolution-cache-hotfix1",
-    "20260605-v2028-cache-nav-hotfix1"
+    "20260605-v2028-cache-nav-hotfix1",
+    "20260605-v2029-remove-comfyui-content1"
 )
 $staticFiles = Get-ChildItem -LiteralPath "static" -Recurse -File | Where-Object { $_.Extension -in ".html", ".js", ".css" }
 foreach ($file in $staticFiles) {
@@ -78,6 +100,29 @@ Write-Host "[2/5] Checking Python syntax..."
 python -m py_compile main.py cloud_config_server.py launcher.py desktop_launcher.py desktop_updater.py
 if ($LASTEXITCODE -ne 0) {
     throw "Python syntax check failed."
+}
+
+Write-Host "[2b/5] Checking Go and Next when toolchains are available..."
+if (Get-Command go -ErrorAction SilentlyContinue) {
+    go test ./...
+    if ($LASTEXITCODE -ne 0) {
+        throw "go test ./... failed."
+    }
+} else {
+    Write-Host "Go not found; skipped go test ./..."
+}
+if ((Get-Command bun -ErrorAction SilentlyContinue) -and (Test-Path "web\bun.lock")) {
+    Push-Location web
+    try {
+        bun run build
+        if ($LASTEXITCODE -ne 0) {
+            throw "bun run build failed."
+        }
+    } finally {
+        Pop-Location
+    }
+} else {
+    Write-Host "Bun not found; skipped bun run build."
 }
 
 Write-Host "[3/5] Checking key HTML script syntax when Node is available..."

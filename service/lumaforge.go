@@ -1,0 +1,983 @@
+package service
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/basketikun/infinite-canvas/config"
+	"github.com/basketikun/infinite-canvas/model"
+)
+
+const (
+	LumaForgeVersion = "2.1.0"
+	LumaForgeBuildID = "20260605-v210-source-refactor1"
+)
+
+var (
+	lumaHTTPClient = &http.Client{Timeout: 45 * time.Second}
+	providerIDRE   = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{1,48}$`)
+)
+
+type LumaCloudSession struct {
+	BaseURL            string         `json:"base_url"`
+	Token              string         `json:"token"`
+	Email              string         `json:"email"`
+	DisplayName        string         `json:"display_name"`
+	AvatarURL          string         `json:"avatar_url"`
+	EmailVerified      bool           `json:"email_verified"`
+	CustomCloud        bool           `json:"custom_cloud"`
+	CloudConfigMissing bool           `json:"cloud_config_missing"`
+	UpdatedAt          int64          `json:"updated_at"`
+	User               map[string]any `json:"user"`
+}
+
+type LumaAPIProvider struct {
+	ID                string           `json:"id"`
+	Name              string           `json:"name"`
+	BaseURL           string           `json:"base_url"`
+	Protocol          string           `json:"protocol"`
+	Enabled           bool             `json:"enabled"`
+	Primary           bool             `json:"primary"`
+	ImageModels       []string         `json:"image_models"`
+	ChatModels        []string         `json:"chat_models"`
+	VideoModels       []string         `json:"video_models"`
+	MSLoras           []map[string]any `json:"ms_loras,omitempty"`
+	MSDefaultsVersion int              `json:"ms_defaults_version,omitempty"`
+	APIKey            string           `json:"api_key,omitempty"`
+	ClearKey          bool             `json:"clear_key,omitempty"`
+	HasKey            bool             `json:"has_key"`
+	KeyPreview        string           `json:"key_preview"`
+}
+
+func LumaDataDir() string {
+	if value := strings.TrimSpace(config.Cfg.LumaForgeDataDir); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(os.Getenv("APP_RUNTIME_DIR")); value != "" {
+		return filepath.Join(value, "data")
+	}
+	dsn := strings.TrimSpace(config.Cfg.DatabaseDSN)
+	if index := strings.Index(dsn, "?"); index >= 0 {
+		dsn = dsn[:index]
+	}
+	if dsn != "" && dsn != ":memory:" && !strings.HasPrefix(dsn, "file:") {
+		return filepath.Dir(dsn)
+	}
+	return "data"
+}
+
+func LumaAssetsDir() string {
+	if value := strings.TrimSpace(os.Getenv("APP_ASSETS_DIR")); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(os.Getenv("USERPROFILE")); value != "" {
+		return filepath.Join(value, "Pictures", "LumaForge")
+	}
+	return filepath.Join(LumaDataDir(), "assets")
+}
+
+func lumaPath(name string) string {
+	return filepath.Join(LumaDataDir(), name)
+}
+
+func readJSONFile(path string, target any) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return json.Unmarshal(data, target) == nil
+}
+
+func writeJSONFile(path string, value any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(data, '\n'), 0644)
+}
+
+func LumaLoadCloudSession() LumaCloudSession {
+	var session LumaCloudSession
+	_ = readJSONFile(lumaPath("cloud_session.json"), &session)
+	if session.BaseURL == "" {
+		session.BaseURL = strings.TrimRight(config.Cfg.LumaForgeCloudURL, "/")
+	}
+	return session
+}
+
+func LumaSaveCloudSession(session LumaCloudSession) error {
+	session.BaseURL = strings.TrimRight(strings.TrimSpace(session.BaseURL), "/")
+	if session.BaseURL == "" {
+		session.BaseURL = strings.TrimRight(config.Cfg.LumaForgeCloudURL, "/")
+	}
+	session.UpdatedAt = time.Now().UnixMilli()
+	return writeJSONFile(lumaPath("cloud_session.json"), session)
+}
+
+func lumaCloudBaseURL(requested string) (string, bool, error) {
+	value := strings.TrimRight(strings.TrimSpace(requested), "/")
+	custom := value != ""
+	if value == "" {
+		value = strings.TrimRight(strings.TrimSpace(config.Cfg.LumaForgeCloudURL), "/")
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return "", custom, errors.New("云端地址需要以 http:// 或 https:// 开头")
+	}
+	return value, custom, nil
+}
+
+func lumaCloudJSON(method string, baseURL string, path string, token string, payload any) (map[string]any, int, error) {
+	var body io.Reader
+	if payload != nil {
+		data, err := json.Marshal(payload)
+		if err != nil {
+			return nil, 0, err
+		}
+		body = bytes.NewReader(data)
+	}
+	request, err := http.NewRequest(method, strings.TrimRight(baseURL, "/")+path, body)
+	if err != nil {
+		return nil, 0, err
+	}
+	if payload != nil {
+		request.Header.Set("Content-Type", "application/json")
+	}
+	if strings.TrimSpace(token) != "" {
+		request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(token))
+	}
+	response, err := lumaHTTPClient.Do(request)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer response.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(response.Body, 12<<20))
+	var result map[string]any
+	if len(data) > 0 {
+		_ = json.Unmarshal(data, &result)
+	}
+	if response.StatusCode >= 400 {
+		message := "云端请求失败"
+		if detail, ok := result["detail"].(string); ok && detail != "" {
+			message = detail
+		} else if msg, ok := result["message"].(string); ok && msg != "" {
+			message = msg
+		}
+		return result, response.StatusCode, errors.New(message)
+	}
+	if result == nil {
+		result = map[string]any{}
+	}
+	return result, response.StatusCode, nil
+}
+
+func LumaCloudAuth(action string, payload map[string]any) (map[string]any, error) {
+	email := strings.TrimSpace(stringFromAny(firstNonNil(payload["email"], payload["username"])))
+	password := strings.TrimSpace(stringFromAny(payload["password"]))
+	baseURL, custom, err := lumaCloudBaseURL(stringFromAny(payload["base_url"]))
+	if err != nil {
+		return nil, err
+	}
+	if email == "" || password == "" {
+		return nil, errors.New("邮箱和密码不能为空")
+	}
+	data, _, err := lumaCloudJSON(http.MethodPost, baseURL, "/api/auth/"+action, "", map[string]any{
+		"email":    email,
+		"password": password,
+	})
+	if err != nil {
+		return nil, err
+	}
+	token := stringFromAny(data["token"])
+	user := map[string]any{
+		"email":          stringFromAny(data["email"]),
+		"email_verified": boolFromAny(data["email_verified"]),
+		"display_name":   stringFromAny(data["display_name"]),
+		"avatar_url":     stringFromAny(data["avatar_url"]),
+	}
+	session := LumaCloudSession{
+		BaseURL:       baseURL,
+		Token:         token,
+		Email:         stringFromAny(user["email"]),
+		DisplayName:   stringFromAny(user["display_name"]),
+		AvatarURL:     stringFromAny(user["avatar_url"]),
+		EmailVerified: boolFromAny(user["email_verified"]),
+		CustomCloud:   custom,
+		User:          user,
+	}
+	_ = LumaSaveCloudSession(session)
+	return map[string]any{
+		"token":                token,
+		"user":                 lumaAuthUserFromSession(session),
+		"base_url":             baseURL,
+		"custom_cloud":         custom,
+		"cloud_config_missing": false,
+	}, nil
+}
+
+func LumaCurrentAuthUser(token string) (model.AuthUser, bool) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return model.AuthUser{}, false
+	}
+	session := LumaLoadCloudSession()
+	if session.Token == token && session.Email != "" {
+		return lumaAuthUserFromSession(session), true
+	}
+	baseURL := session.BaseURL
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = strings.TrimRight(config.Cfg.LumaForgeCloudURL, "/")
+	}
+	data, _, err := lumaCloudJSON(http.MethodGet, baseURL, "/api/me", token, nil)
+	if err != nil {
+		return model.AuthUser{}, false
+	}
+	session.Token = token
+	session.BaseURL = baseURL
+	session.Email = stringFromAny(data["email"])
+	session.DisplayName = stringFromAny(data["display_name"])
+	session.AvatarURL = stringFromAny(data["avatar_url"])
+	session.EmailVerified = boolFromAny(data["email_verified"])
+	session.User = data
+	_ = LumaSaveCloudSession(session)
+	return lumaAuthUserFromSession(session), true
+}
+
+func lumaAuthUserFromSession(session LumaCloudSession) model.AuthUser {
+	name := strings.TrimSpace(session.DisplayName)
+	if name == "" {
+		name = session.Email
+	}
+	role := model.UserRoleUser
+	if strings.EqualFold(session.Email, "admin") {
+		role = model.UserRoleAdmin
+	}
+	return model.AuthUser{
+		ID:          stableCloudUserID(session.Email),
+		Username:    session.Email,
+		DisplayName: name,
+		AvatarURL:   session.AvatarURL,
+		Role:        role,
+		Credits:     999999,
+		CreatedAt:   "",
+		UpdatedAt:   "",
+	}
+}
+
+func stableCloudUserID(email string) string {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" {
+		return "cloud-user"
+	}
+	sum := sha256.Sum256([]byte(email))
+	return "cloud-" + fmt.Sprintf("%x", sum[:8])
+}
+
+func LumaCloudStatus(refresh bool) map[string]any {
+	session := LumaLoadCloudSession()
+	status := map[string]any{
+		"logged_in":            session.Token != "",
+		"base_url":             session.BaseURL,
+		"custom_cloud":         session.CustomCloud,
+		"email":                session.Email,
+		"display_name":         session.DisplayName,
+		"avatar_url":           session.AvatarURL,
+		"email_verified":       session.EmailVerified,
+		"cloud_config_missing": session.CloudConfigMissing,
+	}
+	if refresh && session.Token != "" {
+		if user, ok := LumaCurrentAuthUser(session.Token); ok {
+			status["logged_in"] = true
+			status["email"] = user.Username
+			status["display_name"] = user.DisplayName
+			status["avatar_url"] = user.AvatarURL
+		} else {
+			_ = LumaSaveCloudSession(LumaCloudSession{BaseURL: session.BaseURL, CustomCloud: session.CustomCloud})
+			status["logged_in"] = false
+		}
+	}
+	return status
+}
+
+func LumaCloudConfigUpload(configPayload map[string]any) (map[string]any, error) {
+	session := LumaLoadCloudSession()
+	if session.Token == "" {
+		return nil, errors.New("请先登录云端账户")
+	}
+	if configPayload == nil {
+		configPayload = LumaBuildCloudConfig(true)
+	}
+	data, _, err := lumaCloudJSON(http.MethodPut, session.BaseURL, "/api/configs/current", session.Token, map[string]any{"config": configPayload})
+	if err != nil {
+		return nil, err
+	}
+	session.CloudConfigMissing = false
+	_ = LumaSaveCloudSession(session)
+	return map[string]any{"ok": true, "cloud": data}, nil
+}
+
+func LumaCloudConfigDownload() (map[string]any, error) {
+	session := LumaLoadCloudSession()
+	if session.Token == "" {
+		return nil, errors.New("请先登录云端账户")
+	}
+	data, _, err := lumaCloudJSON(http.MethodGet, session.BaseURL, "/api/configs/current", session.Token, nil)
+	if err != nil {
+		return nil, err
+	}
+	session.CloudConfigMissing = data["config"] == nil
+	_ = LumaSaveCloudSession(session)
+	configMap, _ := data["config"].(map[string]any)
+	applied, err := LumaApplyCloudConfig(configMap)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"ok": true, "cloud_updated_at": data["updated_at"], "config": data["config"], "applied": applied}, nil
+}
+
+func LumaBuildCloudConfig(includeSecrets bool) map[string]any {
+	providers := LumaPublicProviders(LumaLoadProviders())
+	if includeSecrets {
+		keys := LumaLoadProviderKeys()
+		for i := range providers {
+			if key := strings.TrimSpace(keys[providers[i].ID]); key != "" {
+				providers[i].APIKey = key
+			}
+		}
+	}
+	return map[string]any{
+		"schema_version": "lumaforge-2.1.0",
+		"api_providers":  providers,
+		"updated_at":     time.Now().UnixMilli(),
+	}
+}
+
+func LumaApplyCloudConfig(configMap map[string]any) (map[string]any, error) {
+	result := map[string]any{"providers": false}
+	if configMap == nil {
+		return result, nil
+	}
+	rawProviders, ok := configMap["api_providers"].([]any)
+	if !ok {
+		return result, nil
+	}
+	providers := make([]LumaAPIProvider, 0, len(rawProviders))
+	for _, raw := range rawProviders {
+		data, _ := json.Marshal(raw)
+		var provider LumaAPIProvider
+		if json.Unmarshal(data, &provider) == nil && strings.TrimSpace(provider.ID) != "" {
+			providers = append(providers, provider)
+		}
+	}
+	if len(providers) == 0 {
+		return result, nil
+	}
+	if _, err := LumaSaveProviders(providers); err != nil {
+		return result, err
+	}
+	result["providers"] = true
+	result["providers_count"] = len(providers)
+	return result, nil
+}
+
+func LumaDefaultProviders() []LumaAPIProvider {
+	return []LumaAPIProvider{
+		{
+			ID:          "openai",
+			Name:        "OpenAI Compatible",
+			BaseURL:     "https://api.openai.com/v1",
+			Protocol:    "openai",
+			Enabled:     true,
+			Primary:     true,
+			ImageModels: []string{"gpt-image-2-vip", "gpt-image-2", "nano-banana"},
+			ChatModels:  []string{"gpt-5.5", "gpt-4.1", "gpt-4o"},
+			VideoModels: []string{"sora-2"},
+		},
+	}
+}
+
+func LumaLoadProviders() []LumaAPIProvider {
+	var providers []LumaAPIProvider
+	if !readJSONFile(lumaPath("api_providers.json"), &providers) || len(providers) == 0 {
+		providers = LumaDefaultProviders()
+	}
+	return normalizeLumaProviders(providers)
+}
+
+func LumaSaveProviders(providers []LumaAPIProvider) ([]LumaAPIProvider, error) {
+	if len(providers) == 0 {
+		return nil, errors.New("至少保留一个 API 平台")
+	}
+	keys := LumaLoadProviderKeys()
+	cleaned := make([]LumaAPIProvider, 0, len(providers))
+	seen := map[string]bool{}
+	primaryIndex := -1
+	for i, provider := range providers {
+		normalized, err := normalizeLumaProvider(provider)
+		if err != nil {
+			return nil, err
+		}
+		if seen[normalized.ID] {
+			return nil, fmt.Errorf("API 平台 ID 重复：%s", normalized.ID)
+		}
+		seen[normalized.ID] = true
+		if provider.ClearKey {
+			delete(keys, normalized.ID)
+		} else if strings.TrimSpace(provider.APIKey) != "" {
+			keys[normalized.ID] = strings.TrimSpace(provider.APIKey)
+		}
+		if normalized.Primary {
+			primaryIndex = i
+		}
+		normalized.APIKey = ""
+		normalized.ClearKey = false
+		cleaned = append(cleaned, normalized)
+	}
+	if primaryIndex >= 0 {
+		for i := range cleaned {
+			cleaned[i].Primary = i == primaryIndex
+		}
+	}
+	if err := writeJSONFile(lumaPath("api_provider_keys.json"), keys); err != nil {
+		return nil, err
+	}
+	if err := writeJSONFile(lumaPath("api_providers.json"), cleaned); err != nil {
+		return nil, err
+	}
+	return LumaPublicProviders(cleaned), nil
+}
+
+func normalizeLumaProviders(providers []LumaAPIProvider) []LumaAPIProvider {
+	result := []LumaAPIProvider{}
+	seen := map[string]bool{}
+	for _, provider := range providers {
+		normalized, err := normalizeLumaProvider(provider)
+		if err != nil || seen[normalized.ID] {
+			continue
+		}
+		seen[normalized.ID] = true
+		result = append(result, normalized)
+	}
+	if len(result) == 0 {
+		result = LumaDefaultProviders()
+	}
+	if !hasPrimaryProvider(result) {
+		result[0].Primary = true
+	}
+	return result
+}
+
+func normalizeLumaProvider(provider LumaAPIProvider) (LumaAPIProvider, error) {
+	provider.ID = strings.ToLower(strings.TrimSpace(provider.ID))
+	if !providerIDRE.MatchString(provider.ID) {
+		return provider, fmt.Errorf("API 平台 ID 不合法：%s", provider.ID)
+	}
+	provider.Name = strings.TrimSpace(provider.Name)
+	if provider.Name == "" {
+		provider.Name = provider.ID
+	}
+	provider.BaseURL = strings.TrimRight(strings.TrimSpace(provider.BaseURL), "/")
+	if provider.BaseURL != "" {
+		parsed, err := url.Parse(provider.BaseURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+			return provider, fmt.Errorf("%s 的 Base URL 需要以 http:// 或 https:// 开头", provider.Name)
+		}
+	}
+	provider.Protocol = strings.ToLower(strings.TrimSpace(provider.Protocol))
+	if provider.Protocol != "apimart" {
+		provider.Protocol = "openai"
+	}
+	provider.ImageModels = uniqueStrings(provider.ImageModels)
+	provider.ChatModels = uniqueStrings(provider.ChatModels)
+	provider.VideoModels = uniqueStrings(provider.VideoModels)
+	return provider, nil
+}
+
+func hasPrimaryProvider(providers []LumaAPIProvider) bool {
+	for _, provider := range providers {
+		if provider.Primary {
+			return true
+		}
+	}
+	return false
+}
+
+func LumaLoadProviderKeys() map[string]string {
+	keys := map[string]string{}
+	_ = readJSONFile(lumaPath("api_provider_keys.json"), &keys)
+	for _, provider := range LumaLoadProviders() {
+		envName := "LUMAFORGE_PROVIDER_" + strings.ToUpper(strings.ReplaceAll(provider.ID, "-", "_")) + "_API_KEY"
+		if value := strings.TrimSpace(os.Getenv(envName)); value != "" {
+			keys[provider.ID] = value
+		}
+	}
+	return keys
+}
+
+func LumaPublicProviders(providers []LumaAPIProvider) []LumaAPIProvider {
+	keys := LumaLoadProviderKeys()
+	public := make([]LumaAPIProvider, 0, len(providers))
+	for _, provider := range normalizeLumaProviders(providers) {
+		key := strings.TrimSpace(keys[provider.ID])
+		provider.APIKey = ""
+		provider.ClearKey = false
+		provider.HasKey = key != ""
+		provider.KeyPreview = keyPreview(key)
+		public = append(public, provider)
+	}
+	return public
+}
+
+func LumaProviderByID(id string) (LumaAPIProvider, string, bool) {
+	id = strings.ToLower(strings.TrimSpace(id))
+	keys := LumaLoadProviderKeys()
+	for _, provider := range LumaLoadProviders() {
+		if provider.ID == id {
+			return provider, keys[provider.ID], true
+		}
+	}
+	return LumaAPIProvider{}, "", false
+}
+
+func LumaPrimaryProvider() (LumaAPIProvider, string, bool) {
+	keys := LumaLoadProviderKeys()
+	providers := LumaLoadProviders()
+	for _, provider := range providers {
+		if provider.Primary && provider.Enabled {
+			return provider, keys[provider.ID], true
+		}
+	}
+	if len(providers) > 0 {
+		return providers[0], keys[providers[0].ID], true
+	}
+	return LumaAPIProvider{}, "", false
+}
+
+func LumaModelChannel(modelName string) (model.ModelChannel, bool) {
+	modelName = strings.TrimSpace(modelName)
+	providers := LumaLoadProviders()
+	keys := LumaLoadProviderKeys()
+	var fallback *LumaAPIProvider
+	for i := range providers {
+		provider := providers[i]
+		if !provider.Enabled {
+			continue
+		}
+		if provider.Primary {
+			copyProvider := provider
+			fallback = &copyProvider
+		}
+		models := append(append([]string{}, provider.ImageModels...), append(provider.ChatModels, provider.VideoModels...)...)
+		if stringInSlice(modelName, models) {
+			return model.ModelChannel{
+				Protocol: "openai",
+				Name:     provider.Name,
+				BaseURL:  provider.BaseURL,
+				APIKey:   keys[provider.ID],
+				Models:   models,
+				Weight:   1,
+				Enabled:  true,
+			}, true
+		}
+	}
+	if fallback != nil {
+		models := append(append([]string{}, fallback.ImageModels...), append(fallback.ChatModels, fallback.VideoModels...)...)
+		return model.ModelChannel{
+			Protocol: "openai",
+			Name:     fallback.Name,
+			BaseURL:  fallback.BaseURL,
+			APIKey:   keys[fallback.ID],
+			Models:   models,
+			Weight:   1,
+			Enabled:  true,
+		}, true
+	}
+	return model.ModelChannel{}, false
+}
+
+func stringInSlice(value string, values []string) bool {
+	for _, item := range values {
+		if strings.TrimSpace(item) == value {
+			return true
+		}
+	}
+	return false
+}
+
+func LumaFetchProviderModels(provider LumaAPIProvider, apiKey string) (map[string]any, error) {
+	models, status, message, err := fetchOpenAIModels(provider.BaseURL, firstNonEmptyString(apiKey, provider.APIKey))
+	if err != nil {
+		if len(provider.ImageModels)+len(provider.ChatModels)+len(provider.VideoModels) > 0 {
+			all := uniqueStrings(append(append([]string{}, provider.ImageModels...), append(provider.ChatModels, provider.VideoModels...)...))
+			return classifiedModelPayload(all, status, message), nil
+		}
+		return nil, err
+	}
+	return classifiedModelPayload(models, status, message), nil
+}
+
+func fetchOpenAIModels(baseURL string, apiKey string) ([]string, int, string, error) {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if baseURL == "" {
+		return nil, 0, "Base URL 为空", errors.New("Base URL 为空")
+	}
+	modelURL := baseURL + "/models"
+	if !strings.HasSuffix(strings.ToLower(baseURL), "/v1") {
+		modelURL = baseURL + "/v1/models"
+	}
+	request, err := http.NewRequest(http.MethodGet, modelURL, nil)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	if strings.TrimSpace(apiKey) != "" {
+		request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(apiKey))
+	}
+	response, err := lumaHTTPClient.Do(request)
+	if err != nil {
+		return nil, 0, err.Error(), err
+	}
+	defer response.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(response.Body, 4<<20))
+	if response.StatusCode >= 400 {
+		return nil, response.StatusCode, string(data), fmt.Errorf("上游返回 HTTP %d", response.StatusCode)
+	}
+	var payload struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, response.StatusCode, "模型列表返回格式异常", err
+	}
+	models := []string{}
+	for _, item := range payload.Data {
+		if strings.TrimSpace(item.ID) != "" {
+			models = append(models, strings.TrimSpace(item.ID))
+		}
+	}
+	sort.Strings(models)
+	return models, response.StatusCode, "地址验证通过", nil
+}
+
+func classifiedModelPayload(models []string, status int, message string) map[string]any {
+	models = uniqueStrings(models)
+	imageModels := []string{}
+	chatModels := []string{}
+	videoModels := []string{}
+	for _, name := range models {
+		lower := strings.ToLower(name)
+		switch {
+		case strings.Contains(lower, "video") || strings.Contains(lower, "sora") || strings.Contains(lower, "veo") || strings.Contains(lower, "seedance") || strings.Contains(lower, "kling"):
+			videoModels = append(videoModels, name)
+		case strings.Contains(lower, "image") || strings.Contains(lower, "dall") || strings.Contains(lower, "banana") || strings.Contains(lower, "flux") || strings.Contains(lower, "seedream"):
+			imageModels = append(imageModels, name)
+		default:
+			chatModels = append(chatModels, name)
+		}
+	}
+	return map[string]any{
+		"ok":           true,
+		"status":       status,
+		"message":      message,
+		"all":          models,
+		"total":        len(models),
+		"model_count":  len(models),
+		"image_models": imageModels,
+		"chat_models":  chatModels,
+		"video_models": videoModels,
+	}
+}
+
+func LumaAppInfo() map[string]any {
+	return map[string]any{
+		"name":                    "LumaForge",
+		"display_name":            "光绘工坊",
+		"version":                 LumaForgeVersion,
+		"build_id":                LumaForgeBuildID,
+		"runtime_dir":             filepath.Dir(LumaDataDir()),
+		"data_dir":                LumaDataDir(),
+		"assets_dir":              LumaAssetsDir(),
+		"update_capable":          true,
+		"update_check_configured": strings.TrimSpace(config.Cfg.UpdateCheckURL) != "",
+		"update_check_url":        config.Cfg.UpdateCheckURL,
+		"legacy_api_url":          strings.TrimRight(config.Cfg.LumaForgeLegacyAPI, "/"),
+	}
+}
+
+func RunLumaMigration() {
+	reportPath := lumaPath("migration-2.1.0.json")
+	if _, err := os.Stat(reportPath); err == nil {
+		return
+	}
+	report := map[string]any{
+		"version":            LumaForgeVersion,
+		"build_id":           LumaForgeBuildID,
+		"created_at":         time.Now().Format(time.RFC3339),
+		"mode":               "non_destructive_reuse",
+		"data_dir":           LumaDataDir(),
+		"assets_dir":         LumaAssetsDir(),
+		"api_providers_file": fileExists(lumaPath("api_providers.json")),
+		"cloud_session_file": fileExists(lumaPath("cloud_session.json")),
+		"notes":              []string{"旧数据目录只读复用；未删除、未搬移用户文件。", "深度画布/素材迁移将在后续迁移器中扩展。"},
+	}
+	_ = writeJSONFile(reportPath, report)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func LumaUpdateState() map[string]any {
+	state := map[string]any{}
+	_ = readJSONFile(lumaPath("update_state.json"), &state)
+	if state["phase"] == nil {
+		state["phase"] = "idle"
+	}
+	state["current_version"] = LumaForgeVersion
+	state["build_id"] = LumaForgeBuildID
+	return state
+}
+
+func LumaSaveUpdateState(patch map[string]any) map[string]any {
+	state := LumaUpdateState()
+	for key, value := range patch {
+		state[key] = value
+	}
+	state["updated_at"] = time.Now().UnixMilli()
+	_ = writeJSONFile(lumaPath("update_state.json"), state)
+	return state
+}
+
+func LumaUpdateCheck() map[string]any {
+	checkURL := strings.TrimSpace(config.Cfg.UpdateCheckURL)
+	if checkURL == "" {
+		return map[string]any{
+			"ok":              false,
+			"current_version": LumaForgeVersion,
+			"latest_version":  "",
+			"is_newer":        false,
+			"message":         "未配置更新检查地址",
+		}
+	}
+	LumaSaveUpdateState(map[string]any{"phase": "checking", "error": nil})
+	latest, asset, notes, err := fetchLatestGitHubRelease(checkURL)
+	if err != nil {
+		LumaSaveUpdateState(map[string]any{"phase": "failed", "error": err.Error()})
+		return map[string]any{
+			"ok":              false,
+			"current_version": LumaForgeVersion,
+			"latest_version":  "",
+			"is_newer":        false,
+			"message":         err.Error(),
+			"source_url":      checkURL,
+		}
+	}
+	isNewer := compareVersion(latest, LumaForgeVersion) > 0
+	phase := "idle"
+	if isNewer {
+		phase = "found"
+	}
+	LumaSaveUpdateState(map[string]any{"phase": phase, "latest_version": latest, "asset": asset})
+	return map[string]any{
+		"ok":              true,
+		"current_version": LumaForgeVersion,
+		"latest_version":  latest,
+		"is_newer":        isNewer,
+		"asset":           asset,
+		"assets":          []map[string]any{asset},
+		"release_notes":   notes,
+		"source_url":      checkURL,
+	}
+}
+
+func fetchLatestGitHubRelease(checkURL string) (string, map[string]any, string, error) {
+	request, err := http.NewRequest(http.MethodGet, checkURL, nil)
+	if err != nil {
+		return "", nil, "", err
+	}
+	request.Header.Set("Accept", "application/vnd.github+json")
+	request.Header.Set("User-Agent", "LumaForge/"+LumaForgeVersion)
+	response, err := lumaHTTPClient.Do(request)
+	if err != nil {
+		return "", nil, "", err
+	}
+	defer response.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(response.Body, 4<<20))
+	if response.StatusCode >= 400 {
+		return "", nil, "", fmt.Errorf("更新检查失败：HTTP %d", response.StatusCode)
+	}
+	var releases []map[string]any
+	if strings.HasSuffix(strings.TrimRight(checkURL, "/"), "/latest") {
+		var single map[string]any
+		if err := json.Unmarshal(data, &single); err != nil {
+			return "", nil, "", err
+		}
+		releases = []map[string]any{single}
+	} else if err := json.Unmarshal(data, &releases); err != nil {
+		var single map[string]any
+		if err2 := json.Unmarshal(data, &single); err2 != nil {
+			return "", nil, "", err
+		}
+		releases = []map[string]any{single}
+	}
+	sort.SliceStable(releases, func(i, j int) bool {
+		return compareVersion(releaseVersion(releases[i]), releaseVersion(releases[j])) > 0
+	})
+	for _, release := range releases {
+		if boolFromAny(release["draft"]) || boolFromAny(release["prerelease"]) {
+			continue
+		}
+		version := releaseVersion(release)
+		if !strings.HasPrefix(version, "2.") {
+			continue
+		}
+		asset := selectDesktopZipAsset(release)
+		return version, asset, stringFromAny(release["body"]), nil
+	}
+	return "", nil, "", errors.New("没有找到可用的 2.x GitHub Release")
+}
+
+func releaseVersion(release map[string]any) string {
+	value := strings.TrimSpace(firstNonEmptyString(stringFromAny(release["tag_name"]), stringFromAny(release["name"])))
+	value = strings.TrimPrefix(strings.TrimPrefix(value, "v"), "V")
+	if strings.HasPrefix(value, "20.0.") {
+		value = "2.0." + strings.TrimPrefix(value, "20.0.")
+	}
+	return value
+}
+
+func selectDesktopZipAsset(release map[string]any) map[string]any {
+	rawAssets, _ := release["assets"].([]any)
+	fallback := map[string]any{}
+	for _, raw := range rawAssets {
+		asset, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := stringFromAny(asset["name"])
+		item := map[string]any{
+			"name":   name,
+			"url":    firstNonEmptyString(stringFromAny(asset["browser_download_url"]), stringFromAny(asset["url"])),
+			"size":   asset["size"],
+			"sha256": "",
+			"type":   "asset",
+		}
+		if fallback["name"] == nil {
+			fallback = item
+		}
+		lower := strings.ToLower(name)
+		if strings.HasSuffix(lower, ".zip") && strings.Contains(lower, "desktop") {
+			return item
+		}
+	}
+	return fallback
+}
+
+func compareVersion(a string, b string) int {
+	ap := versionParts(a)
+	bp := versionParts(b)
+	for i := 0; i < 3; i++ {
+		if ap[i] > bp[i] {
+			return 1
+		}
+		if ap[i] < bp[i] {
+			return -1
+		}
+	}
+	return 0
+}
+
+func versionParts(value string) [3]int {
+	value = strings.TrimPrefix(strings.TrimSpace(value), "v")
+	parts := strings.Split(value, ".")
+	result := [3]int{}
+	for i := 0; i < len(parts) && i < 3; i++ {
+		n, _ := strconv.Atoi(regexp.MustCompile(`\D.*$`).ReplaceAllString(parts[i], ""))
+		result[i] = n
+	}
+	return result
+}
+
+func keyPreview(key string) string {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return ""
+	}
+	if len(key) <= 8 {
+		return strings.Repeat("*", len(key))
+	}
+	return key[:4] + "..." + key[len(key)-4:]
+}
+
+func uniqueStrings(values []string) []string {
+	result := []string{}
+	seen := map[string]bool{}
+	for _, value := range values {
+		item := strings.TrimSpace(value)
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		result = append(result, item)
+	}
+	return result
+}
+
+func firstNonNil(values ...any) any {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func stringFromAny(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case fmt.Stringer:
+		return typed.String()
+	case nil:
+		return ""
+	default:
+		return fmt.Sprint(typed)
+	}
+}
+
+func boolFromAny(value any) bool {
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		return typed == "1" || strings.EqualFold(typed, "true") || strings.EqualFold(typed, "yes")
+	default:
+		return false
+	}
+}

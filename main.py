@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.0.29")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260605-v2029-remove-comfyui-content1")
+APP_VERSION = os.getenv("APP_VERSION", "2.1.0")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260605-v210-source-refactor1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -510,7 +510,7 @@ MODELSCOPE_DEFAULT_LORAS = [
 ]
 MODELSCOPE_DEFAULTS_VERSION = 3
 CHAT_MODEL = os.getenv("CHAT_MODEL", "gpt-4o-mini")
-IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gpt-image-2")
+IMAGE_MODEL = os.getenv("IMAGE_MODEL", "gpt-image-2-vip")
 SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "You are a helpful assistant.")
 MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "30"))
 AI_REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "120"))
@@ -581,7 +581,7 @@ def reload_env_globals():
     MODELSCOPE_API_KEY = os.getenv("MODELSCOPE_API_KEY", "")
     AI_API_KEY = os.getenv("COMFLY_API_KEY", "")
     AI_BASE_URL = os.getenv("COMFLY_BASE_URL", "https://ai.comfly.chat").rstrip("/")
-    IMAGE_MODELS = model_list("IMAGE_MODELS", os.getenv("IMAGE_MODEL", IMAGE_MODEL), ["nano-banana-pro"])
+    IMAGE_MODELS = model_list("IMAGE_MODELS", os.getenv("IMAGE_MODEL", IMAGE_MODEL), ["gpt-image-2", "nano-banana-pro"])
     CHAT_MODELS = model_list("CHAT_MODELS", os.getenv("CHAT_MODEL", CHAT_MODEL), ["gpt-4o-mini", "gemini-3.1-flash-image-preview-2k"])
     VIDEO_MODELS = model_list("VIDEO_MODELS", "veo3-fast", [
         "veo2", "veo2-fast", "veo2-pro",
@@ -602,7 +602,7 @@ def reload_env_globals():
     MODELSCOPE_CHAT_MODELS = list(dict.fromkeys([m for m in [*MODELSCOPE_DEFAULT_CHAT_MODELS, *_configured] if m]))
 
 CHAT_MODELS = model_list("CHAT_MODELS", CHAT_MODEL, ["gpt-4o-mini", "gemini-3.1-flash-image-preview-2k"])
-IMAGE_MODELS = model_list("IMAGE_MODELS", IMAGE_MODEL, ["nano-banana-pro"])
+IMAGE_MODELS = model_list("IMAGE_MODELS", IMAGE_MODEL, ["gpt-image-2", "nano-banana-pro"])
 VIDEO_MODELS = model_list("VIDEO_MODELS", "veo3-fast", [
     # —— Veo 系列 ——
     "veo2", "veo2-fast", "veo2-pro",
@@ -851,7 +851,7 @@ def cloud_synced_env_defaults():
     return {
         "COMFYUI_INSTANCES": "127.0.0.1:8188",
         "COMFLY_BASE_URL": "https://ai.comfly.chat",
-        "IMAGE_MODELS": ",".join(["gpt-image-2", "nano-banana-pro"]),
+        "IMAGE_MODELS": ",".join(["gpt-image-2-vip", "gpt-image-2", "nano-banana-pro"]),
         "CHAT_MODELS": ",".join(["gpt-4o-mini", "gemini-3.1-flash-image-preview-2k"]),
         "VIDEO_MODELS": ",".join([
             "veo2", "veo2-fast", "veo2-pro",

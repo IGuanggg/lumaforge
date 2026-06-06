@@ -4,6 +4,7 @@ import logging
 import os
 import shutil
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -202,6 +203,150 @@ def resource_path(*parts):
     return bundle_dir().joinpath(*parts)
 
 
+def app_dir():
+    return Path(sys.executable).resolve().parent if is_frozen() else Path(__file__).resolve().parent
+
+
+def find_first_existing(paths):
+    for path in paths:
+        if path and Path(path).exists():
+            return Path(path)
+    return None
+
+
+def find_v21_bundle():
+    roots = []
+    for root in (app_dir(), bundle_dir(), Path(__file__).resolve().parent):
+        if root not in roots:
+            roots.append(root)
+
+    server_names = ("server.exe", "lumaforge-server.exe", "LumaForgeServer.exe", "server")
+    node_names = ("node.exe", "node")
+    server_candidates = []
+    node_candidates = []
+    web_candidates = []
+
+    for root in roots:
+        for name in server_names:
+            server_candidates.extend((root / "v21" / name, root / name))
+        for name in node_names:
+            node_candidates.extend((root / "node" / name, root / "nodejs" / name, root / name))
+        web_candidates.extend((root / "web" / "server.js", root / "server.js"))
+
+    server_exe = find_first_existing(server_candidates)
+    node_exe = find_first_existing(node_candidates)
+    web_server = find_first_existing(web_candidates)
+    if not server_exe or not node_exe or not web_server:
+        return None
+    return {"server": server_exe, "node": node_exe, "web_server": web_server, "web_dir": web_server.parent}
+
+
+def child_process_kwargs(log_file):
+    kwargs = {}
+    if os.name == "nt" and hasattr(subprocess, "CREATE_NO_WINDOW"):
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+    try:
+        stream = open(log_file, "a", encoding="utf-8", buffering=1)
+        kwargs["stdout"] = stream
+        kwargs["stderr"] = stream
+    except Exception:
+        pass
+    return kwargs
+
+
+def start_v21_processes(port, paths, log_file):
+    bundle = find_v21_bundle()
+    if not bundle:
+        return None
+
+    api_port = find_port(os.getenv("LUMAFORGE_API_PORT", "8080"))
+    legacy_server = None
+    legacy_thread = None
+    legacy_port = None
+    data_dir = ensure_dir(paths["runtime_dir"] / "data")
+    prompt_dir = ensure_dir(data_dir / "prompts")
+
+    env = os.environ.copy()
+    env.setdefault("APP_RUNTIME_DIR", str(paths["runtime_dir"]))
+    env.setdefault("APP_ASSETS_DIR", str(paths["save_dir"]))
+    env.setdefault("APP_OUTPUT_DIR", str(paths["save_dir"] / "legacy-output"))
+    env.setdefault("APP_LOG_DIR", str(paths["logs_dir"]))
+    env.setdefault("APP_CACHE_DIR", str(localappdata_dir() / "cache"))
+    env.setdefault("LUMAFORGE_DATA_DIR", str(data_dir))
+    env.setdefault("PROMPT_DATA_DIR", str(prompt_dir))
+
+    try:
+        legacy_port = find_port(os.getenv("LUMAFORGE_LEGACY_PORT", "8090"))
+        legacy_server, legacy_thread = start_server(legacy_port)
+        env["LUMAFORGE_LEGACY_API_URL"] = f"http://127.0.0.1:{legacy_port}"
+        logging.info("Started legacy compatibility API on port=%s", legacy_port)
+    except Exception:
+        logging.exception("Legacy compatibility API failed to start; v2.1 runtime will continue without updater proxy")
+
+    api_env = env.copy()
+    api_env["PORT"] = str(api_port)
+    api_process = subprocess.Popen(
+        [str(bundle["server"])],
+        cwd=str(bundle["server"].parent),
+        env=api_env,
+        **child_process_kwargs(log_file),
+    )
+
+    web_env = env.copy()
+    web_env["NODE_ENV"] = "production"
+    web_env["HOSTNAME"] = "127.0.0.1"
+    web_env["PORT"] = str(port)
+    web_env["API_BASE_URL"] = f"http://127.0.0.1:{api_port}"
+    web_process = subprocess.Popen(
+        [str(bundle["node"]), str(bundle["web_server"])],
+        cwd=str(bundle["web_dir"]),
+        env=web_env,
+        **child_process_kwargs(log_file),
+    )
+
+    logging.info(
+        "Started v2.1 runtime api_pid=%s api_port=%s web_pid=%s web_port=%s legacy_port=%s",
+        api_process.pid,
+        api_port,
+        web_process.pid,
+        port,
+        legacy_port,
+    )
+    return {
+        "mode": "v21",
+        "processes": [web_process, api_process],
+        "legacy_server": legacy_server,
+        "legacy_thread": legacy_thread,
+        "app_url": f"http://127.0.0.1:{port}/",
+        "ready_url": f"http://127.0.0.1:{port}/api/health",
+        "legacy_ready_url": f"http://127.0.0.1:{legacy_port}/health" if legacy_port else "",
+    }
+
+
+def stop_v21_processes(runtime):
+    if not runtime:
+        return
+    legacy_server = runtime.get("legacy_server")
+    if legacy_server:
+        legacy_server.should_exit = True
+    for process in runtime.get("processes", []):
+        if process and process.poll() is None:
+            process.terminate()
+    deadline = time.time() + 8
+    for process in runtime.get("processes", []):
+        if not process:
+            continue
+        try:
+            remaining = max(0.1, deadline - time.time())
+            process.wait(timeout=remaining)
+        except Exception:
+            if process.poll() is None:
+                process.kill()
+    legacy_thread = runtime.get("legacy_thread")
+    if legacy_thread and legacy_thread.is_alive():
+        legacy_thread.join(timeout=6)
+
+
 def start_server(port):
     from main import app
 
@@ -242,16 +387,28 @@ def desktop_error_html(message, log_file):
 """
 
 
-def run_smoke_test(port):
+def run_smoke_test(port, paths, log_file):
     server = None
     thread = None
+    v21_runtime = None
     try:
-        server, thread = start_server(port)
-        ready, last_error = wait_until_ready(f"http://127.0.0.1:{port}/health")
+        v21_runtime = start_v21_processes(port, paths, log_file)
+        if v21_runtime:
+            ready_url = v21_runtime["ready_url"]
+        else:
+            server, thread = start_server(port)
+            ready_url = f"http://127.0.0.1:{port}/health"
+        ready, last_error = wait_until_ready(ready_url)
         result = {"ready": ready, "port": port, "error": last_error}
         if ready:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=3) as response:
+            with urllib.request.urlopen(ready_url, timeout=3) as response:
                 result["health"] = json.loads(response.read().decode("utf-8"))
+            legacy_ready_url = v21_runtime.get("legacy_ready_url") if v21_runtime else ""
+            if legacy_ready_url:
+                legacy_ready, legacy_error = wait_until_ready(legacy_ready_url, timeout=10)
+                result["legacy_ready"] = legacy_ready
+                if legacy_error:
+                    result["legacy_error"] = legacy_error
         print(json.dumps(result, ensure_ascii=False))
         return 0 if ready else 1
     except Exception as exc:
@@ -259,6 +416,7 @@ def run_smoke_test(port):
         print(json.dumps({"ready": False, "port": port, "error": str(exc)}, ensure_ascii=False))
         return 1
     finally:
+        stop_v21_processes(v21_runtime)
         if server:
             server.should_exit = True
         if thread and thread.is_alive():
@@ -279,7 +437,7 @@ def main():
         logging.info("Migrated legacy desktop data from %r", paths["migrated_from"])
 
     if smoke_test:
-        exit_code = run_smoke_test(port)
+        exit_code = run_smoke_test(port, paths, log_file)
         logging.info("Desktop smoke test finished exit_code=%s", exit_code)
         force_exit(exit_code)
         return exit_code
@@ -293,15 +451,23 @@ def main():
 
     server = None
     thread = None
+    v21_runtime = None
     exit_code = 1
     try:
-        server, thread = start_server(port)
-        ready, last_error = wait_until_ready(f"http://127.0.0.1:{port}/health")
+        v21_runtime = start_v21_processes(port, paths, log_file)
+        if v21_runtime:
+            app_url = v21_runtime["app_url"]
+            ready_url = v21_runtime["ready_url"]
+        else:
+            server, thread = start_server(port)
+            app_url = f"http://127.0.0.1:{port}/"
+            ready_url = f"http://127.0.0.1:{port}/health"
+        ready, last_error = wait_until_ready(ready_url)
         icon_path = resource_path("static", "logo.ico")
         if ready:
             webview.create_window(
                 APP_NAME,
-                f"http://127.0.0.1:{port}/",
+                app_url,
                 width=1440,
                 height=920,
                 min_size=(1100, 720),
@@ -327,6 +493,7 @@ def main():
         )
         exit_code = 0 if ready else 1
     finally:
+        stop_v21_processes(v21_runtime)
         if server:
             server.should_exit = True
         if thread and thread.is_alive():

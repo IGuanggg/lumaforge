@@ -12,7 +12,7 @@ LumaForge（光绘工坊）是一个基于 **Python FastAPI + 原生 HTML/JS** �
 **技术栈：**
 - 后端：Python 3.10 + FastAPI + uvicorn + httpx + Pillow
 - 前端：纯原生 HTML/CSS/JS（无框架），Tailwind CSS CDN，Lucide Icons CDN
-- 本地 ComfyUI 引擎：通过 HTTP API 与 ComfyUI 后端交互
+- 本地 本地工作流 引擎：通过 HTTP API 与 本地工作流 后端交互
 - 数据存储：JSON 文件（无数据库）
 - 部署：`run.bat` / `mac-启动服务.sh` → `python main.py` → uvicorn `0.0.0.0:3000`
 
@@ -28,7 +28,7 @@ lumaforge/
 │   ├── canvas.html          # 无限画布页面（核心，7886 行）
 │   ├── gpt-chat.html        # GPT 对话页面
 │   ├── api-settings.html    # API 平台设置页面
-│   ├── comfyui-settings.html# ComfyUI 设置页面（含工作流管理）
+│   ├── comfyui-settings.html# 本地工作流 设置页面（含工作流管理）
 │   ├── zimage.html           # Z-Image 文生图页面
 │   ├── enhance.html         # 细节增强页面
 │   ├── klein.html           # Klein 编辑页面
@@ -40,7 +40,7 @@ lumaforge/
 │   ├── theme.css            # 主题样式
 │   ├── image-preview.js     # 图片预览组件
 │   └── history-bulk-manager.js  # 历史批量管理
-├── workflows/               # ComfyUI 工作流 JSON
+├── workflows/               # 本地工作流 工作流 JSON
 │   ├── Z-Image.json         # Z-Image 文生图工作流（内置）
 │   ├── Z-Image-Enhance.json # 细节增强工作流（内置）
 │   ├── Flux2-Klein.json     # Klein 编辑工作流（内置）
@@ -54,8 +54,8 @@ lumaforge/
 │   └── api_providers.json   # API 平台配置
 ├── output/                  # 生成图片输出目录
 ├── assets/                  # 资产目录
-│   ├── input/               # ComfyUI 输入图片
-│   └── output/              # ComfyUI 输出图片
+│   ├── input/               # 本地工作流 输入图片
+│   └── output/              # 本地工作流 输出图片
 ├── API/
 │   └── .env                 # 环境变量（API Key 等）
 ├── requirements.txt         # Python 依赖
@@ -97,7 +97,7 @@ index.html (壳)
 ├── iframe: gpt-chat.html      # GPT 对话
 ├── iframe: canvas.html        # 无限画布（核心）
 ├── iframe: api-settings.html  # API 设置
-└── iframe: comfyui-settings.html # ComfyUI 设置
+└── iframe: comfyui-settings.html # 本地工作流 设置
 ```
 
 各 iframe 通过 `postMessage` 通信（如语言同步 `studio-lang`、画布更新 `canvas_updated`）。
@@ -122,7 +122,7 @@ index.html (壳)
 | `generator` | API 生图 | `addGeneratorNode()` | `renderGeneratorBody()` | `runGenerator()` |
 | `msgen` | ModelScope 生图 | `addMsGenNode()` | `renderMsGenBody()` | `runMsGenNode()` |
 | `video` | 视频生成 | `addVideoNode()` | `renderVideoBody()` | `runVideoNode()` |
-| `comfy` | ComfyUI | `addComfyNode()` | `renderComfyBody()` | `runComfyNode()` |
+| `comfy` | 本地工作流 | `addComfyNode()` | `renderComfyBody()` | `runComfyNode()` |
 | `output` | 输出 | `addOutputNode()` | 内联渲染 | 无（展示节点） |
 | `loop` | 循环 | `addLoopNode()` | `renderLoopBody()` | 级联调度器 |
 
@@ -188,7 +188,7 @@ index.html (壳)
   - 路由：`POST /api/ms/generate` L2959
   - 逻辑：直接调用 ModelScope API `POST v1/images/generations`，支持图生图、LoRA
 
-### 6.4 ComfyUI 节点
+### 6.4 本地工作流 节点
 
 - **前端：**
   - 创建：`addComfyNode()` (canvas.html 中)
@@ -199,11 +199,11 @@ index.html (壳)
     - `enhance`：图片增强 → `POST /api/generate`（Z-Image-Enhance.json 工作流）
     - `custom`：自定义工作流 → `POST /api/generate`（用户上传的 .json）
 - **后端：**
-  - 路由：`POST /api/generate` L3065 — 提交到 ComfyUI WebSocket API
+  - 路由：`POST /api/generate` L3065 — 提交到 本地工作流 WebSocket API
   - 路由：`POST /api/workflows/{name}/run` L3424 — 自定义工作流运行
   - 路由：`GET/POST/PUT/DELETE /api/workflows/...` — 工作流 CRUD
-  - 逻辑：通过 WebSocket 连接 ComfyUI 后端，提交 prompt，等待图片生成
-  - 支持多 ComfyUI 后端实例负载均衡
+  - 逻辑：通过 WebSocket 连接 本地工作流 后端，提交 prompt，等待图片生成
+  - 支持多 本地工作流 后端实例负载均衡
 
 ### 6.5 视频生成节点
 
@@ -257,7 +257,7 @@ index.html (壳)
 | POST | `/api/canvas-video` | 画布视频生成 |
 | POST | `/api/canvas-llm` | 画布 LLM 调用 |
 | POST | `/api/ms/generate` | ModelScope 生图 |
-| POST | `/api/generate` | ComfyUI 本地生图 |
+| POST | `/api/generate` | 本地工作流 本地生图 |
 | POST | `/generate` | ModelScope 云端生图（旧版） |
 | POST | `/api/chat` | GPT 对话（非流式） |
 | POST | `/api/chat/stream` | GPT 对话（流式） |
@@ -276,8 +276,8 @@ index.html (壳)
 | POST | `/api/providers/test-connection` | 测试 API 连接 |
 | POST | `/api/providers/probe-async` | 异步探测协议 |
 | GET | `/api/providers/{id}/fetch-models` | 拉取上游模型列表 |
-| GET | `/api/comfyui/instances` | 获取 ComfyUI 实例列表 |
-| PUT | `/api/comfyui/instances` | 保存 ComfyUI 实例列表 |
+| GET | `/api/comfyui/instances` | 获取 本地工作流 实例列表 |
+| PUT | `/api/comfyui/instances` | 保存 本地工作流 实例列表 |
 
 ### 7.4 工作流管理
 
@@ -294,9 +294,9 @@ index.html (壳)
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/api/upload` | 上传图片到 ComfyUI |
+| POST | `/api/upload` | 上传图片到 本地工作流 |
 | POST | `/api/ai/upload` | 上传图片到本地 assets |
-| GET | `/api/view` | 代理查看 ComfyUI 图片 |
+| GET | `/api/view` | 代理查看 本地工作流 图片 |
 | GET | `/api/download-output` | 下载输出文件 |
 | GET | `/api/history` | 获取生成历史 |
 | DELETE | `/api/history/delete` | 删除历史记录 |
@@ -316,7 +316,7 @@ index.html (壳)
 | API 平台 | `data/api_providers.json` | `[{id, name, base_url, protocol, image_models[], chat_models[], video_models[]}]` |
 | 环境变量 | `API/.env` | `KEY=VALUE` 格式 |
 | 生成历史 | `history.json`（项目根目录） | `[{timestamp, prompt, images[], type}]` |
-| ComfyUI 工作流 | `workflows/*.json` | ComfyUI API 格式（节点 ID → class_type + inputs） |
+| 本地工作流 工作流 | `workflows/*.json` | 本地工作流 API 格式（节点 ID → class_type + inputs） |
 | 工作流配置 | `workflows/*.config.json` | `{title, fields[], mini_cards{}}` |
 | 自定义工作流 | `workflows/custom/*.json` | 用户上传的工作流 |
 

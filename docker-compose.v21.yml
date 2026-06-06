@@ -1,0 +1,12 @@
+services:
+  app:
+    image: iguang9881/lumaforge:2.1.0
+    container_name: lumaforge
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./assets:/app/assets
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
