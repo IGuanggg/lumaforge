@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -20,6 +20,19 @@
             if(!window.MutationObserver || window.__studioMutationObserverGuard) return;
             window.__studioMutationObserverGuard = true;
             var OriginalMutationObserver = window.MutationObserver;
+            var originalProtoObserve = OriginalMutationObserver.prototype && OriginalMutationObserver.prototype.observe;
+            if(originalProtoObserve && !OriginalMutationObserver.prototype.__studioObserveGuard) {
+                Object.defineProperty(OriginalMutationObserver.prototype, '__studioObserveGuard', { value:true });
+                OriginalMutationObserver.prototype.observe = function(target, options){
+                    if(!target || typeof target.nodeType !== 'number') return;
+                    try {
+                        return originalProtoObserve.call(this, target, options);
+                    } catch(err) {
+                        if(err && /parameter 1 is not of type 'Node'/i.test(String(err.message || err))) return;
+                        throw err;
+                    }
+                };
+            }
             window.MutationObserver = function(callback){
                 var observer = new OriginalMutationObserver(callback);
                 var originalObserve = observer.observe;
@@ -305,6 +318,135 @@
             .api-toast,
             .picker-row { animation:none !important; transition:none !important; }
         }
+        /* v2.1: align retained LumaForge pages with the imported Go + Next.js workbench UI. */
+        :root {
+            --bg:#ffffff;
+            --panel:#ffffff;
+            --soft:#f5f5f4;
+            --line:#e7e5e4;
+            --line-strong:#d6d3d1;
+            --text:#1c1917;
+            --muted:#78716c;
+            --faint:#a8a29e;
+            --accent:#1c1917;
+        }
+        body.studio-theme-dark,
+        html.studio-theme-dark body {
+            --bg:#171717;
+            --panel:#1c1917;
+            --soft:#292524;
+            --line:#292524;
+            --line-strong:#44403c;
+            --text:#f5f5f4;
+            --muted:#a8a29e;
+            --faint:#78716c;
+            --accent:#f5f5f4;
+        }
+        body {
+            background-color:var(--bg);
+            background-image:radial-gradient(#e5e7eb 1px, transparent 1px);
+            background-size:16px 16px;
+            font-family:"SF Pro Display","SF Pro Text","PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif;
+        }
+        body.studio-theme-dark,
+        html.studio-theme-dark body {
+            background-image:radial-gradient(rgba(245,245,244,.16) 1px, transparent 1px);
+        }
+        button:focus-visible,
+        a:focus-visible,
+        input:focus-visible,
+        select:focus-visible {
+            box-shadow:0 0 0 4px rgba(120,113,108,.18);
+        }
+        .page { padding:32px 24px 72px; }
+        .wrap { max-width:1180px; }
+        .page-head {
+            padding:0 0 24px;
+            margin-bottom:20px;
+            border-bottom:1px solid var(--line);
+        }
+        .page-head .title { font-size:28px; font-weight:700; letter-spacing:0; }
+        .page-head .sub { font-size:13px; font-weight:500; color:var(--muted); }
+        .layout { gap:28px; grid-template-columns:260px minmax(0,1fr); }
+        .sidebar,
+        .content-head,
+        .block,
+        .picker-modal,
+        .key-diag-row,
+        .model-row,
+        .lora-row,
+        .id-readonly,
+        .picker-summary {
+            border-radius:10px;
+            border-color:var(--line);
+            background:var(--panel);
+            box-shadow:none;
+        }
+        .block,
+        .content-head { padding:22px 24px; }
+        .block:hover {
+            border-color:var(--line-strong);
+            box-shadow:none;
+        }
+        .provider-card,
+        .add-btn,
+        .api-link-btn,
+        .field-frame,
+        .key-btn,
+        .ghost-btn,
+        .action-btn,
+        .picker-search,
+        .picker-cat-tabs,
+        .picker-cat-tab,
+        .picker-checkbox,
+        .lora-field input,
+        .lora-field select {
+            border-radius:8px;
+        }
+        .provider-card.active,
+        .provider-mark,
+        .field-frame,
+        .field-frame.is-disabled,
+        .model-row,
+        .lora-row,
+        .picker-cat-tabs,
+        .picker-search,
+        .picker-row:hover,
+        .id-readonly {
+            background:var(--soft);
+        }
+        .block-title,
+        .side-section-title { letter-spacing:.06em; font-weight:800; }
+        .block-desc,
+        .content-head .editor-sub,
+        .hint,
+        .provider-meta,
+        .label { color:var(--muted); font-weight:500; }
+        .action-btn.save-btn,
+        .action-btn.primary-btn,
+        .api-link-btn:hover {
+            background:var(--accent);
+            border-color:var(--accent);
+            color:var(--bg);
+            box-shadow:none;
+        }
+        .action-btn.save-btn:hover,
+        .action-btn.primary-btn:hover {
+            background:var(--text);
+            border-color:var(--text);
+            color:var(--bg);
+            box-shadow:none;
+        }
+        body.studio-theme-dark .action-btn.save-btn,
+        html.studio-theme-dark body .action-btn.save-btn,
+        body.studio-theme-dark .action-btn.primary-btn,
+        html.studio-theme-dark body .action-btn.primary-btn,
+        body.studio-theme-dark .api-link-btn:hover,
+        html.studio-theme-dark body .api-link-btn:hover {
+            background:#f5f5f4;
+            border-color:#f5f5f4;
+            color:#171717;
+        }
         @media (max-width:860px) { .page{padding:24px 16px 60px}.layout{grid-template-columns:1fr;gap:28px}.sidebar{position:static}.form,.model-grid{grid-template-columns:1fr}.models-toolbar{align-items:flex-start;flex-direction:column}.models-toolbar-actions{width:100%;justify-content:flex-end}.lora-row{grid-template-columns:1fr}.lora-row .icon-btn{width:100%;} }
     </style>
 </head>
@@ -436,7 +578,7 @@
                             <div class="block-head">
                                 <div>
                                     <div class="block-title" data-i18n="api.imageModels">生图模型</div>
-                                    <div class="block-desc" data-i18n="api.imageHint">在线生图和无限画布 API 生成使用</div>
+                                    <div class="block-desc" data-i18n="api.imageHint">在线生图和智能画布 API 生成使用</div>
                                     <div class="ms-hint">
                                         <span class="ms-line"><span data-i18n="api.msModelExample">模型名称示意：</span><span class="inline-code">Tongyi-MAI/Z-Image-Turbo</span></span>
                                     </div>
@@ -461,7 +603,7 @@
                             <div class="block-head">
                                 <div>
                                     <div class="block-title" data-i18n="api.videoModels">视频模型</div>
-                                    <div class="block-desc" data-i18n="api.videoHint">无限画布视频生成节点使用</div>
+                                    <div class="block-desc" data-i18n="api.videoHint">智能画布视频生成节点使用</div>
                                 </div>
                                 <button class="ghost-btn" type="button" onclick="addModel('video')"><i data-lucide="plus" class="w-3.5 h-3.5"></i><span data-i18n="api.model">模型</span></button>
                             </div>
@@ -472,7 +614,7 @@
                             <div class="block-head">
                                 <div>
                                     <div class="block-title" data-i18n="api.loraManager">LoRA 管理</div>
-                                    <div class="block-desc" data-i18n="api.loraManagerDesc">为 ModelScope 生图模型绑定可用 LoRA。无限画布 MS 节点会按当前模型自动筛选。</div>
+                                    <div class="block-desc" data-i18n="api.loraManagerDesc">为 ModelScope 生图模型绑定可用 LoRA。智能画布 MS 节点会按当前模型自动筛选。</div>
                                     <div class="ms-hint">
                                         <span class="ms-line"><span data-i18n="api.msCnModels">中文模型库：</span><a href="https://www.modelscope.cn/aigc/models" target="_blank">https://www.modelscope.cn/aigc/models</a></span>
                                         <span class="ms-line"><span data-i18n="api.msEnModels">英文模型库：</span><a href="https://www.modelscope.ai/civision/models" target="_blank">https://www.modelscope.ai/civision/models</a></span>

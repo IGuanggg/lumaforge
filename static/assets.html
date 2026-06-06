@@ -145,7 +145,7 @@
         <header class="topbar">
             <div class="title">
                 <h1>素材库</h1>
-                <p>生成结果会自动归档；本地素材也可以上传，然后送到无限画布继续创作。</p>
+                <p>生成结果会自动归档；本地素材也可以上传，然后送到智能画布继续创作。</p>
             </div>
             <div class="actions">
                 <input id="uploadInput" type="file" accept="image/*,video/*" multiple hidden>
@@ -235,7 +235,7 @@
     </main>
 
     <div id="contextMenu" class="context-menu" role="menu">
-        <button type="button" data-action="canvas"><i data-lucide="send-to-back" size="15"></i><span>加入无限画布</span></button>
+        <button type="button" data-action="canvas"><i data-lucide="send-to-back" size="15"></i><span>加入智能画布</span></button>
         <button type="button" data-action="preview"><i data-lucide="scan-eye" size="15"></i><span>打开预览</span></button>
         <button type="button" data-action="download"><i data-lucide="download" size="15"></i><span>下载</span></button>
         <button type="button" data-action="favorite"><i data-lucide="star" size="15"></i><span>收藏</span></button>
@@ -384,7 +384,7 @@
                             <button class="asset-select ${state.selected.has(asset.id) ? 'active' : ''}" data-action="select" type="button" title="选择">${state.selected.has(asset.id) ? '<i data-lucide="check" size="16"></i>' : '<i data-lucide="circle" size="16"></i>'}</button>
                             <button class="fav" data-action="favorite" type="button" title="收藏">${asset.favorite ? '<i data-lucide="star" size="16" fill="currentColor"></i>' : '<i data-lucide="star" size="16"></i>'}</button>
                             <div class="asset-quick">
-                                <button class="quick-btn" data-action="canvas" type="button" title="加入无限画布"><i data-lucide="send-to-back" size="15"></i></button>
+                                <button class="quick-btn" data-action="canvas" type="button" title="加入智能画布"><i data-lucide="send-to-back" size="15"></i></button>
                                 <button class="quick-btn" data-action="reuse" type="button" title="复用参数生成"><i data-lucide="repeat-2" size="15"></i></button>
                                 <button class="quick-btn" data-action="preview" type="button" title="打开预览"><i data-lucide="scan-eye" size="15"></i></button>
                                 <button class="quick-btn" data-action="download" type="button" title="下载"><i data-lucide="download" size="15"></i></button>
@@ -648,7 +648,7 @@
                     height:asset.height || 0
                 }
             }, '*');
-            showToast('已发送到无限画布');
+            showToast('已发送到智能画布');
         }
 
         function openPreview(asset){
