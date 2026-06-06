@@ -4,7 +4,7 @@ LumaForge 是一个本地优先的 AI 创作工作台，核心是智能画布、
 
 当前版本：`2.1.0`
 
-v2.1.0 是源码主线重构版：以 Go + Next.js 无限画布主体作为新创作界面，同时保留 LumaForge 原有云端账户同步、API 设置、设置页自动检测更新/更新模块、桌面 EXE 与自动更新基础。桌面模式会同步启动 legacy FastAPI 兼容服务，确保自动更新、备份、诊断和深度素材维护能力在迁移期继续可用。
+v2.1.0 是源码主线重构版：以 Go + Next.js 画布主体作为新的智能画布创作界面，同时保留 LumaForge 原有云端账户同步、API 设置、设置页自动检测更新/更新模块、桌面 EXE 与自动更新基础。桌面模式会同步启动 legacy FastAPI 兼容服务，确保自动更新、备份、诊断和深度素材维护能力在迁移期继续可用。
 
 > v2.1.0 引入了 `new新的infinite-canvas-0.2.4-copy.zip` 的 Go/Next 主体能力，并保留原项目 AGPL 授权文件 `LICENSE.infinite-canvas-AGPL`。LumaForge 云端账户与同步仍以现有 Python `cloud_config_server.py` 为权威服务，不迁移云端数据库结构。
 
