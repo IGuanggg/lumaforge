@@ -2,9 +2,10 @@
 
 import type { CSSProperties, RefObject } from "react";
 import { Avatar, Dropdown, Tooltip } from "antd";
-import { BookOpen, Keyboard, LogOut, Settings2, Shield } from "lucide-react";
+import { BookOpen, Keyboard, LogOut, Settings2, Shield, SlidersHorizontal } from "lucide-react";
 import type { ItemType } from "antd/es/menu/interface";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { GitHubLink } from "@/components/layout/github-link";
@@ -28,6 +29,7 @@ type UserStatusActionsProps = {
 };
 
 export function UserStatusActions({ showConfig = true, variant = "default", onOpenShortcuts, accountOpen, onAccountOpenChange, accountRef, getPopupContainer }: UserStatusActionsProps) {
+    const pathname = usePathname();
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const user = useUserStore((state) => state.user);
@@ -39,6 +41,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
     const avatarUrl = user?.avatarUrl?.trim();
     const avatarText = (userName.trim()[0] || "U").toUpperCase();
     const naturalIconClass = "inline-flex size-7 shrink-0 items-center justify-center text-stone-600 transition hover:text-stone-950 dark:text-stone-300 dark:hover:text-white [&_svg]:size-4";
+    const appSettingsActive = pathname === "/app-settings";
     const iconStyle: CSSProperties | undefined = variant === "canvas" ? { color: canvasTheme.node.text } : undefined;
     const versionStyle = iconStyle;
     const gitHubClassName = "size-7 text-base";
@@ -59,9 +62,21 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
             </a>
             {showConfig ? (
                 <button type="button" className={naturalIconClass} style={iconStyle} onClick={() => openConfigDialog(false)} aria-label="配置" title="配置">
-                    <Settings2 className="size-4" />
+                    <SlidersHorizontal className="size-4" />
                 </button>
             ) : null}
+            <Link
+                href="/app-settings"
+                className={cn(
+                    naturalIconClass,
+                    appSettingsActive && "text-stone-950 dark:text-stone-100",
+                )}
+                style={iconStyle}
+                aria-label="应用设置"
+                title="应用设置"
+            >
+                <Settings2 className="size-4" />
+            </Link>
             <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} className={naturalIconClass} style={iconStyle} aria-label={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"} title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"} />
             <VersionReleaseModal style={versionStyle} />
             <GitHubLink className={cn("bg-transparent hover:bg-transparent dark:hover:bg-transparent", gitHubClassName)} style={gitHubStyle} />

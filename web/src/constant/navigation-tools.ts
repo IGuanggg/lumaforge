@@ -1,4 +1,4 @@
-import { FileText, ImagePlus, Images, Maximize2, Settings2, SlidersHorizontal, Video } from "lucide-react";
+import { FileText, ImagePlus, Images, Maximize2, SlidersHorizontal, Video } from "lucide-react";
 
 export const navigationTools = [
     {
@@ -30,11 +30,6 @@ export const navigationTools = [
         slug: "api-settings",
         label: "API 设置",
         icon: SlidersHorizontal,
-    },
-    {
-        slug: "app-settings",
-        label: "应用设置",
-        icon: Settings2,
     },
 ] as const;
 
