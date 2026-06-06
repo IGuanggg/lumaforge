@@ -12,7 +12,7 @@ function Assert-Contains {
         [string]$Path,
         [string]$Needle
     )
-    $content = Get-Content -LiteralPath $Path -Raw
+    $content = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
     if (-not $content.Contains($Needle)) {
         throw "Expected '$Path' to contain '$Needle'"
     }
@@ -23,7 +23,7 @@ function Assert-NotContains {
         [string]$Path,
         [string]$Needle
     )
-    $content = Get-Content -LiteralPath $Path -Raw
+    $content = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
     if ($content.Contains($Needle)) {
         throw "Expected '$Path' to not contain stale marker '$Needle'"
     }
@@ -76,6 +76,20 @@ Assert-Contains "static/index.html" "const APP_BUILD_ID = '$BuildId';"
 Assert-Contains "static/canvas.html" "const CANVAS_BUILD_ID = '$BuildId';"
 Assert-Contains "static/smart-canvas.html" "?v=$BuildId"
 Assert-Contains "static/app-settings.html" "?v=$BuildId"
+Assert-Contains "router/router.go" 'api.POST("/auth/register", gin.WrapF(handler.LumaAuthRegister))'
+Assert-Contains "router/router.go" 'api.POST("/auth/login", gin.WrapF(handler.LumaAuthLogin))'
+Assert-Contains "router/router.go" 'api.GET("/auth/me", gin.WrapF(handler.LumaCurrentUser))'
+Assert-NotContains "router/router.go" 'api.POST("/auth/register", gin.WrapF(handler.Register))'
+Assert-NotContains "router/router.go" 'api.POST("/auth/login", gin.WrapF(handler.Login))'
+Assert-Contains "middleware/admin.go" "service.LumaCurrentAuthUser(token)"
+Assert-Contains "config/config.go" "LumaForgeCloudURL"
+Assert-Contains "RELEASE_NOTES_v$Version.md" "旧版本用户升级"
+Assert-Contains "docs/HANDOFF.md" "Old-version compatibility requirements"
+Assert-Contains "desktop_updater.py" "PROTECT_NAMES"
+Assert-Contains "desktop_updater.py" "`"data`""
+Assert-Contains "desktop_updater.py" "`"cloud-data`""
+Assert-Contains "desktop_updater.py" "`"userdata`""
+Assert-Contains "desktop_updater.py" "`"assets`""
 
 $staleBuildIds = @(
     "20260526-asset-reliability1",

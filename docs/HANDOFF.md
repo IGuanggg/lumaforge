@@ -90,6 +90,14 @@ Protected runtime directories during update:
 - `userdata`
 - `output`
 
+Old-version compatibility requirements:
+
+- Users registered in LumaForge Cloud must not be migrated into or replaced by the imported Go local user table.
+- Keep `cloud_config.db` / `cloud-data` as the source of truth for cloud accounts, email verification, cloud config, and cloud media records.
+- Existing desktop users must keep `%APPDATA%\LumaForge`, `%USERPROFILE%\Pictures\LumaForge`, and `%LOCALAPPDATA%\LumaForge` untouched by installer and updater.
+- First v2.1 startup may copy missing legacy app-dir data into the runtime directories only when the destination is empty; it must never overwrite user-modified files.
+- Old clients that still call LumaForge Cloud APIs must continue to work while v2.1 is rolling out.
+
 Migration rule:
 
 - First v2.1 startup writes `migration-2.1.0.json`.
