@@ -9,9 +9,10 @@ import { saveAs } from "file-saver";
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
 import { requestVideoGeneration, storeGeneratedVideo } from "@/services/api/video";
+import { uploadAssetDataUrl } from "@/services/api/assets";
 import { DOCS_URL } from "@/constant/env";
 import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
-import { resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
+import { imageToDataUrl, resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
 import { resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { nanoid } from "nanoid";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
@@ -1425,7 +1426,7 @@ function InfiniteCanvasPage() {
                 return;
             }
             if (!node.metadata?.content) return message.error("没有可保存的图片");
-            const dataUrl = node.metadata.storageKey ? "" : node.metadata.content;
+            const dataUrl = await imageToDataUrl({ dataUrl: node.metadata.content, storageKey: node.metadata.storageKey });
             addAsset({
                 kind: "image",
                 title: node.metadata?.prompt?.slice(0, 24) || "画布图片",
@@ -1433,7 +1434,7 @@ function InfiniteCanvasPage() {
                 tags: [],
                 source: "Canvas",
                 data: {
-                    dataUrl,
+                    dataUrl: dataUrl.startsWith("data:") ? dataUrl : "",
                     storageKey: node.metadata.storageKey,
                     width: node.metadata.naturalWidth || node.width,
                     height: node.metadata.naturalHeight || node.height,
@@ -1442,7 +1443,13 @@ function InfiniteCanvasPage() {
                 },
                 metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt },
             });
-            message.success("已加入我的素材");
+            try {
+                await uploadAssetDataUrl(dataUrl, `${node.title || node.id}.png`);
+                message.success("已加入我的素材和旧素材库");
+            } catch (error) {
+                console.warn("Asset library sync failed", error);
+                message.warning("已加入本地素材，旧素材库同步失败");
+            }
         },
         [addAsset, message],
     );
@@ -2331,6 +2338,7 @@ function InfiniteCanvasPage() {
                             isRelated={relatedHighlight.nodeIds.has(node.id)}
                             isFocusRelated={activeNodeId === node.id}
                             isConnectionTarget={connectionTargetNodeId === node.id}
+                            isConnectionSource={connectingParams?.nodeId === node.id}
                             isConnecting={Boolean(connectingParams)}
                             editRequestNonce={editingNodeId === node.id ? editRequestNonce : 0}
                             showPanel={dialogNodeId === node.id && !selectionBox}
@@ -2369,6 +2377,7 @@ function InfiniteCanvasPage() {
                             renderNodeContent={(contentNode) => (
                                 <CanvasConfigNodePanel
                                     node={contentNode}
+                                    scale={viewport.k}
                                     isRunning={runningNodeId === contentNode.id}
                                     inputSummary={getInputSummary(configInputsById.get(contentNode.id) || [])}
                                     onConfigChange={handleConfigNodeChange}

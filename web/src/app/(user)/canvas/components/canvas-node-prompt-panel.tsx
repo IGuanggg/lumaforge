@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowUp, LoaderCircle } from "lucide-react";
+import { ArrowUp, LoaderCircle, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -40,6 +40,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const hasImageContent = node.type === CanvasNodeType.Image && Boolean(node.metadata?.content);
     const isEditingExistingContent = hasTextContent || hasImageContent;
     const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
+    const [promptExpanded, setPromptExpanded] = useState(false);
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, count: mode === "image" ? config.count : 1 });
 
     useEffect(() => {
@@ -66,15 +67,28 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             onPointerDown={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
         >
-            <CanvasResourceMentionTextarea
-                value={prompt}
-                references={mentionReferences}
-                onChange={updatePrompt}
-                onSubmit={submit}
-                className="thin-scrollbar h-24 w-full resize-none rounded-xl border px-3 py-2 text-sm leading-5 outline-none"
-                style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
-                placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
-            />
+            <div className="relative">
+                <CanvasResourceMentionTextarea
+                    value={prompt}
+                    references={mentionReferences}
+                    onChange={updatePrompt}
+                    onSubmit={submit}
+                    className={`thin-scrollbar w-full resize-none rounded-xl border px-3 py-2 pr-11 text-sm leading-5 outline-none transition-[height] duration-150 ${promptExpanded ? "h-60" : "h-24"}`}
+                    style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
+                    placeholder={promptPlaceholder(mode, hasImageContent, hasTextContent)}
+                />
+                <button
+                    type="button"
+                    className="absolute right-2 top-2 grid size-7 place-items-center rounded-lg border text-xs opacity-70 transition hover:opacity-100"
+                    style={{ background: `${theme.toolbar.panel}d9`, borderColor: theme.toolbar.border, color: theme.node.text }}
+                    aria-label={promptExpanded ? "收起生成输入框" : "放大生成输入框"}
+                    title={promptExpanded ? "收起生成输入框" : "放大生成输入框"}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={() => setPromptExpanded((value) => !value)}
+                >
+                    {promptExpanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+                </button>
+            </div>
 
             <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">

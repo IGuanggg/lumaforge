@@ -89,6 +89,16 @@ func LumaAssetsDir() string {
 	return filepath.Join(LumaDataDir(), "assets")
 }
 
+func LumaOutputDir() string {
+	if value := strings.TrimSpace(os.Getenv("APP_OUTPUT_DIR")); value != "" {
+		return value
+	}
+	if value := strings.TrimSpace(os.Getenv("APP_RUNTIME_DIR")); value != "" {
+		return filepath.Join(value, "output")
+	}
+	return filepath.Join(LumaDataDir(), "output")
+}
+
 func lumaPath(name string) string {
 	return filepath.Join(LumaDataDir(), name)
 }
@@ -503,10 +513,24 @@ func normalizeLumaProvider(provider LumaAPIProvider) (LumaAPIProvider, error) {
 	if provider.Protocol != "apimart" {
 		provider.Protocol = "openai"
 	}
+	provider = mergeBuiltInProviderDefaults(provider)
 	provider.ImageModels = uniqueStrings(provider.ImageModels)
 	provider.ChatModels = uniqueStrings(provider.ChatModels)
 	provider.VideoModels = uniqueStrings(provider.VideoModels)
 	return provider, nil
+}
+
+func mergeBuiltInProviderDefaults(provider LumaAPIProvider) LumaAPIProvider {
+	for _, item := range LumaDefaultProviders() {
+		if provider.ID != item.ID {
+			continue
+		}
+		provider.ImageModels = append(provider.ImageModels, item.ImageModels...)
+		provider.ChatModels = append(provider.ChatModels, item.ChatModels...)
+		provider.VideoModels = append(provider.VideoModels, item.VideoModels...)
+		break
+	}
+	return provider
 }
 
 func hasPrimaryProvider(providers []LumaAPIProvider) bool {
@@ -519,8 +543,7 @@ func hasPrimaryProvider(providers []LumaAPIProvider) bool {
 }
 
 func LumaLoadProviderKeys() map[string]string {
-	keys := map[string]string{}
-	_ = readJSONFile(lumaPath("api_provider_keys.json"), &keys)
+	keys := lumaLoadProviderKeyFile()
 	for _, provider := range LumaLoadProviders() {
 		envName := "LUMAFORGE_PROVIDER_" + strings.ToUpper(strings.ReplaceAll(provider.ID, "-", "_")) + "_API_KEY"
 		if value := strings.TrimSpace(os.Getenv(envName)); value != "" {
@@ -528,6 +551,72 @@ func LumaLoadProviderKeys() map[string]string {
 		}
 	}
 	return keys
+}
+
+func lumaLoadProviderKeyFile() map[string]string {
+	keys := map[string]string{}
+	_ = readJSONFile(lumaPath("api_provider_keys.json"), &keys)
+	return keys
+}
+
+func LumaProviderKeyDiagnostics() map[string]any {
+	providers := LumaPublicProviders(LumaLoadProviders())
+	providerIDs := map[string]bool{}
+	for _, provider := range providers {
+		providerIDs[provider.ID] = true
+	}
+	keys := lumaLoadProviderKeyFile()
+	orphanKeys := []string{}
+	referencedCount := 0
+	for id, value := range keys {
+		if !providerIDs[id] {
+			orphanKeys = append(orphanKeys, id)
+			continue
+		}
+		if strings.TrimSpace(value) != "" {
+			referencedCount += 1
+		}
+	}
+	sort.Strings(orphanKeys)
+	return map[string]any{
+		"providers":            providers,
+		"provider_count":       len(providers),
+		"stored_key_count":     referencedCount,
+		"orphan_keys":          orphanKeys,
+		"orphan_count":         len(orphanKeys),
+		"has_environment_keys": hasProviderEnvironmentKeys(providers),
+	}
+}
+
+func LumaClearOrphanProviderKeys() map[string]any {
+	keys := lumaLoadProviderKeyFile()
+	providerIDs := map[string]bool{}
+	for _, provider := range LumaLoadProviders() {
+		providerIDs[provider.ID] = true
+	}
+	removed := []string{}
+	for id := range keys {
+		if !providerIDs[id] {
+			delete(keys, id)
+			removed = append(removed, id)
+		}
+	}
+	sort.Strings(removed)
+	_ = writeJSONFile(lumaPath("api_provider_keys.json"), keys)
+	diagnostics := LumaProviderKeyDiagnostics()
+	diagnostics["removed"] = removed
+	diagnostics["removed_count"] = len(removed)
+	return diagnostics
+}
+
+func hasProviderEnvironmentKeys(providers []LumaAPIProvider) bool {
+	for _, provider := range providers {
+		envName := "LUMAFORGE_PROVIDER_" + strings.ToUpper(strings.ReplaceAll(provider.ID, "-", "_")) + "_API_KEY"
+		if strings.TrimSpace(os.Getenv(envName)) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func LumaPublicProviders(providers []LumaAPIProvider) []LumaAPIProvider {
@@ -569,8 +658,39 @@ func LumaPrimaryProvider() (LumaAPIProvider, string, bool) {
 	return LumaAPIProvider{}, "", false
 }
 
+const lumaModelRefSeparator = "::"
+
+func LumaModelRef(providerID string, modelName string) string {
+	providerID = strings.ToLower(strings.TrimSpace(providerID))
+	modelName = strings.TrimSpace(modelName)
+	if providerID == "" || modelName == "" {
+		return modelName
+	}
+	return providerID + lumaModelRefSeparator + modelName
+}
+
+func LumaSplitModelRef(value string) (string, string, bool) {
+	value = strings.TrimSpace(value)
+	parts := strings.SplitN(value, lumaModelRefSeparator, 2)
+	if len(parts) != 2 {
+		return "", value, false
+	}
+	providerID := strings.ToLower(strings.TrimSpace(parts[0]))
+	modelName := strings.TrimSpace(parts[1])
+	if providerID == "" || modelName == "" {
+		return "", value, false
+	}
+	return providerID, modelName, true
+}
+
+func LumaRawModelName(value string) string {
+	_, modelName, _ := LumaSplitModelRef(value)
+	return modelName
+}
+
 func LumaModelChannel(modelName string) (model.ModelChannel, bool) {
 	modelName = strings.TrimSpace(modelName)
+	providerID, rawModelName, hasProviderRef := LumaSplitModelRef(modelName)
 	providers := LumaLoadProviders()
 	keys := LumaLoadProviderKeys()
 	var fallback *LumaAPIProvider
@@ -584,31 +704,33 @@ func LumaModelChannel(modelName string) (model.ModelChannel, bool) {
 			fallback = &copyProvider
 		}
 		models := append(append([]string{}, provider.ImageModels...), append(provider.ChatModels, provider.VideoModels...)...)
+		if hasProviderRef {
+			if provider.ID == providerID && stringInSlice(rawModelName, models) {
+				return lumaProviderModelChannel(provider, keys[provider.ID], models), true
+			}
+			continue
+		}
 		if stringInSlice(modelName, models) {
-			return model.ModelChannel{
-				Protocol: "openai",
-				Name:     provider.Name,
-				BaseURL:  provider.BaseURL,
-				APIKey:   keys[provider.ID],
-				Models:   models,
-				Weight:   1,
-				Enabled:  true,
-			}, true
+			return lumaProviderModelChannel(provider, keys[provider.ID], models), true
 		}
 	}
 	if fallback != nil {
 		models := append(append([]string{}, fallback.ImageModels...), append(fallback.ChatModels, fallback.VideoModels...)...)
-		return model.ModelChannel{
-			Protocol: "openai",
-			Name:     fallback.Name,
-			BaseURL:  fallback.BaseURL,
-			APIKey:   keys[fallback.ID],
-			Models:   models,
-			Weight:   1,
-			Enabled:  true,
-		}, true
+		return lumaProviderModelChannel(*fallback, keys[fallback.ID], models), true
 	}
 	return model.ModelChannel{}, false
+}
+
+func lumaProviderModelChannel(provider LumaAPIProvider, apiKey string, models []string) model.ModelChannel {
+	return model.ModelChannel{
+		Protocol: "openai",
+		Name:     provider.Name,
+		BaseURL:  provider.BaseURL,
+		APIKey:   apiKey,
+		Models:   models,
+		Weight:   1,
+		Enabled:  true,
+	}
 }
 
 func stringInSlice(value string, values []string) bool {
@@ -750,6 +872,11 @@ func LumaUpdateState() map[string]any {
 	if state["phase"] == nil {
 		state["phase"] = "idle"
 	}
+	if latest := stringFromAny(state["latest_version"]); latest != "" && compareVersion(latest, LumaForgeVersion) <= 0 {
+		state["phase"] = "idle"
+		state["asset"] = nil
+		state["assets"] = []map[string]any{}
+	}
 	state["current_version"] = LumaForgeVersion
 	state["build_id"] = LumaForgeBuildID
 	return state
@@ -791,17 +918,21 @@ func LumaUpdateCheck() map[string]any {
 	}
 	isNewer := compareVersion(latest, LumaForgeVersion) > 0
 	phase := "idle"
+	var stateAsset any
+	stateAssets := []map[string]any{}
 	if isNewer {
 		phase = "found"
+		stateAsset = asset
+		stateAssets = []map[string]any{asset}
 	}
-	LumaSaveUpdateState(map[string]any{"phase": phase, "latest_version": latest, "asset": asset})
+	LumaSaveUpdateState(map[string]any{"phase": phase, "latest_version": latest, "asset": stateAsset, "assets": stateAssets})
 	return map[string]any{
 		"ok":              true,
 		"current_version": LumaForgeVersion,
 		"latest_version":  latest,
 		"is_newer":        isNewer,
-		"asset":           asset,
-		"assets":          []map[string]any{asset},
+		"asset":           stateAsset,
+		"assets":          stateAssets,
 		"release_notes":   notes,
 		"source_url":      checkURL,
 	}

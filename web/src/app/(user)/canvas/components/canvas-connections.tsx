@@ -27,9 +27,13 @@ export function ConnectionPath({
     const dx = Math.abs(endX - startX);
     const curvature = Math.max(dx * 0.5, 50);
     const pathD = `M ${startX} ${startY} C ${startX + curvature} ${startY}, ${endX - curvature} ${endY}, ${endX} ${endY}`;
+    const motionPathId = `canvas-connection-motion-${connection.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
     return (
-        <g>
+        <g className={`canvas-connection ${active ? "canvas-connection-active" : ""}`}>
+            <defs>
+                <path id={motionPathId} d={pathD} />
+            </defs>
             <path
                 data-connection-id={connection.id}
                 d={pathD}
@@ -48,13 +52,37 @@ export function ConnectionPath({
                 }}
             />
             <path
+                className="canvas-connection-glow"
                 d={pathD}
                 stroke={active ? theme.node.activeStroke : theme.node.muted}
-                strokeWidth={active ? 3 : 2}
-                strokeOpacity={active ? 1 : 0.82}
+                strokeWidth={active ? 5.2 : 4.4}
+                strokeOpacity={active ? 0.52 : 0.34}
                 fill="none"
-                style={{ filter: active ? `drop-shadow(0 0 8px ${theme.node.activeStroke}66)` : undefined, pointerEvents: "none" }}
+                pathLength={120}
+                style={{ filter: `drop-shadow(0 0 8px ${theme.node.activeStroke}55)`, pointerEvents: "none" }}
             />
+            <path
+                className="canvas-connection-core"
+                d={pathD}
+                stroke={active ? "#ffffff" : theme.node.activeStroke}
+                strokeWidth={active ? 2.7 : 2.1}
+                strokeOpacity={active ? 1 : 0.78}
+                fill="none"
+                pathLength={120}
+                style={{ filter: active ? `drop-shadow(0 0 7px ${theme.node.activeStroke}99)` : `drop-shadow(0 0 5px ${theme.node.activeStroke}66)`, pointerEvents: "none" }}
+            />
+            <g className="canvas-connection-dots" style={{ pointerEvents: "none" }}>
+                <circle className="canvas-connection-dot" r={active ? 3.8 : 3}>
+                    <animateMotion dur={active ? "1.35s" : "1.65s"} begin="0s" repeatCount="indefinite" rotate="auto">
+                        <mpath href={`#${motionPathId}`} />
+                    </animateMotion>
+                </circle>
+                <circle className="canvas-connection-dot canvas-connection-dot-hot" r={active ? 2.4 : 1.9}>
+                    <animateMotion dur={active ? "1.35s" : "1.65s"} begin="-.48s" repeatCount="indefinite" rotate="auto">
+                        <mpath href={`#${motionPathId}`} />
+                    </animateMotion>
+                </circle>
+            </g>
         </g>
     );
 }
@@ -74,5 +102,10 @@ export function ActiveConnectionPath({ node, handle, mouseWorld, target }: { nod
     const distance = Math.abs(snappedEndX - snappedStartX);
     const pathD = `M ${snappedStartX} ${snappedStartY} C ${snappedStartX + distance * 0.5} ${snappedStartY}, ${snappedEndX - distance * 0.5} ${snappedEndY}, ${snappedEndX} ${snappedEndY}`;
 
-    return <path d={pathD} stroke={theme.node.activeStroke} strokeWidth="2" fill="none" strokeDasharray="5,5" />;
+    return (
+        <g className="canvas-connection-preview">
+            <path d={pathD} stroke={theme.node.activeStroke} strokeWidth="6" strokeOpacity="0.18" fill="none" />
+            <path d={pathD} stroke={theme.node.activeStroke} strokeWidth="2.4" fill="none" strokeDasharray="6,7" pathLength={120} />
+        </g>
+    );
 }

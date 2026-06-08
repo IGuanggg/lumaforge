@@ -38,6 +38,22 @@ try {
 if (-not (Test-Path "web\.next\standalone\server.js")) {
     throw "Next standalone build failed: web\.next\standalone\server.js not found"
 }
+$standaloneNextDir = "web\.next\standalone\.next"
+$standaloneStaticDir = Join-Path $standaloneNextDir "static"
+if (Test-Path "web\.next\static") {
+    New-Item -ItemType Directory -Force -Path $standaloneNextDir | Out-Null
+    if (Test-Path $standaloneStaticDir) {
+        Remove-Item -Recurse -Force $standaloneStaticDir
+    }
+    Copy-Item "web\.next\static" $standaloneNextDir -Recurse -Force
+}
+if (Test-Path "web\public") {
+    $standalonePublicDir = "web\.next\standalone\public"
+    if (Test-Path $standalonePublicDir) {
+        Remove-Item -Recurse -Force $standalonePublicDir
+    }
+    Copy-Item "web\public" "web\.next\standalone" -Recurse -Force
+}
 Write-Host "  OK: web\.next\standalone\server.js"
 
 Write-Host "[4/10] Copying Node runtime..."

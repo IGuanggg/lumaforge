@@ -5,7 +5,8 @@ import { Cpu } from "lucide-react";
 
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { selectableModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+import { modelDisplayLabel, rawModelName, selectableModelsByCapability, selectableProviderModelsByCapability, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+import type { ProviderModelOption } from "@/services/api/admin";
 
 type ModelPickerProps = {
     config: AiConfig;
@@ -21,8 +22,14 @@ type ModelPickerProps = {
 export function ModelPicker({ config, value, onChange, capability, className, fullWidth = false, placeholder = "选择模型", onMissingConfig }: ModelPickerProps) {
     const pickerId = useId();
     const [open, setOpen] = useState(false);
-    const options = useMemo(() => Array.from(new Set([...(config.channelMode === "local" && !capability ? [value] : []), ...selectableModelsByCapability(config, capability)].filter((model): model is string => Boolean(model)))), [capability, config, value]);
+    const providerOptions = useMemo(() => selectableProviderModelsByCapability(config, capability), [capability, config]);
+    const optionByValue = useMemo(() => new Map(providerOptions.map((item) => [item.value, item])), [providerOptions]);
+    const options = useMemo(
+        () => Array.from(new Set([...(config.channelMode === "local" && !capability ? [value] : []), ...selectableModelsByCapability(config, capability)].filter((model): model is string => Boolean(model)))),
+        [capability, config, value],
+    );
     const current = value || "";
+    const currentLabel = optionByValue.get(current)?.label || modelDisplayLabel(config, current);
 
     useEffect(() => {
         const closeOtherPicker = (event: Event) => {
@@ -52,10 +59,10 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                 )}
                 onMouseDown={(event) => event.stopPropagation()}
                 onPointerDown={(event) => event.stopPropagation()}
-                title={current || placeholder}
+                title={currentLabel || placeholder}
             >
                 <ModelIcon model={current} />
-                <span className="canvas-model-picker-text min-w-0 flex-1 truncate text-left">{current || placeholder}</span>
+                <span className="canvas-model-picker-text min-w-0 flex-1 truncate text-left">{currentLabel || placeholder}</span>
             </SelectTrigger>
             <SelectContent
                 data-canvas-no-zoom
@@ -68,11 +75,14 @@ export function ModelPicker({ config, value, onChange, capability, className, fu
                 onMouseDown={(event) => event.stopPropagation()}
             >
                 {options.length ? (
-                    options.map((model) => (
-                        <SelectItem key={model} value={model} textValue={model}>
-                            <ModelLabel model={model} />
-                        </SelectItem>
-                    ))
+                    options.map((model) => {
+                        const option = optionByValue.get(model);
+                        return (
+                            <SelectItem key={model} value={model} textValue={option?.label || model}>
+                                <ModelLabel model={model} option={option} />
+                            </SelectItem>
+                        );
+                    })
                 ) : (
                     <SelectItem value="__empty__" disabled>
                         {emptyModelLabel(config, capability)}
@@ -90,11 +100,14 @@ function emptyModelLabel(config: AiConfig, capability?: ModelCapability) {
     return config.models.length ? `暂无匹配的${label}模型` : "请先到配置里拉取模型列表";
 }
 
-function ModelLabel({ model }: { model: string }) {
+function ModelLabel({ model, option }: { model: string; option?: ProviderModelOption }) {
     return (
         <span className="flex min-w-0 items-center gap-2">
             <ModelIcon model={model} />
-            <span className="truncate">{model}</span>
+            <span className="flex min-w-0 flex-col">
+                <span className="truncate">{option?.label || model}</span>
+                {option ? <span className="truncate text-[11px] text-muted-foreground">{option.providerName} · {option.model}</span> : null}
+            </span>
         </span>
     );
 }
@@ -105,12 +118,12 @@ function ModelIcon({ model }: { model: string }) {
 }
 
 function resolveModelIcon(model: string) {
-    const name = model.toLowerCase();
+    const name = rawModelName(model).toLowerCase();
     if (name.includes("claude") || name.includes("anthropic")) return "/icons/claude.svg";
     if (name.includes("gemini") || name.includes("google")) return "/icons/gemini.svg";
     if (name.includes("gpt") || name.includes("openai")) return "/icons/openai.svg";
-    if (name.includes("grok") || name.includes("grok")) return "/icons/grok.svg";
-    if (name.includes("deepseek") || name.includes("deepseek")) return "/icons/deepseek.svg";
-    if (name.includes("glm") || name.includes("glm")) return "/icons/glm.svg";
+    if (name.includes("grok")) return "/icons/grok.svg";
+    if (name.includes("deepseek")) return "/icons/deepseek.svg";
+    if (name.includes("glm")) return "/icons/glm.svg";
     return "";
 }

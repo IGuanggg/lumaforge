@@ -2,7 +2,7 @@
 
 import type { CSSProperties, RefObject } from "react";
 import { Avatar, Dropdown, Tooltip } from "antd";
-import { BookOpen, Keyboard, LogOut, Settings2, Shield, SlidersHorizontal } from "lucide-react";
+import { BookOpen, Keyboard, LogOut, Settings, Shield, SlidersHorizontal } from "lucide-react";
 import type { ItemType } from "antd/es/menu/interface";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -65,17 +65,8 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
                     <SlidersHorizontal className="size-4" />
                 </button>
             ) : null}
-            <Link
-                href="/app-settings"
-                className={cn(
-                    naturalIconClass,
-                    appSettingsActive && "text-stone-950 dark:text-stone-100",
-                )}
-                style={iconStyle}
-                aria-label="应用设置"
-                title="应用设置"
-            >
-                <Settings2 className="size-4" />
+            <Link href="/app-settings" className={cn(naturalIconClass, appSettingsActive && "text-stone-950 dark:text-stone-100")} style={iconStyle} aria-label="应用设置" title="应用设置">
+                <Settings className="size-4" />
             </Link>
             <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} className={naturalIconClass} style={iconStyle} aria-label={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"} title={theme === "dark" ? "切换到浅色主题" : "切换到深色主题"} />
             <VersionReleaseModal style={versionStyle} />

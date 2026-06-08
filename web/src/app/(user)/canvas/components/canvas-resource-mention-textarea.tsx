@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useMemo, useRef, useState } from "react";
-import type { CSSProperties, MouseEvent, PointerEvent, TextareaHTMLAttributes } from "react";
+import type { ClipboardEvent, CSSProperties, MouseEvent, PointerEvent, TextareaHTMLAttributes } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Image as ImageIcon, Music2, Video } from "lucide-react";
 
@@ -138,6 +138,23 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
                         return;
                     }
                     onKeyDown?.(event);
+                }}
+                onPaste={(event: ClipboardEvent<HTMLTextAreaElement>) => {
+                    props.onPaste?.(event);
+                    if (event.defaultPrevented) return;
+                    const text = event.clipboardData.getData("text/plain");
+                    if (!text) return;
+
+                    event.preventDefault();
+                    const textarea = textareaRef.current;
+                    const start = textarea?.selectionStart ?? value.length;
+                    const end = textarea?.selectionEnd ?? start;
+                    const next = `${value.slice(0, start)}${text}${value.slice(end)}`;
+                    const cursor = start + text.length;
+                    closeMention();
+                    updateValue(next, cursor);
+                    syncMention(next, cursor);
+                    requestAnimationFrame(syncOverlayScroll);
                 }}
                 onScroll={(event) => {
                     syncOverlayScroll();

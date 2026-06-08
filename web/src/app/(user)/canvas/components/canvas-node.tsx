@@ -21,6 +21,7 @@ type CanvasNodeProps = {
     isRelated: boolean;
     isFocusRelated: boolean;
     isConnectionTarget: boolean;
+    isConnectionSource: boolean;
     isConnecting: boolean;
     editRequestNonce?: number;
     showPanel: boolean;
@@ -75,6 +76,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     isRelated,
     isFocusRelated,
     isConnectionTarget,
+    isConnectionSource,
     isConnecting,
     editRequestNonce = 0,
     showPanel,
@@ -111,6 +113,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
     const imageBorderColor = isActive ? selectionBlue : isRelated && !isBatchChild ? theme.node.muted : "transparent";
+    const zoomBias = Math.min(1, Math.max(0, Math.abs(Math.log2(Math.max(scale || 1, 0.08))) / 1.6));
+    const connectionClass = isConnectionTarget ? "canvas-node-connection-target" : isConnectionSource ? "canvas-node-connection-source" : isConnecting ? "canvas-node-connection-candidate" : "";
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const resizeRef = useRef({
         isResizing: false,
@@ -244,7 +248,10 @@ export const CanvasNode = React.memo(function CanvasNode({
                 height: data.height,
                 transition: "box-shadow 200ms ease",
                 contain: "layout style",
-            }}
+                "--canvas-node-zoom-bias": zoomBias,
+                "--canvas-node-media-padding": `${Math.round(zoomBias * 14)}px`,
+                "--canvas-node-input-scale": 1 + zoomBias * 0.18,
+            } as React.CSSProperties}
             onMouseEnter={() => {
                 setHovered(true);
                 onHoverStart(data.id);
@@ -256,7 +263,7 @@ export const CanvasNode = React.memo(function CanvasNode({
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
             <div
-                className="relative h-full w-full overflow-visible rounded-3xl border-2"
+                className={`canvas-node-shell relative h-full w-full overflow-visible rounded-3xl border-2 ${connectionClass}`}
                 style={{
                     background: hasImageContent || hasVideoContent ? "transparent" : theme.node.fill,
                     borderColor: hasImageContent ? imageBorderColor : isActive ? selectionBlue : isRelated ? theme.node.muted : theme.node.stroke,
@@ -535,7 +542,7 @@ function ImageContent({
 
     return (
         <BatchFrame batchCount={isBatchRoot ? batchCount : 0} batchExpanded={batchExpanded} batchOpening={batchOpening} batchRecovering={batchRecovering} onToggleBatch={onToggleBatch}>
-            <div className="h-full w-full overflow-hidden rounded-3xl">
+            <div className="canvas-node-media-frame h-full w-full overflow-hidden rounded-3xl">
                 <img
                     src={node.metadata!.content!}
                     alt={node.title}

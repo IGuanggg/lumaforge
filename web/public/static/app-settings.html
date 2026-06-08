@@ -8,6 +8,9 @@
         (function(){
             try {
                 var theme = localStorage.getItem('studio_theme') || localStorage.getItem('canvas_theme') || 'light';
+                if(new URLSearchParams(location.search).get('embedded') === '1') {
+                    document.documentElement.classList.add('embedded');
+                }
                 if(theme === 'dark') {
                     document.documentElement.classList.add('studio-theme-dark');
                     document.documentElement.classList.add('theme-dark');
@@ -92,9 +95,21 @@
             font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
             -webkit-font-smoothing:antialiased;
         }
+        html.embedded,
+        html.embedded body {
+            min-height:100%;
+            background:transparent;
+        }
         button { font-family:inherit; cursor:pointer; border:0; background:transparent; color:inherit; }
         .page { min-height:100vh; padding:40px 32px 80px; }
         .wrap { max-width:1100px; margin:0 auto; }
+        html.embedded .page { min-height:100%; padding:20px 22px 32px; }
+        html.embedded .wrap { max-width:none; }
+        html.embedded .page-head { padding:0 2px 18px; }
+        html.embedded .block,
+        html.embedded .card,
+        html.embedded .welcome-card,
+        html.embedded .update-result { border-radius:8px; box-shadow:none; }
         .page-head {
             padding:0 4px 28px;
             display:flex;
@@ -612,7 +627,7 @@
                     <div class="title">应用设置</div>
                     <div class="sub">管理本地保存目录、版本信息和桌面端预留动作。目录选择会写入本地配置，浏览器端和后续 EXE 会共用这些路径。</div>
                 </div>
-                <div class="version-pill"><i data-lucide="badge-info" class="w-4 h-4"></i><span id="version-pill">Version ...</span></div>
+                <div class="version-pill"><i data-lucide="settings" class="w-4 h-4"></i><span id="version-pill">Version ...</span></div>
             </header>
             <section class="file-warning-card" id="file-protocol-warning">
                 <div class="file-warning-title">当前是 file:// 直接打开，设置功能不会连接到 LumaForge 本地服务</div>

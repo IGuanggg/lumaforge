@@ -93,16 +93,49 @@ func normalizePublicSettingWithChannels(setting model.PublicSetting, channels []
 		enabled := true
 		setting.Auth.AllowRegister = &enabled
 	}
-	enabledModels := enabledChannelModels(channels)
-	if len(enabledModels) > 0 {
-		setting.ModelChannel.AvailableModels = enabledModels
+	providerModels := enabledProviderModelGroups()
+	if len(providerModels.all) > 0 {
+		setting.ModelChannel.AvailableModels = providerModels.all
+		setting.ModelChannel.ProviderModels = providerModels.options
+		setting.ModelChannel.DefaultImageModel = preferredProviderModelValue(providerModels.options, "image", "gpt-image-2-vip")
+		if setting.ModelChannel.DefaultImageModel == "" {
+			setting.ModelChannel.DefaultImageModel = firstProviderModelValue(providerModels.options, "image")
+		}
+		setting.ModelChannel.DefaultTextModel = firstProviderModelValue(providerModels.options, "text")
+		setting.ModelChannel.DefaultVideoModel = firstProviderModelValue(providerModels.options, "video")
+		setting.ModelChannel.DefaultModel = setting.ModelChannel.DefaultTextModel
 	} else {
-		setting.ModelChannel.AvailableModels = uniqueModelNames(setting.ModelChannel.AvailableModels)
+		setting.ModelChannel.ProviderModels = nil
+		enabledModels := enabledChannelModels(channels)
+		if len(enabledModels) > 0 {
+			setting.ModelChannel.AvailableModels = enabledModels
+			providerModels = modelGroupsFromNames(enabledModels)
+		} else {
+			setting.ModelChannel.AvailableModels = uniqueModelNames(setting.ModelChannel.AvailableModels)
+			providerModels = modelGroupsFromNames(setting.ModelChannel.AvailableModels)
+		}
 	}
-	setting.ModelChannel.DefaultTextModel = repairDefaultModel(setting.ModelChannel.DefaultTextModel, setting.ModelChannel.AvailableModels, isTextModelName)
-	setting.ModelChannel.DefaultImageModel = repairDefaultModel(setting.ModelChannel.DefaultImageModel, setting.ModelChannel.AvailableModels, isImageModelName)
-	setting.ModelChannel.DefaultVideoModel = repairDefaultModel(setting.ModelChannel.DefaultVideoModel, setting.ModelChannel.AvailableModels, isVideoModelName)
-	setting.ModelChannel.DefaultModel = repairDefaultModel(setting.ModelChannel.DefaultModel, setting.ModelChannel.AvailableModels, isTextModelName)
+	if len(setting.ModelChannel.ProviderModels) == 0 {
+		setting.ModelChannel.DefaultImageModel = preferredNamedModel(providerModels.image, "gpt-image-2-vip")
+		if setting.ModelChannel.DefaultImageModel == "" {
+			setting.ModelChannel.DefaultImageModel = firstModel(providerModels.image)
+		}
+		if setting.ModelChannel.DefaultImageModel == "" {
+			setting.ModelChannel.DefaultImageModel = repairDefaultModel(setting.ModelChannel.DefaultImageModel, setting.ModelChannel.AvailableModels, isImageModelName)
+		}
+		setting.ModelChannel.DefaultTextModel = repairDefaultModel(setting.ModelChannel.DefaultTextModel, providerModels.chat, anyModelName)
+		if setting.ModelChannel.DefaultTextModel == "" {
+			setting.ModelChannel.DefaultTextModel = repairDefaultModel(setting.ModelChannel.DefaultTextModel, setting.ModelChannel.AvailableModels, isTextModelName)
+		}
+		setting.ModelChannel.DefaultVideoModel = repairDefaultModel(setting.ModelChannel.DefaultVideoModel, providerModels.video, anyModelName)
+		if setting.ModelChannel.DefaultVideoModel == "" {
+			setting.ModelChannel.DefaultVideoModel = repairDefaultModel(setting.ModelChannel.DefaultVideoModel, setting.ModelChannel.AvailableModels, isVideoModelName)
+		}
+		setting.ModelChannel.DefaultModel = repairDefaultModel(setting.ModelChannel.DefaultModel, providerModels.chat, anyModelName)
+		if setting.ModelChannel.DefaultModel == "" {
+			setting.ModelChannel.DefaultModel = setting.ModelChannel.DefaultTextModel
+		}
+	}
 	return setting
 }
 
@@ -112,8 +145,9 @@ func ModelCost(modelName string) (int, error) {
 		return 0, err
 	}
 	modelName = strings.TrimSpace(modelName)
+	rawModelName := LumaRawModelName(modelName)
 	for _, item := range normalizePublicSetting(settings.Public).ModelChannel.ModelCosts {
-		if item.Model == modelName {
+		if item.Model == modelName || item.Model == rawModelName {
 			return item.Credits, nil
 		}
 	}
@@ -180,6 +214,7 @@ func SelectModelChannel(modelName string) (model.ModelChannel, error) {
 	if channel, ok := LumaModelChannel(modelName); ok {
 		return channel, nil
 	}
+	modelName = LumaRawModelName(modelName)
 	settings, err := repository.GetSettings()
 	if err != nil {
 		return model.ModelChannel{}, err
@@ -252,6 +287,97 @@ func enabledChannelModels(channels []model.ModelChannel) []string {
 	return uniqueModelNames(models)
 }
 
+type modelGroups struct {
+	all     []string
+	image   []string
+	chat    []string
+	video   []string
+	options []model.ProviderModelOption
+}
+
+func enabledProviderModelGroups() modelGroups {
+	groups := modelGroups{}
+	for _, provider := range LumaPublicProviders(LumaLoadProviders()) {
+		if !provider.Enabled {
+			continue
+		}
+		groups.image = append(groups.image, provider.ImageModels...)
+		groups.chat = append(groups.chat, provider.ChatModels...)
+		groups.video = append(groups.video, provider.VideoModels...)
+		groups.options = append(groups.options, providerModelOptions(provider, provider.ImageModels, "image")...)
+		groups.options = append(groups.options, providerModelOptions(provider, provider.ChatModels, "text")...)
+		groups.options = append(groups.options, providerModelOptions(provider, provider.VideoModels, "video")...)
+	}
+	groups.image = uniqueModelNames(groups.image)
+	groups.chat = uniqueModelNames(groups.chat)
+	groups.video = uniqueModelNames(groups.video)
+	groups.all = uniqueModelNames(append(append([]string{}, groups.image...), append(groups.chat, groups.video...)...))
+	groups.options = uniqueProviderModelOptions(groups.options)
+	return groups
+}
+
+func providerModelOptions(provider LumaAPIProvider, models []string, capability string) []model.ProviderModelOption {
+	options := []model.ProviderModelOption{}
+	for _, item := range uniqueModelNames(models) {
+		options = append(options, model.ProviderModelOption{
+			Value:        LumaModelRef(provider.ID, item),
+			ProviderID:   provider.ID,
+			ProviderName: provider.Name,
+			Model:        item,
+			Capability:   capability,
+			Label:        strings.TrimSpace(provider.Name + " / " + item),
+			Enabled:      provider.Enabled,
+		})
+	}
+	return options
+}
+
+func uniqueProviderModelOptions(options []model.ProviderModelOption) []model.ProviderModelOption {
+	result := []model.ProviderModelOption{}
+	seen := map[string]bool{}
+	for _, item := range options {
+		if item.Value == "" || seen[item.Value] {
+			continue
+		}
+		seen[item.Value] = true
+		result = append(result, item)
+	}
+	return result
+}
+
+func preferredProviderModelValue(options []model.ProviderModelOption, capability string, modelName string) string {
+	for _, item := range options {
+		if item.Enabled && item.Capability == capability && item.Model == modelName {
+			return item.Value
+		}
+	}
+	return ""
+}
+
+func firstProviderModelValue(options []model.ProviderModelOption, capability string) string {
+	for _, item := range options {
+		if item.Enabled && item.Capability == capability {
+			return item.Value
+		}
+	}
+	return ""
+}
+
+func modelGroupsFromNames(models []string) modelGroups {
+	groups := modelGroups{all: uniqueModelNames(models)}
+	for _, item := range groups.all {
+		switch {
+		case isVideoModelName(item):
+			groups.video = append(groups.video, item)
+		case isImageModelName(item):
+			groups.image = append(groups.image, item)
+		default:
+			groups.chat = append(groups.chat, item)
+		}
+	}
+	return groups
+}
+
 func uniqueModelNames(models []string) []string {
 	result := []string{}
 	seen := map[string]bool{}
@@ -284,14 +410,36 @@ func repairDefaultModel(current string, models []string, preferred func(string) 
 	return ""
 }
 
+func preferredNamedModel(models []string, names ...string) string {
+	for _, name := range names {
+		for _, item := range models {
+			if item == name {
+				return item
+			}
+		}
+	}
+	return ""
+}
+
+func firstModel(models []string) string {
+	if len(models) == 0 {
+		return ""
+	}
+	return models[0]
+}
+
+func anyModelName(modelName string) bool {
+	return strings.TrimSpace(modelName) != ""
+}
+
 func isVideoModelName(modelName string) bool {
-	name := strings.ToLower(strings.TrimSpace(modelName))
+	name := strings.ToLower(strings.TrimSpace(LumaRawModelName(modelName)))
 	return strings.Contains(name, "seedance") || strings.Contains(name, "video")
 }
 
 func isImageModelName(modelName string) bool {
-	name := strings.ToLower(strings.TrimSpace(modelName))
-	return strings.Contains(name, "seedream") || strings.Contains(name, "gpt-image") || strings.Contains(name, "image")
+	name := strings.ToLower(strings.TrimSpace(LumaRawModelName(modelName)))
+	return strings.Contains(name, "seedream") || strings.Contains(name, "gpt-image") || strings.Contains(name, "image") || strings.Contains(name, "banana") || strings.Contains(name, "flux") || strings.Contains(name, "dall")
 }
 
 func isTextModelName(modelName string) bool {

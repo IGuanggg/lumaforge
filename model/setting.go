@@ -27,16 +27,29 @@ type ModelCost struct {
 	Credits int    `json:"credits"`
 }
 
+// ProviderModelOption 是 v2.1 前端使用的平台感知模型身份。
+// AvailableModels 继续保留纯模型名，供旧页面和旧客户端兼容。
+type ProviderModelOption struct {
+	Value        string `json:"value"`
+	ProviderID   string `json:"providerId"`
+	ProviderName string `json:"providerName"`
+	Model        string `json:"model"`
+	Capability   string `json:"capability"`
+	Label        string `json:"label"`
+	Enabled      bool   `json:"enabled"`
+}
+
 // PublicModelChannelSetting 公开模型渠道配置。
 type PublicModelChannelSetting struct {
-	AvailableModels    []string    `json:"availableModels"`
-	ModelCosts         []ModelCost `json:"modelCosts"`
-	DefaultModel       string      `json:"defaultModel"`
-	DefaultImageModel  string      `json:"defaultImageModel"`
-	DefaultVideoModel  string      `json:"defaultVideoModel"`
-	DefaultTextModel   string      `json:"defaultTextModel"`
-	SystemPrompt       string      `json:"systemPrompt"`
-	AllowCustomChannel *bool       `json:"allowCustomChannel"`
+	AvailableModels    []string              `json:"availableModels"`
+	ProviderModels     []ProviderModelOption `json:"providerModels,omitempty"`
+	ModelCosts         []ModelCost           `json:"modelCosts"`
+	DefaultModel       string                `json:"defaultModel"`
+	DefaultImageModel  string                `json:"defaultImageModel"`
+	DefaultVideoModel  string                `json:"defaultVideoModel"`
+	DefaultTextModel   string                `json:"defaultTextModel"`
+	SystemPrompt       string                `json:"systemPrompt"`
+	AllowCustomChannel *bool                 `json:"allowCustomChannel"`
 }
 
 // PublicSetting 公开配置。

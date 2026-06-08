@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { apiGet } from "@/services/api/request";
-import type { AdminPublicSettings } from "@/services/api/admin";
+import type { AdminPublicSettings, ProviderModelOption } from "@/services/api/admin";
 
 export type AiConfig = {
     channelMode: "remote" | "local";
@@ -30,6 +30,11 @@ export type AiConfig = {
     videoModels: string[];
     textModels: string[];
     audioModels: string[];
+    providerModels: ProviderModelOption[];
+    imageProviderModels: ProviderModelOption[];
+    videoProviderModels: ProviderModelOption[];
+    textProviderModels: ProviderModelOption[];
+    audioProviderModels: ProviderModelOption[];
     quality: string;
     size: string;
     count: string;
@@ -62,6 +67,11 @@ export const defaultConfig: AiConfig = {
     videoModels: [],
     textModels: [],
     audioModels: [],
+    providerModels: [],
+    imageProviderModels: [],
+    videoProviderModels: [],
+    textProviderModels: [],
+    audioProviderModels: [],
     quality: "1k",
     size: "16:9",
     count: "1",
@@ -83,18 +93,24 @@ type ConfigStore = {
 };
 
 function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
-    const channelMode = modelChannel?.allowCustomChannel ? config.channelMode : "remote";
+    const hasLocalConfig = Boolean(config.baseUrl.trim() && config.apiKey.trim());
+    const channelMode = modelChannel?.allowCustomChannel && config.channelMode === "local" && hasLocalConfig ? "local" : "remote";
     if (channelMode === "local" || !modelChannel) return { ...config, channelMode };
-    const models = modelChannel.availableModels;
-    const textModels = filterModelsByCapability(models, "text");
-    const imageModels = filterModelsByCapability(models, "image");
-    const videoModels = filterModelsByCapability(models, "video");
-    const audioModels = filterModelsByCapability(models, "audio");
-    const fallbackTextModel = validDefault(modelChannel.defaultTextModel, textModels) || preferredModel(textModels, isTextModelName);
+    const providerModels = normalizeProviderModelOptions(modelChannel.providerModels);
+    const imageProviderModels = filterProviderModelsByCapability(providerModels, "image");
+    const videoProviderModels = filterProviderModelsByCapability(providerModels, "video");
+    const textProviderModels = filterProviderModelsByCapability(providerModels, "text");
+    const audioProviderModels = filterProviderModelsByCapability(providerModels, "audio");
+    const models = providerModels.length ? providerModels.map((item) => item.value) : modelChannel.availableModels;
+    const textModels = providerModels.length ? textProviderModels.map((item) => item.value) : filterModelsByCapability(models, "text");
+    const imageModels = providerModels.length ? imageProviderModels.map((item) => item.value) : filterModelsByCapability(models, "image");
+    const videoModels = providerModels.length ? videoProviderModels.map((item) => item.value) : filterModelsByCapability(models, "video");
+    const audioModels = providerModels.length ? audioProviderModels.map((item) => item.value) : filterModelsByCapability(models, "audio");
+    const fallbackTextModel = validDefault(modelChannel.defaultTextModel, textModels) || preferredProviderModel(textProviderModels) || preferredModel(textModels, isTextModelName);
     const fallbackModel = validDefault(modelChannel.defaultModel, textModels) || fallbackTextModel;
-    const fallbackImageModel = validDefault(modelChannel.defaultImageModel, imageModels) || preferredModel(imageModels, isImageModelName);
-    const fallbackVideoModel = validDefault(modelChannel.defaultVideoModel, videoModels) || preferredModel(videoModels, isVideoModelName);
-    const fallbackAudioModel = preferredModel(audioModels, isAudioModelName);
+    const fallbackImageModel = validDefault(modelChannel.defaultImageModel, imageModels) || preferredProviderModel(imageProviderModels, "gpt-image-2-vip") || preferredModel(imageModels, isImageModelName);
+    const fallbackVideoModel = validDefault(modelChannel.defaultVideoModel, videoModels) || preferredProviderModel(videoProviderModels) || preferredModel(videoModels, isVideoModelName);
+    const fallbackAudioModel = preferredProviderModel(audioProviderModels) || preferredModel(audioModels, isAudioModelName);
     return {
         ...config,
         channelMode,
@@ -103,12 +119,41 @@ function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSetti
         videoModels,
         textModels,
         audioModels,
-        model: textModels.includes(config.model) ? config.model : fallbackModel,
-        imageModel: imageModels.includes(config.imageModel) ? config.imageModel : fallbackImageModel,
-        videoModel: videoModels.includes(config.videoModel) ? config.videoModel : fallbackVideoModel,
-        textModel: textModels.includes(config.textModel) ? config.textModel : fallbackTextModel || fallbackModel,
-        audioModel: audioModels.includes(config.audioModel) ? config.audioModel : fallbackAudioModel,
+        providerModels,
+        imageProviderModels,
+        videoProviderModels,
+        textProviderModels,
+        audioProviderModels,
+        model: resolveSelectedModel(config.model, textModels, providerModels) || fallbackModel,
+        imageModel: resolveSelectedModel(config.imageModel, imageModels, providerModels) || fallbackImageModel,
+        videoModel: resolveSelectedModel(config.videoModel, videoModels, providerModels) || fallbackVideoModel,
+        textModel: resolveSelectedModel(config.textModel, textModels, providerModels) || fallbackTextModel || fallbackModel,
+        audioModel: resolveSelectedModel(config.audioModel, audioModels, providerModels) || fallbackAudioModel,
         systemPrompt: modelChannel.systemPrompt,
+    };
+}
+
+function reconcileConfigWithPublicSettings(config: AiConfig, publicSettings: AdminPublicSettings) {
+    const effective = resolveEffectiveConfig(config, publicSettings.modelChannel);
+    return {
+        ...config,
+        channelMode: effective.channelMode,
+        model: effective.model || config.model,
+        imageModel: effective.imageModel || config.imageModel,
+        videoModel: effective.videoModel || config.videoModel,
+        textModel: effective.textModel || config.textModel,
+        audioModel: effective.audioModel || config.audioModel,
+        systemPrompt: effective.systemPrompt,
+        models: effective.models,
+        imageModels: effective.imageModels,
+        videoModels: effective.videoModels,
+        textModels: effective.textModels,
+        audioModels: effective.audioModels,
+        providerModels: effective.providerModels,
+        imageProviderModels: effective.imageProviderModels,
+        videoProviderModels: effective.videoProviderModels,
+        textProviderModels: effective.textProviderModels,
+        audioProviderModels: effective.audioProviderModels,
     };
 }
 
@@ -120,18 +165,61 @@ function preferredModel(models: string[], predicate: (model: string) => boolean)
     return models.find(predicate) || "";
 }
 
+function normalizeProviderModelOptions(options?: ProviderModelOption[]) {
+    const seen = new Set<string>();
+    return (options || []).filter((item) => {
+        if (!item?.value || !item.model || seen.has(item.value) || item.enabled === false) return false;
+        seen.add(item.value);
+        return true;
+    });
+}
+
+function filterProviderModelsByCapability(options: ProviderModelOption[], capability: ModelCapability) {
+    return options.filter((item) => item.capability === capability || modelMatchesCapability(item.model, capability));
+}
+
+function preferredProviderModel(options: ProviderModelOption[], preferredRawModel?: string) {
+    if (preferredRawModel) {
+        const preferred = options.find((item) => rawModelName(item.value) === preferredRawModel || item.model === preferredRawModel);
+        if (preferred) return preferred.value;
+    }
+    return options[0]?.value || "";
+}
+
+function resolveSelectedModel(current: string, models: string[], providerModels: ProviderModelOption[]) {
+    if (models.includes(current)) return current;
+    const rawCurrent = rawModelName(current);
+    const providerMatch = providerModels.find((item) => models.includes(item.value) && item.model === rawCurrent);
+    return providerMatch?.value || "";
+}
+
+export function rawModelName(model: string) {
+    const value = String(model || "").trim();
+    const index = value.indexOf("::");
+    if (index < 0) return value;
+    return value.slice(index + 2).trim() || value;
+}
+
+export function modelDisplayLabel(config: Pick<AiConfig, "providerModels">, model: string) {
+    const value = String(model || "").trim();
+    if (!value) return "";
+    const raw = rawModelName(value);
+    const option = config.providerModels.find((item) => item.value === value) || config.providerModels.find((item) => item.model === raw);
+    return option?.label || value;
+}
+
 function isVideoModelName(model: string) {
-    const value = model.toLowerCase();
+    const value = rawModelName(model).toLowerCase();
     return value.includes("seedance") || value.includes("video") || value.includes("sora") || value.includes("veo") || value.includes("kling") || value.includes("wan") || value.includes("hailuo");
 }
 
 function isImageModelName(model: string) {
-    const value = model.toLowerCase();
+    const value = rawModelName(model).toLowerCase();
     return !isVideoModelName(model) && !isAudioModelName(model) && (value.includes("seedream") || value.includes("gpt-image") || value.includes("image") || value.includes("dall-e") || value.includes("dalle") || value.includes("imagen") || value.includes("flux") || value.includes("sdxl") || value.includes("stable-diffusion") || value.includes("midjourney"));
 }
 
 function isAudioModelName(model: string) {
-    const value = model.toLowerCase();
+    const value = rawModelName(model).toLowerCase();
     return value.includes("audio") || value.includes("tts") || value.includes("speech") || value.includes("voice") || value.includes("music") || value.includes("sound");
 }
 
@@ -156,8 +244,17 @@ export function selectableModelsByCapability(config: AiConfig, capability?: Mode
     return config[modelListKey(capability)];
 }
 
+export function selectableProviderModelsByCapability(config: AiConfig, capability?: ModelCapability) {
+    if (!capability) return config.providerModels;
+    return config[providerModelListKey(capability)];
+}
+
 function modelListKey(capability: ModelCapability) {
     return `${capability}Models` as "imageModels" | "videoModels" | "textModels" | "audioModels";
+}
+
+function providerModelListKey(capability: ModelCapability) {
+    return `${capability}ProviderModels` as "imageProviderModels" | "videoProviderModels" | "textProviderModels" | "audioProviderModels";
 }
 
 function isAiConfigReady(config: AiConfig, model: string) {
@@ -183,7 +280,11 @@ export const useConfigStore = create<ConfigStore>()(
                 if (get().isPublicSettingsLoading) return;
                 set({ isPublicSettingsLoading: true });
                 try {
-                    set({ publicSettings: await apiGet<AdminPublicSettings>("/api/settings") });
+                    const publicSettings = await apiGet<AdminPublicSettings>("/api/settings");
+                    set((state) => ({
+                        publicSettings,
+                        config: reconcileConfigWithPublicSettings(state.config, publicSettings),
+                    }));
                 } finally {
                     set({ isPublicSettingsLoading: false });
                 }

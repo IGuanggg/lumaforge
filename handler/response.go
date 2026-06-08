@@ -33,7 +33,7 @@ func FailError(w http.ResponseWriter, err error) {
 }
 
 func writeJSON(w http.ResponseWriter, value any) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(value)
 }
 

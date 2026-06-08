@@ -38,6 +38,16 @@ APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
 
+def make_async_client(*args, **kwargs):
+    kwargs.setdefault("trust_env", False)
+    return httpx.AsyncClient(*args, **kwargs)
+
+
+def make_sync_client(*args, **kwargs):
+    kwargs.setdefault("trust_env", False)
+    return httpx.Client(*args, **kwargs)
+
+
 def configure_ssl_cert_file():
     for env_name in ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE"):
         value = os.getenv(env_name)
@@ -214,18 +224,18 @@ async def _cleanup_canvas_tasks():
 async def lifespan(app):
     global GLOBAL_HTTP_CLIENT, CLOUD_MEDIA_PERIODIC_TASK
     try:
-        GLOBAL_HTTP_CLIENT = httpx.AsyncClient(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True)
+        GLOBAL_HTTP_CLIENT = make_async_client(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True)
     except Exception as client_exc:
         logger.warning("httpx.AsyncClient default SSL failed: %s; retrying with certifi fallback", client_exc)
         try:
             import ssl as _ssl
             import certifi as _certifi
             _ctx = _ssl.create_default_context(cafile=_certifi.where())
-            GLOBAL_HTTP_CLIENT = httpx.AsyncClient(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True, verify=_ctx)
+            GLOBAL_HTTP_CLIENT = make_async_client(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True, verify=_ctx)
             logger.info("httpx.AsyncClient created with explicit certifi CA bundle")
         except Exception as fallback_exc:
             logger.error("httpx.AsyncClient fallback also failed: %s; creating without SSL verify", fallback_exc)
-            GLOBAL_HTTP_CLIENT = httpx.AsyncClient(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True, verify=False)
+            GLOBAL_HTTP_CLIENT = make_async_client(timeout=httpx.Timeout(connect=20.0, read=120.0, write=60.0, pool=20.0), follow_redirects=True, verify=False)
     cleanup_task = asyncio.create_task(_cleanup_canvas_tasks())
     CLOUD_MEDIA_PERIODIC_TASK = asyncio.create_task(_cloud_media_periodic_sync())
     schedule_cloud_media_sync()
@@ -797,7 +807,7 @@ async def upload_cloud_config(include_secrets=True):
     base_url = cloud_base_url(session)
     config = build_cloud_config(include_secrets=True)
     try:
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        async with make_async_client(timeout=60, follow_redirects=True) as client:
             response = await client.put(
                 f"{base_url}/api/configs/current",
                 headers=cloud_auth_header(session),
@@ -976,7 +986,7 @@ def apply_cloud_config(config):
 async def try_apply_cloud_config_from_account(session):
     base_url = cloud_base_url(session)
     try:
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        async with make_async_client(timeout=60, follow_redirects=True) as client:
             response = await client.get(
                 f"{base_url}/api/configs/current",
                 headers=cloud_auth_header(session),
@@ -1915,7 +1925,7 @@ class CanvasSaveRequest(BaseModel):
 async def check_images_exist(backend_addr, images):
     if not images:
         return True
-    client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=2)
+    client = GLOBAL_HTTP_CLIENT or make_async_client(timeout=2)
     own_client = GLOBAL_HTTP_CLIENT is None
     try:
         for img in images:
@@ -1937,7 +1947,7 @@ async def get_best_backend(required_images: List[str] = None):
     candidates_with_images = []
     candidates_others = []
     backend_stats = {}
-    client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=2)
+    client = GLOBAL_HTTP_CLIENT or make_async_client(timeout=2)
     own_client = GLOBAL_HTTP_CLIENT is None
     try:
         for addr in COMFYUI_INSTANCES:
@@ -2003,7 +2013,7 @@ async def download_comfy_output(comfy_address, item, prefix="studio_"):
     comfy_url_path = f"/view?filename={urllib.parse.quote(str(item['filename']))}&subfolder={subfolder}&type={file_type}"
     full_url = f"http://{comfy_address}{comfy_url_path}"
     try:
-        client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=60)
+        client = GLOBAL_HTTP_CLIENT or make_async_client(timeout=60)
         own_client = GLOBAL_HTTP_CLIENT is None
         try:
             response = await client.get(full_url)
@@ -2038,7 +2048,7 @@ def save_to_history(record):
 
 async def get_comfy_history(comfy_address, prompt_id):
     try:
-        client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=10)
+        client = GLOBAL_HTTP_CLIENT or make_async_client(timeout=10)
         own_client = GLOBAL_HTTP_CLIENT is None
         try:
             response = await client.get(f"http://{comfy_address}/history/{prompt_id}")
@@ -2626,7 +2636,7 @@ async def bytes_from_download_url(url: str):
     if value.lower().startswith(("http://", "https://")):
         try:
             timeout = httpx.Timeout(connect=20.0, read=300.0, write=60.0, pool=20.0)
-            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+            async with make_async_client(timeout=timeout, follow_redirects=True) as client:
                 response = await client.get(value)
                 response.raise_for_status()
                 content_type = response.headers.get("content-type", "application/octet-stream").split(";")[0].strip() or "application/octet-stream"
@@ -2860,7 +2870,7 @@ async def save_ai_image_to_output(image_data, prefix="online_", category="output
         return value
     try:
         timeout = httpx.Timeout(connect=20.0, read=300.0, write=60.0, pool=20.0)
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        async with make_async_client(timeout=timeout, follow_redirects=True) as client:
             response = await client.get(value)
             response.raise_for_status()
             content_type = response.headers.get("Content-Type", "")
@@ -2885,7 +2895,7 @@ async def save_remote_video_to_output(url, prefix="video_", category="output"):
     filename = f"{prefix}{uuid.uuid4().hex[:10]}.mp4"
     path = output_path_for(filename, category)
     try:
-        async with httpx.AsyncClient(timeout=VIDEO_POLL_TIMEOUT) as client:
+        async with make_async_client(timeout=VIDEO_POLL_TIMEOUT) as client:
             response = await client.get(url)
             response.raise_for_status()
             content_type = (response.headers.get("Content-Type") or "").lower()
@@ -3084,7 +3094,7 @@ async def generate_modelscope_provider_image(prompt, size, model, reference_imag
 
     base_root = ((provider or {}).get("base_url") or MODELSCOPE_CHAT_BASE_URL).rstrip("/")
     api_root = base_root if base_root.endswith("/v1") else f"{base_root}/v1"
-    async with httpx.AsyncClient(timeout=AI_REQUEST_TIMEOUT) as client:
+    async with make_async_client(timeout=AI_REQUEST_TIMEOUT) as client:
         submit_res = await client.post(f"{api_root}/images/generations", headers=headers, json=payload)
         submit_res.raise_for_status()
         raw = submit_res.json()
@@ -3134,7 +3144,7 @@ async def generate_ai_image(prompt, size, quality, model, reference_images=None,
     mask_refs = [ref for ref in refs if str(ref.get("role") or "").strip().lower() == "mask" or str(ref.get("name") or "").lower().endswith("_mask.png")]
     image_refs = [ref for ref in refs if ref not in mask_refs]
     request_timeout = httpx.Timeout(connect=20.0, read=600.0, write=120.0, pool=20.0) if (is_gpt2 or is_apimart) else AI_REQUEST_TIMEOUT
-    async with httpx.AsyncClient(timeout=request_timeout) as client:
+    async with make_async_client(timeout=request_timeout) as client:
         response = None
         if is_apimart:
             apimart_size, resolution = apimart_size_resolution(size)
@@ -4327,7 +4337,7 @@ async def app_update_check():
             "message": "未配置更新检查地址。发布到 GitHub 后可通过 APP_UPDATE_CHECK_URL 指向 release/version JSON。",
     }
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
+        async with make_async_client(timeout=8) as client:
             data, normalized = await fetch_update_source_payload(client)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"检查更新失败：{exc}")
@@ -4582,7 +4592,7 @@ async def app_update_download():
     if not APP_UPDATE_CHECK_URL:
         raise HTTPException(status_code=400, detail="未配置更新检查地址")
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
+        async with make_async_client(timeout=8) as client:
             data, normalized = await fetch_update_source_payload(client)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"检查更新失败：{exc}")
@@ -4618,7 +4628,7 @@ async def app_update_download():
         "error": None,
     })
     try:
-        async with httpx.AsyncClient(timeout=300, follow_redirects=True) as client:
+        async with make_async_client(timeout=300, follow_redirects=True) as client:
             async with client.stream("GET", download_url) as dl_resp:
                 dl_resp.raise_for_status()
                 header_total = int(dl_resp.headers.get("content-length") or 0)
@@ -4919,7 +4929,7 @@ async def view_image(filename: str, type: str = "input", subfolder: str = ""):
         raise HTTPException(status_code=400, detail="Invalid type")
     if subfolder and not SAFE_NAME_RE.match(subfolder):
         raise HTTPException(status_code=400, detail="Invalid subfolder")
-    client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=2)
+    client = GLOBAL_HTTP_CLIENT or make_async_client(timeout=2)
     own_client = GLOBAL_HTTP_CLIENT is None
     try:
         for addr in COMFYUI_INSTANCES:
@@ -5487,7 +5497,7 @@ async def upload_image(files: List[UploadFile] = File(...)):
             raise HTTPException(status_code=413, detail=f"File too large (max {MAX_UPLOAD_SIZE_MB}MB)")
         files_content.append((file, content))
 
-    client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=10)
+    client = GLOBAL_HTTP_CLIENT or make_async_client(timeout=10)
     own_client = GLOBAL_HTTP_CLIENT is None
     try:
         for file, content in files_content:
@@ -5707,7 +5717,7 @@ async def cloud_status(refresh: int = 0):
         base_url = str(session.get("base_url") or CLOUD_SYNC_BASE_URL).strip().rstrip("/")
         if base_url and re.match(r"^https?://", base_url):
             try:
-                async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                async with make_async_client(timeout=15, follow_redirects=True) as client:
                     response = await client.get(f"{base_url}/api/me", headers=cloud_auth_header(session))
                     if response.status_code == 200:
                         data = response.json()
@@ -5747,7 +5757,7 @@ async def cloud_auth(action: str, payload: CloudAuthRequest):
     previous_session = load_cloud_session()
     previous_email = str(previous_session.get("email") or "").strip().lower()
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        async with make_async_client(timeout=30, follow_redirects=True) as client:
             response = await client.post(
                 f"{base_url}/api/auth/{action}",
                 json={"email": payload.email.strip().lower(), "password": payload.password},
@@ -5816,7 +5826,7 @@ async def cloud_login(payload: CloudAuthRequest):
 async def cloud_forgot_password(payload: CloudPasswordForgotRequest):
     base_url, custom_cloud = cloud_requested_base_url(payload.base_url)
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        async with make_async_client(timeout=30, follow_redirects=True) as client:
             response = await client.post(
                 f"{base_url}/api/auth/password/forgot",
                 json={"email": payload.email.strip().lower()},
@@ -5837,7 +5847,7 @@ async def cloud_forgot_password(payload: CloudPasswordForgotRequest):
 async def cloud_reset_password(payload: CloudPasswordResetRequest):
     base_url, custom_cloud = cloud_requested_base_url(payload.base_url)
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        async with make_async_client(timeout=30, follow_redirects=True) as client:
             response = await client.post(
                 f"{base_url}/api/auth/password/reset",
                 json={
@@ -5864,7 +5874,7 @@ async def cloud_request_email_verify():
     cloud_auth_header(session)
     base_url = cloud_base_url(session)
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        async with make_async_client(timeout=30, follow_redirects=True) as client:
             profile_response = await client.get(f"{base_url}/api/me", headers=cloud_auth_header(session))
             profile_response.raise_for_status()
             profile = profile_response.json()
@@ -5897,7 +5907,7 @@ async def cloud_confirm_email_verify(payload: CloudEmailVerifyConfirmRequest):
     cloud_auth_header(session)
     base_url = cloud_base_url(session)
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        async with make_async_client(timeout=30, follow_redirects=True) as client:
             response = await client.post(
                 f"{base_url}/api/auth/email/verify/confirm",
                 json={"email": session.get("email", ""), "token": payload.token.strip()},
@@ -5927,7 +5937,7 @@ async def cloud_profile():
     session = load_cloud_session()
     base_url = cloud_base_url(session)
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        async with make_async_client(timeout=30, follow_redirects=True) as client:
             response = await client.get(f"{base_url}/api/me", headers=cloud_auth_header(session))
             response.raise_for_status()
             data = response.json()
@@ -5951,7 +5961,7 @@ async def cloud_save_profile(payload: CloudProfileRequest):
     session = load_cloud_session()
     base_url = cloud_base_url(session)
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        async with make_async_client(timeout=30, follow_redirects=True) as client:
             response = await client.put(
                 f"{base_url}/api/me",
                 headers=cloud_auth_header(session),
@@ -5984,7 +5994,7 @@ async def cloud_upload_avatar(file: UploadFile = File(...)):
     if len(content) > CLOUD_AVATAR_MAX_BYTES:
         raise HTTPException(status_code=413, detail="头像文件不能超过 5MB")
     try:
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        async with make_async_client(timeout=60, follow_redirects=True) as client:
             response = await client.post(
                 f"{base_url}/api/me/avatar",
                 headers=cloud_auth_header(session),
@@ -6012,7 +6022,7 @@ async def cloud_change_password(payload: CloudPasswordRequest):
     session = load_cloud_session()
     base_url = cloud_base_url(session)
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        async with make_async_client(timeout=30, follow_redirects=True) as client:
             response = await client.post(
                 f"{base_url}/api/me/password",
                 headers=cloud_auth_header(session),
@@ -6035,7 +6045,7 @@ async def cloud_upload(payload: CloudUploadRequest):
     base_url = cloud_base_url(session)
     config = build_cloud_config(include_secrets=True)
     try:
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        async with make_async_client(timeout=60, follow_redirects=True) as client:
             response = await client.put(
                 f"{base_url}/api/configs/current",
                 headers=cloud_auth_header(session),
@@ -6062,7 +6072,7 @@ async def cloud_download():
     session = load_cloud_session()
     base_url = cloud_base_url(session)
     try:
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True) as client:
+        async with make_async_client(timeout=60, follow_redirects=True) as client:
             response = await client.get(
                 f"{base_url}/api/configs/current",
                 headers=cloud_auth_header(session),
@@ -6302,7 +6312,7 @@ async def cloud_media_status():
         }
     base_url = cloud_base_url(session)
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+        async with make_async_client(timeout=30, follow_redirects=True) as client:
             remote = await cloud_media_remote_status(client, base_url, session)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"读取云素材状态失败：{exc}") from exc
@@ -6325,7 +6335,7 @@ async def cloud_media_restore(payload: CloudMediaRestoreRequest):
     restored, skipped, failed = [], [], []
     skipped_deleted = []
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=20, read=180, write=180, pool=20), follow_redirects=True) as client:
+        async with make_async_client(timeout=httpx.Timeout(connect=20, read=180, write=180, pool=20), follow_redirects=True) as client:
             remote_data = await cloud_media_remote_list(client, base_url, session, payload.limit)
             remote_items = remote_data.get("items") or []
             local_index = local_media_hash_index()
@@ -6390,7 +6400,7 @@ async def cloud_media_sync(payload: CloudMediaSyncRequest):
     deleted_remote = 0
     remote_items = {}
     try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=20, read=180, write=180, pool=20), follow_redirects=True) as client:
+        async with make_async_client(timeout=httpx.Timeout(connect=20, read=180, write=180, pool=20), follow_redirects=True) as client:
             for i in range(0, len(hashes), 400):
                 response = await client.post(f"{base_url}/api/media/exists", headers=cloud_auth_header(session), json={"hashes": hashes[i:i + 400]})
                 response.raise_for_status()
@@ -6571,7 +6581,7 @@ async def test_provider_connection(payload: TestConnectionPayload):
         raise HTTPException(status_code=400, detail="请先填写或保存 API Key")
     url = f"{base_url}/models" if base_url.endswith("/v1") else f"{base_url}/v1/models"
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with make_async_client(timeout=15) as client:
             resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"})
         if resp.status_code >= 400:
             return {"ok": False, "status": resp.status_code, "message": resp.text[:300]}
@@ -6623,7 +6633,7 @@ def probe_provider_liveness(provider: dict):
         return result
     url = f"{base_url}/models" if base_url.endswith("/v1") else f"{base_url}/v1/models"
     try:
-        with httpx.Client(timeout=API_LIVENESS_TIMEOUT) as client:
+        with make_sync_client(timeout=API_LIVENESS_TIMEOUT) as client:
             resp = client.get(url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"})
         result["status"] = resp.status_code
         result["latency_ms"] = int((time.time() - started) * 1000)
@@ -6726,7 +6736,7 @@ async def probe_async_endpoint(payload: TestConnectionPayload):
     tasks_base = base_url if base_url.endswith("/v1") else f"{base_url}/v1"
     probe_url = f"{tasks_base}/tasks/healthcheck_probe_do_not_submit"
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with make_async_client(timeout=15) as client:
             resp = await client.get(probe_url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"})
         try:
             body = resp.json()
@@ -6772,7 +6782,7 @@ async def fetch_upstream_models(provider_id: str):
         raise HTTPException(status_code=400, detail=f"{provider.get('name') or provider_id} 未配置 API Key")
     url = f"{base_url}/models" if base_url.endswith("/v1") else f"{base_url}/v1/models"
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with make_async_client(timeout=30) as client:
             resp = await client.get(url, headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"})
             if resp.status_code >= 400:
                 raise HTTPException(status_code=resp.status_code, detail=f"上游 /v1/models 失败：{resp.text[:300]}")
@@ -7078,7 +7088,7 @@ async def canvas_video(payload: CanvasVideoRequest):
     is_apimart = is_apimart_provider(provider)
     submit_url = f"{base_url}/videos/generations" if is_apimart and base_url.endswith("/v1") else f"{base_url}/v1/videos/generations" if is_apimart else f"{base_url}/v2/videos/generations"
     try:
-        async with httpx.AsyncClient(timeout=VIDEO_POLL_TIMEOUT) as client:
+        async with make_async_client(timeout=VIDEO_POLL_TIMEOUT) as client:
             # --- 构造图片载荷 ---
             if is_apimart:
                 image_with_roles = []
@@ -7274,7 +7284,7 @@ async def canvas_llm(payload: CanvasLLMRequest):
         upstream_messages.append({"role": "user", "content": payload.message})
     raw = None
     try:
-        async with httpx.AsyncClient(timeout=AI_REQUEST_TIMEOUT) as client:
+        async with make_async_client(timeout=AI_REQUEST_TIMEOUT) as client:
             req_body = {"model": model, "messages": upstream_messages}
             if _is_apimart:
                 req_body["stream"] = False   # APIMart 默认流式，强制关闭
@@ -7476,7 +7486,7 @@ async def chat(payload: ChatRequest, request: Request, x_user_id: str = Header(d
             if msg:
                 upstream_messages.append(msg)
         try:
-            async with httpx.AsyncClient(timeout=AI_REQUEST_TIMEOUT) as client:
+            async with make_async_client(timeout=AI_REQUEST_TIMEOUT) as client:
                 conv_req_body = {"model": model, "messages": upstream_messages}
                 if _conv_is_apimart:
                     conv_req_body["stream"] = False
@@ -7546,7 +7556,7 @@ async def chat_stream(payload: ChatRequest, request: Request, x_user_id: str = H
         raw_usage = None
         yield sse_event({"type": "meta", "conversation": conversation})
         try:
-            async with httpx.AsyncClient(timeout=AI_REQUEST_TIMEOUT) as client:
+            async with make_async_client(timeout=AI_REQUEST_TIMEOUT) as client:
                 async with client.stream(
                     "POST",
                     f"{chat_base}/chat/completions",
@@ -7695,7 +7705,7 @@ async def poll_angle_cloud(req: CloudPollRequest):
     logger.info(f"Resuming polling for Angle Task: {task_id}")
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with make_async_client(timeout=30) as client:
             for i in range(300):
                 await asyncio.sleep(2)
                 try:
@@ -7710,7 +7720,7 @@ async def poll_angle_cloud(req: CloudPollRequest):
                         img_url = data["output_images"][0]
                         local_path = ""
                         try:
-                            async with httpx.AsyncClient() as dl_client:
+                            async with make_async_client() as dl_client:
                                 img_res = await dl_client.get(img_url)
                                 if img_res.status_code == 200:
                                     filename = f"cloud_angle_{int(time.time())}.png"
@@ -7778,7 +7788,7 @@ async def generate_angle_cloud(req: CloudGenRequest):
         payload["loras"] = req.loras
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with make_async_client(timeout=30) as client:
             submit_res = await client.post(f"{base_url}v1/images/generations", headers=headers, json=payload)
             if submit_res.status_code != 200:
                 try:
@@ -7804,7 +7814,7 @@ async def generate_angle_cloud(req: CloudGenRequest):
                         img_url = data["output_images"][0]
                         local_path = ""
                         try:
-                            async with httpx.AsyncClient() as dl_client:
+                            async with make_async_client() as dl_client:
                                 img_res = await dl_client.get(img_url)
                                 if img_res.status_code == 200:
                                     filename = f"cloud_angle_{int(time.time())}.png"
@@ -7872,7 +7882,7 @@ async def generate_cloud(req: CloudGenRequest):
         payload["loras"] = req.loras
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with make_async_client(timeout=30) as client:
             submit_res = await client.post(
                 f"{base_url}v1/images/generations",
                 headers={**headers, "X-ModelScope-Async-Mode": "true"},
@@ -7905,7 +7915,7 @@ async def generate_cloud(req: CloudGenRequest):
                         img_url = data["output_images"][0]
                         local_path = ""
                         try:
-                            async with httpx.AsyncClient() as dl_client:
+                            async with make_async_client() as dl_client:
                                 img_res = await dl_client.get(img_url)
                                 if img_res.status_code == 200:
                                     filename = f"cloud_{int(time.time())}.png"
@@ -7974,7 +7984,7 @@ async def ms_generate(req: MsGenerateRequest):
         payload["loras"] = req.loras
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with make_async_client(timeout=30) as client:
             submit_res = await client.post(
                 f"{base_url}v1/images/generations",
                 headers=headers,
@@ -8007,7 +8017,7 @@ async def ms_generate(req: MsGenerateRequest):
                         img_url = data["output_images"][0]
                         local_path = ""
                         try:
-                            async with httpx.AsyncClient() as dl_client:
+                            async with make_async_client() as dl_client:
                                 img_res = await dl_client.get(img_url)
                                 if img_res.status_code == 200:
                                     filename = f"ms_{req.model.replace('/', '_').replace(':', '_')}_{int(time.time())}.png"
@@ -8062,7 +8072,7 @@ async def generate(req: GenerateRequest):
         current_task = {"task_id": task_id, "client_id": req.client_id}
         QUEUE.append(current_task)
 
-    client = GLOBAL_HTTP_CLIENT or httpx.AsyncClient(timeout=httpx.Timeout(connect=20, read=120, write=60, pool=20))
+    client = GLOBAL_HTTP_CLIENT or make_async_client(timeout=httpx.Timeout(connect=20, read=120, write=60, pool=20))
     own_client = GLOBAL_HTTP_CLIENT is None
     try:
         required_images = []

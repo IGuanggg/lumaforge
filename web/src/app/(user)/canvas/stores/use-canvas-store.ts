@@ -18,6 +18,12 @@ export type CanvasProject = {
     backgroundMode: CanvasBackgroundMode;
     showImageInfo: boolean;
     viewport: ViewportTransform;
+    metadata?: {
+        legacyId?: string;
+        source?: string;
+        migratedAt?: string;
+        [key: string]: unknown;
+    };
 };
 
 type CanvasStore = {
@@ -78,6 +84,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     backgroundMode: "lines",
                     showImageInfo: false,
                     viewport: initialViewport,
+                    metadata: { source: "v2.1" },
                 };
                 set((state) => ({ projects: [project, ...state.projects] }));
                 return id;
@@ -96,6 +103,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     backgroundMode: source.backgroundMode || "lines",
                     showImageInfo: source.showImageInfo || false,
                     viewport: source.viewport || initialViewport,
+                    metadata: source.metadata || {},
                 };
                 set((state) => ({ projects: [project, ...state.projects] }));
                 return project.id;

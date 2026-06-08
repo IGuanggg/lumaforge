@@ -35,6 +35,8 @@ global_config.json
 build/
 dist/
 *.spec~
+web/.next/
+web/node_modules/
 
 # Releases (uploaded to GitHub Release, not tracked)
 releases/

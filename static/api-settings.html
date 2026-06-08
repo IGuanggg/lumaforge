@@ -8,6 +8,9 @@
         (function(){
             try {
                 var theme = localStorage.getItem('studio_theme') || localStorage.getItem('canvas_theme') || 'light';
+                if(new URLSearchParams(location.search).get('embedded') === '1') {
+                    document.documentElement.classList.add('embedded');
+                }
                 if(theme === 'dark') {
                     document.documentElement.classList.add('studio-theme-dark');
                     document.documentElement.classList.add('theme-dark');
@@ -64,6 +67,7 @@
         * { box-sizing:border-box; }
         html { min-height:100%; overflow-y:auto; overscroll-behavior:auto; }
         body { margin:0; min-height:100vh; overflow-y:auto; background:var(--bg); color:var(--text); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; -webkit-overflow-scrolling:touch; overscroll-behavior:auto; }
+        html.embedded, html.embedded body { min-height:100%; background:transparent; }
         * { scrollbar-width:thin !important; scrollbar-color:rgba(148,163,184,.72) transparent !important; }
         *::-webkit-scrollbar { width:10px !important; height:10px !important; background:transparent !important; }
         *::-webkit-scrollbar-track { background:transparent !important; }
@@ -74,6 +78,12 @@
         button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline:0; box-shadow:0 0 0 4px rgba(37,99,235,.16); }
         .page { min-height:100vh; padding:40px 32px 80px; }
         .wrap { max-width:1100px; margin:0 auto; }
+        html.embedded .page { min-height:100%; padding:20px 22px 32px; }
+        html.embedded .wrap { max-width:none; }
+        html.embedded .page-head { padding:0 2px 18px; }
+        html.embedded .sidebar { top:20px; max-height:calc(100vh - 40px); border-radius:8px; }
+        html.embedded .content-head,
+        html.embedded .block { border-radius:8px; box-shadow:none; }
         .page-head { padding:0 4px 28px; display:flex; justify-content:space-between; align-items:end; gap:24px; flex-wrap:wrap; }
         .page-head .title { font-size:26px; line-height:1.05; font-weight:900; letter-spacing:-.015em; }
         .page-head .sub { margin-top:8px; color:var(--muted); font-size:12.5px; line-height:1.55; font-weight:600; max-width:520px; }

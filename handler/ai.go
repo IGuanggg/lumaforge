@@ -47,13 +47,14 @@ func proxyAIGetRequest(w http.ResponseWriter, r *http.Request, path string) {
 	if strings.TrimSpace(modelName) == "" {
 		modelName = "grok-imagine-video"
 	}
+	rawModelName := service.LumaRawModelName(modelName)
 	channel, err := service.SelectModelChannel(modelName)
 	if err != nil {
 		log.Printf("AI proxy select channel failed: model=%s err=%v", modelName, err)
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	path = resolveAIProxyPath(channel.BaseURL, modelName, path)
+	path = resolveAIProxyPath(channel.BaseURL, rawModelName, path)
 	request, err := http.NewRequest(http.MethodGet, service.BuildModelChannelURL(channel, path), nil)
 	if err != nil {
 		Fail(w, "AI 接口请求失败")
@@ -67,6 +68,13 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	body, contentType, modelName, err := readAIRequest(r)
 	if err != nil {
 		log.Printf("AI proxy request read failed: %v", err)
+		Fail(w, "AI 接口请求失败")
+		return
+	}
+	rawModelName := service.LumaRawModelName(modelName)
+	body, contentType, err = rewriteAIRequestModel(body, contentType, rawModelName)
+	if err != nil {
+		log.Printf("AI proxy request normalize model failed: %v", err)
 		Fail(w, "AI 接口请求失败")
 		return
 	}
@@ -88,7 +96,7 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 		Fail(w, "AI 接口请求失败")
 		return
 	}
-	path = resolveAIProxyPath(channel.BaseURL, modelName, path)
+	path = resolveAIProxyPath(channel.BaseURL, rawModelName, path)
 	request, err := http.NewRequest(http.MethodPost, service.BuildModelChannelURL(channel, path), bytes.NewReader(body))
 	if err != nil {
 		log.Printf("AI proxy build request failed: url=%s err=%v", service.BuildModelChannelURL(channel, path), err)
@@ -164,6 +172,90 @@ func readAIRequest(r *http.Request) ([]byte, string, string, error) {
 		return nil, "", "", errMissingModel
 	}
 	return body, contentType, modelName, nil
+}
+
+func rewriteAIRequestModel(body []byte, contentType string, rawModelName string) ([]byte, string, error) {
+	rawModelName = strings.TrimSpace(rawModelName)
+	if rawModelName == "" {
+		return body, contentType, nil
+	}
+	if strings.HasPrefix(contentType, "multipart/form-data") {
+		return rewriteMultipartAIModel(body, contentType, rawModelName)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return body, contentType, nil
+	}
+	if payload["model"] == rawModelName {
+		return body, contentType, nil
+	}
+	payload["model"] = rawModelName
+	nextBody, err := json.Marshal(payload)
+	if err != nil {
+		return nil, "", err
+	}
+	return nextBody, contentType, nil
+}
+
+func rewriteMultipartAIModel(body []byte, contentType string, rawModelName string) ([]byte, string, error) {
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return body, contentType, nil
+	}
+	reader := multipart.NewReader(bytes.NewReader(body), params["boundary"])
+	form, err := reader.ReadForm(512 << 20)
+	if err != nil {
+		return body, contentType, nil
+	}
+	defer form.RemoveAll()
+
+	var buffer bytes.Buffer
+	writer := multipart.NewWriter(&buffer)
+	wroteModel := false
+	for key, values := range form.Value {
+		for _, value := range values {
+			if key == "model" {
+				value = rawModelName
+				wroteModel = true
+			}
+			if err := writer.WriteField(key, value); err != nil {
+				_ = writer.Close()
+				return nil, "", err
+			}
+		}
+	}
+	if !wroteModel {
+		if err := writer.WriteField("model", rawModelName); err != nil {
+			_ = writer.Close()
+			return nil, "", err
+		}
+	}
+	for key, files := range form.File {
+		for _, header := range files {
+			if err := copyMultipartFile(writer, key, header); err != nil {
+				_ = writer.Close()
+				return nil, "", err
+			}
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return nil, "", err
+	}
+	return buffer.Bytes(), writer.FormDataContentType(), nil
+}
+
+func copyMultipartFile(writer *multipart.Writer, fieldName string, header *multipart.FileHeader) error {
+	file, err := header.Open()
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	part, err := writer.CreateFormFile(fieldName, header.Filename)
+	if err != nil {
+		return err
+	}
+	_, err = io.Copy(part, file)
+	return err
 }
 
 func readMultipartModel(body []byte, contentType string) string {

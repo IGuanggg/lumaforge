@@ -169,6 +169,7 @@ export type AdminModelChannel = {
 
 export type AdminPublicModelChannelSettings = {
     availableModels: string[];
+    providerModels?: ProviderModelOption[];
     modelCosts: AdminModelCost[];
     defaultModel: string;
     defaultImageModel: string;
@@ -176,6 +177,16 @@ export type AdminPublicModelChannelSettings = {
     defaultTextModel: string;
     systemPrompt: string;
     allowCustomChannel: boolean;
+};
+
+export type ProviderModelOption = {
+    value: string;
+    providerId: string;
+    providerName: string;
+    model: string;
+    capability: "image" | "video" | "text" | "audio" | string;
+    label: string;
+    enabled: boolean;
 };
 
 export type AdminModelCost = {

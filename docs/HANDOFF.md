@@ -97,12 +97,14 @@ Old-version compatibility requirements:
 - Existing desktop users must keep `%APPDATA%\LumaForge`, `%USERPROFILE%\Pictures\LumaForge`, and `%LOCALAPPDATA%\LumaForge` untouched by installer and updater.
 - First v2.1 startup may copy missing legacy app-dir data into the runtime directories only when the destination is empty; it must never overwrite user-modified files.
 - Old clients that still call LumaForge Cloud APIs must continue to work while v2.1 is rolling out.
+- v2.1 Next startup calls `/api/migration/v21/import` once and stores a browser marker `lumaforge:v21_migration_done`; import is copy-only and deduplicated by legacy canvas id.
 
 Migration rule:
 
 - First v2.1 startup writes `migration-2.1.0.json`.
 - Existing data is reused or copied only.
 - Never delete old canvas, asset, API provider, cloud session, backup, update, or log files during migration.
+- Legacy canvas import may store unsupported node fields in metadata, but must not modify the original files under `data/canvases`.
 
 ## API Compatibility
 
@@ -120,6 +122,18 @@ Keep these LumaForge routes:
 - `/api/app/update-state`
 - `/api/app/update-download`
 - `/api/app/update-install`
+- `/api/migration/v21/status`
+- `/api/migration/v21/import`
+
+Removed public routes:
+
+- `/api/auth/linux-do/authorize`
+- `/api/auth/linux-do/callback`
+
+Linux.do UI policy:
+
+- Do not show Linux.do in login, admin settings, admin users, static pages, or product docs.
+- Historical database fields and imported source helper code may remain dormant to avoid destructive migrations.
 
 New source routes may remain:
 
@@ -128,6 +142,11 @@ New source routes may remain:
 - `/api/v1/chat/completions`
 - `/api/v1/videos`
 - `/api/prompts`
+
+Legacy local file routes:
+
+- `/assets/*` is served by the Go API from `APP_ASSETS_DIR` and proxied by Next, so old asset URLs remain valid after upgrade.
+- `/output/*` is kept as a compatibility route for older records that referenced the legacy output mount directly.
 
 `/api/auth/*` maps to the LumaForge cloud account flow. Do not switch the real account source to the imported local user table.
 
@@ -154,6 +173,21 @@ If local Go/Bun are unavailable, validate with Docker:
 docker build -f Dockerfile.v21 -t lumaforge:v21-check --progress=plain .
 docker run --rm -v ${PWD}:/src -w /src golang:1.25-alpine /usr/local/go/bin/go test ./...
 ```
+
+Local portable toolchain:
+
+- Preferred root: `%LOCALAPPDATA%\LumaForgeDevTools`
+- Go: `go1.25.x\bin\go.exe` and `gofmt.exe`
+- Bun: `bun-v1.3.13\bun.exe`
+- Playwright: standalone npm tool dir under `playwright`, browsers under `playwright-browsers`
+
+Old-version upgrade verification:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify_v21_upgrade.ps1
+```
+
+This copies `%APPDATA%\LumaForge`, `%USERPROFILE%\Pictures\LumaForge`, and `%LOCALAPPDATA%\LumaForge` to a temporary verification directory, runs legacy + Go + Next against the copy, writes `upgrade-verification-summary.json`, and asserts that the real source data snapshot is unchanged.
 
 Expected release artifacts:
 

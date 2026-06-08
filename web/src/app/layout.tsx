@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { AntdRegistry } from "@ant-design/nextjs-registry";
 import { AppProviders } from "@/components/layout/app-providers";
 import "antd/dist/reset.css";
@@ -23,25 +22,21 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="zh-CN" suppressHydrationWarning className="font-sans">
-            <head />
+            <head>
+                <script id="mutation-observer-guard-inline" dangerouslySetInnerHTML={{ __html: mutationObserverGuardScript }} />
+                <script
+                    id="theme-script"
+                    dangerouslySetInnerHTML={{
+                        __html: `try{var s=JSON.parse(localStorage.getItem("infinite-canvas:theme_store")||"{}");var t=s.state&&s.state.theme==="light"?"light":"dark";document.documentElement.classList.toggle("dark",t==="dark");document.documentElement.style.colorScheme=t}catch(e){}`,
+                    }}
+                />
+            </head>
             <body
                 className="bg-background text-foreground antialiased"
                 style={{
                     fontFamily: '"SF Pro Display","SF Pro Text","PingFang SC","Microsoft YaHei","Helvetica Neue",sans-serif',
                 }}
             >
-                <Script
-                    id="mutation-observer-guard-inline"
-                    strategy="beforeInteractive"
-                    dangerouslySetInnerHTML={{ __html: mutationObserverGuardScript }}
-                />
-                <Script
-                    id="theme-script"
-                    strategy="beforeInteractive"
-                    dangerouslySetInnerHTML={{
-                        __html: `try{var s=JSON.parse(localStorage.getItem("infinite-canvas:theme_store")||"{}");var t=s.state&&s.state.theme==="light"?"light":"dark";document.documentElement.classList.toggle("dark",t==="dark");document.documentElement.style.colorScheme=t}catch(e){}`,
-                    }}
-                />
                 <AntdRegistry>
                     <AppProviders>{children}</AppProviders>
                 </AntdRegistry>

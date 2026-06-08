@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os/exec"
+	"runtime"
 	"strings"
 
 	"github.com/basketikun/infinite-canvas/config"
@@ -62,6 +64,53 @@ func proxyLegacy(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
+func proxyCloud(w http.ResponseWriter, r *http.Request) bool {
+	session := service.LumaLoadCloudSession()
+	baseURL := strings.TrimRight(strings.TrimSpace(session.BaseURL), "/")
+	if baseURL == "" {
+		baseURL = strings.TrimRight(strings.TrimSpace(config.Cfg.LumaForgeCloudURL), "/")
+	}
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return false
+	}
+	target := baseURL + r.URL.Path
+	if r.URL.RawQuery != "" {
+		target += "?" + r.URL.RawQuery
+	}
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, target, r.Body)
+	if err != nil {
+		writeRawError(w, http.StatusBadGateway, err)
+		return true
+	}
+	req.Header = r.Header.Clone()
+	if strings.TrimSpace(req.Header.Get("Authorization")) == "" && strings.TrimSpace(session.Token) != "" {
+		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(session.Token))
+	}
+	req.Host = parsed.Host
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		writeRawError(w, http.StatusBadGateway, fmt.Errorf("cloud API unavailable: %w", err))
+		return true
+	}
+	defer resp.Body.Close()
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+	return true
+}
+
+func LumaCloudRawProxy(w http.ResponseWriter, r *http.Request) {
+	if proxyCloud(w, r) {
+		return
+	}
+	writeRawError(w, http.StatusBadGateway, fmt.Errorf("cloud API is not configured"))
+}
+
 func LumaAuthLogin(w http.ResponseWriter, r *http.Request) {
 	var payload map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&payload)
@@ -91,6 +140,35 @@ func LumaCurrentUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	OK(w, service.GuestUser())
+}
+
+func LumaMeRaw(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		LumaCloudRawProxy(w, r)
+		return
+	}
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if strings.TrimSpace(token) == "" {
+		token = service.LumaLoadCloudSession().Token
+	}
+	if user, ok := service.LumaCurrentAuthUser(token); ok {
+		session := service.LumaLoadCloudSession()
+		writeRawJSON(w, map[string]any{
+			"email":          user.Username,
+			"email_verified": session.EmailVerified,
+			"display_name":   user.DisplayName,
+			"avatar_url":     user.AvatarURL,
+		})
+		return
+	}
+	writeRawError(w, http.StatusUnauthorized, fmt.Errorf("登录已失效，请重新登录"))
+}
+
+func refreshCloudSessionFromRequest(r *http.Request) {
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if strings.TrimSpace(token) != "" {
+		_, _ = service.LumaCurrentAuthUser(token)
+	}
 }
 
 func LumaCloudStatus(w http.ResponseWriter, r *http.Request) {
@@ -184,6 +262,41 @@ func LumaCloudDownload(w http.ResponseWriter, r *http.Request) {
 	writeRawJSON(w, data)
 }
 
+func LumaConfigsCurrent(w http.ResponseWriter, r *http.Request) {
+	refreshCloudSessionFromRequest(r)
+	switch r.Method {
+	case http.MethodGet:
+		data, err := service.LumaCloudConfigDownload()
+		if err != nil {
+			writeRawError(w, http.StatusBadRequest, err)
+			return
+		}
+		writeRawJSON(w, map[string]any{
+			"config":     data["config"],
+			"updated_at": data["cloud_updated_at"],
+			"applied":    data["applied"],
+		})
+	case http.MethodPut:
+		payload := map[string]any{}
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		configPayload, _ := payload["config"].(map[string]any)
+		data, err := service.LumaCloudConfigUpload(configPayload)
+		if err != nil {
+			writeRawError(w, http.StatusBadRequest, err)
+			return
+		}
+		response := map[string]any{"ok": true}
+		if cloud, _ := data["cloud"].(map[string]any); cloud != nil {
+			if updatedAt, ok := cloud["updated_at"]; ok {
+				response["updated_at"] = updatedAt
+			}
+		}
+		writeRawJSON(w, response)
+	default:
+		writeRawError(w, http.StatusMethodNotAllowed, fmt.Errorf("method not allowed"))
+	}
+}
+
 func LumaCloudMediaStatus(w http.ResponseWriter, r *http.Request) {
 	if proxyLegacy(w, r) {
 		return
@@ -224,14 +337,11 @@ func LumaProviders(w http.ResponseWriter, r *http.Request) {
 }
 
 func LumaProviderKeyDiagnostics(w http.ResponseWriter, r *http.Request) {
-	writeRawJSON(w, map[string]any{
-		"orphan_keys": []any{},
-		"providers":   service.LumaPublicProviders(service.LumaLoadProviders()),
-	})
+	writeRawJSON(w, service.LumaProviderKeyDiagnostics())
 }
 
 func LumaProviderKeyDiagnosticsClear(w http.ResponseWriter, r *http.Request) {
-	writeRawJSON(w, map[string]any{"removed": []string{}, "removed_count": 0, "diagnostics": map[string]any{"orphan_keys": []any{}}})
+	writeRawJSON(w, service.LumaClearOrphanProviderKeys())
 }
 
 func LumaProviderFetchModels(w http.ResponseWriter, r *http.Request, id string) {
@@ -256,6 +366,14 @@ func LumaProviderTestConnection(w http.ResponseWriter, r *http.Request) {
 	payload.Name = payload.ID
 	payload.BaseURL = firstMapString(raw, "base_url")
 	payload.APIKey = firstMapString(raw, "api_key")
+	if strings.TrimSpace(payload.APIKey) == "" {
+		if saved, key, ok := service.LumaProviderByID(payload.ID); ok {
+			payload.APIKey = key
+			if strings.TrimSpace(payload.BaseURL) == "" {
+				payload.BaseURL = saved.BaseURL
+			}
+		}
+	}
 	data, err := service.LumaFetchProviderModels(payload, payload.APIKey)
 	if err != nil {
 		writeRawJSON(w, map[string]any{"ok": false, "status": 0, "message": err.Error(), "model_count": 0, "all": []string{}})
@@ -288,71 +406,31 @@ func LumaConfigToken(w http.ResponseWriter, r *http.Request) {
 }
 
 func LumaSettings(w http.ResponseWriter, r *http.Request) {
-	providers := service.LumaPublicProviders(service.LumaLoadProviders())
-	allModels := []string{}
-	for _, provider := range providers {
-		if !provider.Enabled {
-			continue
-		}
-		allModels = append(allModels, provider.ImageModels...)
-		allModels = append(allModels, provider.ChatModels...)
-		allModels = append(allModels, provider.VideoModels...)
+	settings, err := service.PublicSettings()
+	if err != nil {
+		FailError(w, err)
+		return
 	}
-	if len(allModels) == 0 {
-		allModels = []string{"gpt-image-2-vip", "gpt-image-2", "gpt-5.5"}
-	}
-	allowCustom := true
-	rawJSONData := map[string]any{
-		"modelChannel": map[string]any{
-			"availableModels":   allModels,
-			"modelCosts":        []any{},
-			"defaultModel":      "gpt-5.5",
-			"defaultImageModel": "gpt-image-2-vip",
-			"defaultVideoModel": "sora-2",
-			"defaultTextModel":  "gpt-5.5",
-			"systemPrompt":      "",
-			"allowCustomChannel": allowCustom,
-		},
-		"auth": map[string]any{
-			"allowRegister": true,
-			"linuxDo":       map[string]any{"enabled": false},
-		},
-	}
-	OK(w, rawJSONData)
+	OK(w, settings)
 }
 
 func LumaAppInfo(w http.ResponseWriter, r *http.Request) {
-	if proxyLegacy(w, r) {
-		return
-	}
 	writeRawJSON(w, service.LumaAppInfo())
 }
 
 func LumaUpdateState(w http.ResponseWriter, r *http.Request) {
-	if proxyLegacy(w, r) {
-		return
-	}
 	writeRawJSON(w, service.LumaUpdateState())
 }
 
 func LumaUpdateCheck(w http.ResponseWriter, r *http.Request) {
-	if proxyLegacy(w, r) {
-		return
-	}
 	writeRawJSON(w, service.LumaUpdateCheck())
 }
 
 func LumaUpdateSettings(w http.ResponseWriter, r *http.Request) {
-	if proxyLegacy(w, r) {
-		return
-	}
 	writeRawJSON(w, map[string]any{"ok": true, "current_version": service.LumaForgeVersion, "update_check_url": config.Cfg.UpdateCheckURL, "update_check_configured": config.Cfg.UpdateCheckURL != ""})
 }
 
 func LumaUpdatePreflight(w http.ResponseWriter, r *http.Request) {
-	if proxyLegacy(w, r) {
-		return
-	}
 	writeRawJSON(w, map[string]any{"ok": true, "checks": []map[string]any{{"id": "go_next", "label": "Go + Next 主体", "ok": true, "detail": "2.1.0 runtime"}}})
 }
 
@@ -380,9 +458,6 @@ func LumaUpdateAuto(w http.ResponseWriter, r *http.Request) {
 }
 
 func LumaLocalDataHealth(w http.ResponseWriter, r *http.Request) {
-	if proxyLegacy(w, r) {
-		return
-	}
 	writeRawJSON(w, map[string]any{
 		"ok": true,
 		"paths": map[string]any{
@@ -393,9 +468,6 @@ func LumaLocalDataHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func LumaDiagnostics(w http.ResponseWriter, r *http.Request) {
-	if proxyLegacy(w, r) {
-		return
-	}
 	writeRawJSON(w, map[string]any{"ok": true, "checks": []map[string]any{{"id": "v21", "label": "LumaForge v2.1.0 主体", "ok": true, "detail": "Go + Next adapter active"}}})
 }
 
@@ -413,10 +485,47 @@ func LumaBackupNoop(w http.ResponseWriter, r *http.Request) {
 	writeRawJSON(w, map[string]any{"ok": true, "message": "2.1.0 Go 主体保留备份接口；深度备份由 legacy API 或后续迁移器执行。"})
 }
 
-func LumaAssetsHealth(w http.ResponseWriter, r *http.Request) {
-	if proxyLegacy(w, r) {
+func LumaAppOpenURL(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeRawError(w, http.StatusBadRequest, fmt.Errorf("缺少 URL"))
 		return
 	}
+	opened, err := openExternalURL(payload.URL)
+	if err != nil {
+		writeRawError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeRawJSON(w, map[string]any{"ok": true, "url": opened})
+}
+
+func openExternalURL(rawURL string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("URL 不合法")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("只允许打开 http 或 https 链接")
+	}
+	safeURL := parsed.String()
+	var command *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		command = exec.Command("rundll32", "url.dll,FileProtocolHandler", safeURL)
+	case "darwin":
+		command = exec.Command("open", safeURL)
+	default:
+		command = exec.Command("xdg-open", safeURL)
+	}
+	if err := command.Start(); err != nil {
+		return "", err
+	}
+	return safeURL, nil
+}
+
+func LumaAssetsHealth(w http.ResponseWriter, r *http.Request) {
 	writeRawJSON(w, map[string]any{"ok": true, "checked": 0, "missing_count": 0, "thumb_missing_count": 0, "missing": []any{}, "thumb_missing": []any{}})
 }
 

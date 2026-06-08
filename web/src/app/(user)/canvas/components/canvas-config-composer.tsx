@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, KeyboardEvent, MouseEvent, PointerEvent } from "react";
+import type { ClipboardEvent, CSSProperties, KeyboardEvent, MouseEvent, PointerEvent } from "react";
 import { Button, Image } from "antd";
-import { FileText, Image as ImageIcon, Music2, Video, X } from "lucide-react";
+import { FileText, Image as ImageIcon, Maximize2, Minimize2, Music2, Video, X } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -33,6 +33,7 @@ export function CanvasConfigComposer({ value, inputs, onChange, onClose }: Canva
     const [mention, setMention] = useState<MentionState | null>(null);
     const [activeIndex, setActiveIndex] = useState(0);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [expanded, setExpanded] = useState(false);
     const tokens = useMemo(() => parseComposerTokens(value), [value]);
     const referenceById = useMemo(() => new Map(inputs.map((input) => [input.nodeId, input])), [inputs]);
     const candidates = useMemo(() => {
@@ -105,11 +106,18 @@ export function CanvasConfigComposer({ value, inputs, onChange, onClose }: Canva
     };
 
     const stopCanvasInteraction = (event: PointerEvent | MouseEvent) => event.stopPropagation();
+    const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+        const text = event.clipboardData.getData("text/plain");
+        if (!text) return;
+        event.preventDefault();
+        insertPlainTextAtSelection(editorRef.current, text);
+        requestAnimationFrame(syncFromEditor);
+    };
 
     return (
         <div
             data-canvas-no-zoom
-            className="rounded-2xl border p-3 shadow-2xl backdrop-blur"
+            className={`rounded-2xl border p-3 shadow-2xl backdrop-blur transition-[width] duration-150 ${expanded ? "w-[min(760px,calc(100vw-80px))]" : ""}`}
             style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
             onMouseDown={stopCanvasInteraction}
             onPointerDown={stopCanvasInteraction}
@@ -120,7 +128,17 @@ export function CanvasConfigComposer({ value, inputs, onChange, onClose }: Canva
                     <div className="shrink-0 text-xs font-semibold">组装提示词</div>
                     <div className="truncate text-[11px] opacity-55">@ 引用已连接素材，发送前按当前连接重新编号</div>
                 </div>
-                <Button size="small" type="text" className="!h-7 !w-7 !min-w-7 !p-0" icon={<X className="size-3.5" />} onClick={onClose} />
+                <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                        size="small"
+                        type="text"
+                        className="!h-7 !w-7 !min-w-7 !p-0"
+                        icon={expanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+                        aria-label={expanded ? "收起提示词输入" : "放大提示词输入"}
+                        onClick={() => setExpanded((value) => !value)}
+                    />
+                    <Button size="small" type="text" className="!h-7 !w-7 !min-w-7 !p-0" icon={<X className="size-3.5" />} aria-label="关闭组装提示词" onClick={onClose} />
+                </div>
             </div>
             <div className="relative rounded-xl border" style={{ background: theme.node.fill, borderColor: theme.node.stroke }}>
                 {!value.trim() ? <div className="pointer-events-none absolute left-3 top-2 text-sm leading-7" style={{ color: theme.node.placeholder }}>输入提示词，按 @ 引用连接的图片或文本</div> : null}
@@ -128,7 +146,7 @@ export function CanvasConfigComposer({ value, inputs, onChange, onClose }: Canva
                     ref={editorRef}
                     contentEditable
                     suppressContentEditableWarning
-                    className="thin-scrollbar min-h-28 w-full overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-sm leading-7 outline-none"
+                    className={`thin-scrollbar w-full overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-sm leading-7 outline-none ${expanded ? "min-h-64 max-h-[420px]" : "min-h-28 max-h-[240px]"}`}
                     style={{ color: theme.node.text }}
                     onInput={() => {
                         if (!composingRef.current) syncFromEditor();
@@ -171,6 +189,7 @@ export function CanvasConfigComposer({ value, inputs, onChange, onClose }: Canva
                         }
                         requestAnimationFrame(syncMention);
                     }}
+                    onPaste={handlePaste}
                     onBlur={() => window.setTimeout(closeMention, 120)}
                 />
                 {mention && candidates.length ? <MentionMenu inputs={candidates} allInputs={inputs} activeIndex={Math.min(activeIndex, candidates.length - 1)} theme={theme} onSelect={insertReference} /> : null}
@@ -337,6 +356,32 @@ function placeCaretAtEnd(element: HTMLElement) {
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
+}
+
+function insertPlainTextAtSelection(editor: HTMLElement | null, text: string) {
+    if (!editor) return;
+    editor.focus();
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) {
+        editor.append(document.createTextNode(text));
+        placeCaretAtEnd(editor);
+        return;
+    }
+
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) {
+        placeCaretAtEnd(editor);
+        insertPlainTextAtSelection(editor, text);
+        return;
+    }
+
+    range.deleteContents();
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+    range.setStart(textNode, text.length);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
 }
 
 function parseComposerTokens(value: string): Token[] {

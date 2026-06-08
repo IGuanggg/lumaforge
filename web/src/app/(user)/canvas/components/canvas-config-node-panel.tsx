@@ -16,6 +16,7 @@ import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata } from ".
 
 type CanvasConfigNodePanelProps = {
     node: CanvasNodeData;
+    scale: number;
     isRunning: boolean;
     inputSummary: { textCount: number; imageCount: number; videoCount: number; audioCount: number };
     onConfigChange: (nodeId: string, patch: Partial<CanvasNodeMetadata>) => void;
@@ -23,7 +24,7 @@ type CanvasConfigNodePanelProps = {
     onComposerToggle: () => void;
 };
 
-export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigChange, onGenerate, onComposerToggle }: CanvasConfigNodePanelProps) {
+export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, onConfigChange, onGenerate, onComposerToggle }: CanvasConfigNodePanelProps) {
     const globalConfig = useEffectiveConfig();
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
@@ -36,9 +37,21 @@ export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigC
     const hasAnyInput = Boolean(inputSummary.textCount || inputSummary.imageCount || inputSummary.videoCount || inputSummary.audioCount);
     const hasComposerContent = Boolean((node.metadata?.composerContent ?? node.metadata?.prompt ?? "").trim());
     const canGenerate = hasComposerContent || (mode === "audio" ? inputSummary.textCount > 0 : hasAnyInput);
+    const zoomBias = Math.min(1, Math.max(0, Math.abs(Math.log2(Math.max(scale || 1, 0.08))) / 1.6));
 
     return (
-        <div className="flex h-full w-full cursor-move flex-col px-3 pb-3 pt-7 text-sm" style={{ color: theme.node.text }} onWheel={(event) => event.stopPropagation()}>
+        <div
+            className="canvas-config-node-panel flex h-full w-full cursor-move flex-col px-3 pb-3 pt-7 text-sm"
+            style={
+                {
+                    color: theme.node.text,
+                    "--canvas-config-zoom-bias": zoomBias,
+                    "--canvas-config-panel-gap": `${0.35 + zoomBias * 0.2}rem`,
+                    "--canvas-config-control-scale": 1 + zoomBias * 0.04,
+                } as CSSProperties
+            }
+            onWheel={(event) => event.stopPropagation()}
+        >
             <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="shrink-0 text-sm font-semibold">生成配置</div>
                 <div className="cursor-default" onMouseDown={(event) => event.stopPropagation()}>

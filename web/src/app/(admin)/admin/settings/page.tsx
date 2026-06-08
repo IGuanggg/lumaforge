@@ -338,10 +338,8 @@ export default function AdminSettingsPage() {
     async function persistChannels(nextChannels: AdminModelChannel[]) {
         if (!token) return;
         const values = normalizeSettings(form.getFieldsValue(true) as AdminSettings);
-        const nextChannelModels = collectChannelModels(nextChannels);
         const nextSettings = normalizeSettings({
             ...values,
-            public: { ...values.public, modelChannel: { ...values.public.modelChannel, availableModels: nextChannelModels } },
             private: { ...values.private, channels: nextChannels },
         });
         const saved = normalizeSettings(await saveAdminSettings(token, nextSettings));
@@ -365,10 +363,7 @@ export default function AdminSettingsPage() {
                         <Tabs
                             activeKey={activeTab}
                             onChange={(key) => changeTab(key as SettingsTabKey)}
-                            items={[
-                                { key: "public", label: "公开配置（对外暴露）" },
-                                { key: "private", label: "私有配置（不会对外暴露）" },
-                            ]}
+                            items={[{ key: "public", label: "公开设置" }]}
                         />
                         <Space>
                             <Button icon={<ReloadOutlined />} loading={isLoading} onClick={() => void loadSettings()}>
@@ -405,7 +400,7 @@ export default function AdminSettingsPage() {
                                 </Button>
                             </Space>
                         ) : (
-                            <Typography.Text type="secondary">{activeTab === "public" ? "这些配置会暴露给前端读取" : "这些配置只会在后台保存"}</Typography.Text>
+                            <Typography.Text type="secondary">API 平台和模型请到 API 设置维护；这里保留公开参数和计费配置。</Typography.Text>
                         )}
                     </Flex>
 
@@ -414,28 +409,28 @@ export default function AdminSettingsPage() {
                             <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
                                 <Row gutter={16}>
                                     <Col span={24}>
-                                        <Form.Item name={["public", "modelChannel", "availableModels"]} label="系统可用模型(请先在私有配置里配置渠道)" extra="保存设置时会自动合并所有已启用私有渠道的模型，前台模型下拉会读取这里的公开列表">
-                                            <Select mode="multiple" placeholder="请选择系统可用模型" options={channelModels.map((item) => ({ label: item, value: item }))} />
+                                        <Form.Item name={["public", "modelChannel", "availableModels"]} label="系统可用模型（由 API 设置同步）" extra="v2.1 起模型列表以 LumaForge API 设置为唯一权威；这里仅只读展示当前公开模型。">
+                                            <Select mode="multiple" disabled placeholder="请到 API 设置维护模型" options={publicModels.map((item) => ({ label: item, value: item }))} />
                                         </Form.Item>
                                     </Col>
                                     <Col xs={24} md={6}>
                                         <Form.Item name={["public", "modelChannel", "defaultModel"]} label="默认模型">
-                                            <Select showSearch allowClear options={publicModels.map((item) => ({ label: item, value: item }))} />
+                                            <Select showSearch allowClear disabled options={publicModels.map((item) => ({ label: item, value: item }))} />
                                         </Form.Item>
                                     </Col>
                                     <Col xs={24} md={6}>
                                         <Form.Item name={["public", "modelChannel", "defaultImageModel"]} label="默认图片模型">
-                                            <Select showSearch allowClear options={publicModels.map((item) => ({ label: item, value: item }))} />
+                                            <Select showSearch allowClear disabled options={publicModels.map((item) => ({ label: item, value: item }))} />
                                         </Form.Item>
                                     </Col>
                                     <Col xs={24} md={6}>
                                         <Form.Item name={["public", "modelChannel", "defaultVideoModel"]} label="默认视频模型">
-                                            <Select showSearch allowClear options={publicModels.map((item) => ({ label: item, value: item }))} />
+                                            <Select showSearch allowClear disabled options={publicModels.map((item) => ({ label: item, value: item }))} />
                                         </Form.Item>
                                     </Col>
                                     <Col xs={24} md={6}>
                                         <Form.Item name={["public", "modelChannel", "defaultTextModel"]} label="默认文本模型">
-                                            <Select showSearch allowClear options={publicModels.map((item) => ({ label: item, value: item }))} />
+                                            <Select showSearch allowClear disabled options={publicModels.map((item) => ({ label: item, value: item }))} />
                                         </Form.Item>
                                     </Col>
                                     <Col span={24}>
@@ -499,41 +494,6 @@ export default function AdminSettingsPage() {
                     ) : activeMode === "visual" ? (
                         <Form form={form} layout="vertical" initialValues={emptySettings} requiredMark={false}>
                             <Flex vertical gap={12}>
-                                <Card
-                                    size="small"
-                                    title={
-                                        <Space>
-                                            <img src="/icons/linuxdo.svg" alt="" width={18} height={18} />
-                                            Linux.do 登录
-                                        </Space>
-                                    }
-                                >
-                                    <Flex vertical gap={14}>
-                                        <Typography.Text type="secondary">
-                                            本项目接口回调地址是 /api/auth/linux-do/callback，请在 Linux.do 应用后台自行拼接站点前缀。
-                                            <Typography.Link href="https://connect.linux.do" target="_blank" rel="noreferrer">
-                                                点击此处管理你的 LinuxDO OAuth App
-                                            </Typography.Link>
-                                        </Typography.Text>
-                                        <Row gutter={16}>
-                                            <Col xs={24} md={6}>
-                                                <Form.Item name={["public", "auth", "linuxDo", "enabled"]} label="开启 Linux.do 登录" valuePropName="checked">
-                                                    <Switch />
-                                                </Form.Item>
-                                            </Col>
-                                            <Col xs={24} md={9}>
-                                                <Form.Item name={["private", "auth", "linuxDo", "clientId"]} label="Linux.do Client ID">
-                                                    <Input placeholder="输入 Linux.do OAuth App 的 ID" />
-                                                </Form.Item>
-                                            </Col>
-                                            <Col xs={24} md={9}>
-                                                <Form.Item name={["private", "auth", "linuxDo", "clientSecret"]} label="Linux.do Client Secret">
-                                                    <Input.Password placeholder="留空则沿用已保存的密钥" />
-                                                </Form.Item>
-                                            </Col>
-                                        </Row>
-                                    </Flex>
-                                </Card>
                                 <Card size="small" title="提示词定时同步">
                                     <Row gutter={16} align="middle">
                                         <Col xs={24} md={8}>
@@ -966,7 +926,6 @@ async function collectSettings(form: any, editorMode: Record<SettingsTabKey, Edi
         }
         values.private = privateSetting;
     }
-    values.public.modelChannel.availableModels = collectChannelModels(values.private.channels);
     return normalizeSettings(values);
 }
 

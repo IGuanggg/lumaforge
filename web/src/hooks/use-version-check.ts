@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { App } from "antd";
 import { APP_VERSION } from "@/constant/env";
-import { parseChangelog, type ReleaseInfo } from "@/lib/release";
-
-const latestVersionUrl = "https://raw.githubusercontent.com/IGuanggg/lumaforge/main/VERSION";
-const latestChangelogUrl = "https://raw.githubusercontent.com/IGuanggg/lumaforge/main/CHANGELOG.md";
+import type { ReleaseInfo } from "@/lib/release";
 
 function readLocalReleases(): ReleaseInfo[] {
     try {
@@ -26,6 +23,12 @@ function isNewerVersion(latestVersion: string, currentVersion: string) {
     return latest.some((value, index) => value > current[index] && latest.slice(0, index).every((part, prevIndex) => part === current[prevIndex]));
 }
 
+async function fetchUpdateCheck() {
+    const response = await fetch("/api/app/update-check", { cache: "no-store" });
+    if (!response.ok) throw new Error("版本读取失败");
+    return (await response.json()) as { latest_version?: string; is_newer?: boolean; release_notes?: string };
+}
+
 export function useVersionCheck() {
     const currentVersion = APP_VERSION;
     const { message } = App.useApp();
@@ -38,10 +41,9 @@ export function useVersionCheck() {
 
     const checkLatestVersion = useCallback(async () => {
         try {
-            const response = await fetch(latestVersionUrl);
-            if (!response.ok) return false;
-            const version = await response.text();
-            setLatestVersion(version.trim() || currentVersion);
+            const data = await fetchUpdateCheck();
+            const version = data.is_newer ? data.latest_version?.trim() : currentVersion;
+            setLatestVersion(version || currentVersion);
             return true;
         } catch {
             return false;
@@ -52,12 +54,10 @@ export function useVersionCheck() {
         async (showMessage = false) => {
             setChecking(true);
             try {
-                const [versionResponse, changelogResponse] = await Promise.all([fetch(latestVersionUrl), fetch(latestChangelogUrl)]);
-                if (!versionResponse.ok) throw new Error("版本读取失败");
-                if (!changelogResponse.ok) throw new Error("更新日志读取失败");
-                const [version, changelog] = await Promise.all([versionResponse.text(), changelogResponse.text()]);
-                setLatestVersion(version.trim() || currentVersion);
-                if (changelog.trim()) setReleases(parseChangelog(changelog));
+                const data = await fetchUpdateCheck();
+                const version = data.is_newer ? data.latest_version?.trim() : currentVersion;
+                setLatestVersion(version || currentVersion);
+                setReleases(localReleases);
                 if (showMessage) message.success("已获取最新版本信息");
                 return true;
             } catch {

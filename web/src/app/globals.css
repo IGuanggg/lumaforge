@@ -435,6 +435,133 @@
         top: 21px;
     }
 
+    .canvas-node-shell {
+        transform-origin: center;
+        transition:
+            border-color 0.16s ease,
+            box-shadow 0.16s ease,
+            filter 0.16s ease,
+            transform 0.16s ease;
+    }
+
+    .canvas-node-media-frame {
+        padding: var(--canvas-node-media-padding, 0);
+        transition: padding 0.16s ease;
+    }
+
+    .canvas-node-media-frame > img,
+    .canvas-node-media-frame > video {
+        border-radius: max(12px, calc(1.5rem - var(--canvas-node-media-padding, 0px)));
+        transition: border-radius 0.16s ease;
+    }
+
+    .canvas-node-connection-source {
+        animation: canvas-node-link-breathe 1.25s ease-in-out infinite;
+        box-shadow:
+            0 0 0 1px rgba(47, 128, 255, 0.44),
+            0 0 24px rgba(47, 128, 255, 0.2),
+            0 18px 48px rgba(28, 25, 23, 0.16) !important;
+    }
+
+    .canvas-node-connection-target {
+        animation: canvas-node-connect-pop 0.34s ease-out;
+        box-shadow:
+            0 0 0 2px rgba(47, 128, 255, 0.55),
+            0 0 30px rgba(47, 128, 255, 0.24),
+            0 18px 48px rgba(28, 25, 23, 0.16) !important;
+    }
+
+    .canvas-node-connection-candidate {
+        box-shadow:
+            0 0 0 1px rgba(47, 128, 255, 0.18),
+            0 12px 34px rgba(28, 25, 23, 0.1);
+    }
+
+    .canvas-config-node-panel {
+        gap: var(--canvas-config-panel-gap, 0.35rem);
+    }
+
+    .canvas-config-node-panel .canvas-config-mode,
+    .canvas-config-node-panel .canvas-compact-control {
+        transform: scale(var(--canvas-config-control-scale, 1));
+        transform-origin: center;
+        transition: transform 0.16s ease;
+    }
+
+    .canvas-connection-glow,
+    .canvas-connection-core,
+    .canvas-connection-preview path {
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+    }
+
+    .canvas-connection-glow {
+        stroke-dasharray: 18 102;
+        animation: canvas-connection-flow 1.45s linear infinite;
+    }
+
+    .canvas-connection-core {
+        stroke-dasharray: 7 113;
+        animation: canvas-connection-flow 0.9s linear infinite;
+    }
+
+    .canvas-connection-active .canvas-connection-glow {
+        opacity: 0.58;
+    }
+
+    .canvas-connection-active .canvas-connection-core {
+        opacity: 1;
+    }
+
+    .canvas-connection-dot {
+        fill: #38bdf8;
+        filter: drop-shadow(0 0 7px rgba(14, 165, 233, 0.9));
+        opacity: 0.92;
+    }
+
+    .canvas-connection-dot-hot {
+        fill: #ffffff;
+        filter: drop-shadow(0 0 9px rgba(56, 189, 248, 1));
+    }
+
+    .canvas-connection-preview path:last-child {
+        animation: canvas-connection-flow 1s linear infinite;
+    }
+
+    @keyframes canvas-node-link-breathe {
+        0%,
+        100% {
+            filter: drop-shadow(0 0 0 rgba(47, 128, 255, 0));
+        }
+
+        50% {
+            filter: drop-shadow(0 0 16px rgba(47, 128, 255, 0.34));
+        }
+    }
+
+    @keyframes canvas-node-connect-pop {
+        0% {
+            transform: scale(1);
+            filter: drop-shadow(0 0 0 rgba(47, 128, 255, 0));
+        }
+
+        42% {
+            transform: scale(1.025);
+            filter: drop-shadow(0 0 20px rgba(47, 128, 255, 0.42));
+        }
+
+        100% {
+            transform: scale(1);
+            filter: drop-shadow(0 0 0 rgba(47, 128, 255, 0));
+        }
+    }
+
+    @keyframes canvas-connection-flow {
+        to {
+            stroke-dashoffset: -120;
+        }
+    }
+
     @keyframes canvas-batch-child-in {
         from {
             opacity: 0;
@@ -461,6 +588,29 @@
         to {
             opacity: 0;
             transform: translate(var(--batch-from-x), var(--batch-from-y)) rotate(var(--batch-from-rotate)) scale(0.72);
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .canvas-node-shell,
+        .canvas-node-media-frame,
+        .canvas-node-media-frame > img,
+        .canvas-node-media-frame > video,
+        .canvas-config-node-panel .canvas-config-mode,
+        .canvas-config-node-panel .canvas-compact-control {
+            transition: none;
+        }
+
+        .canvas-node-connection-source,
+        .canvas-node-connection-target,
+        .canvas-connection-glow,
+        .canvas-connection-core,
+        .canvas-connection-preview path:last-child {
+            animation: none;
+        }
+
+        .canvas-connection-dots {
+            display: none;
         }
     }
 }
