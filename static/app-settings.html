@@ -56,9 +56,9 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260609-v212-canvas-assets-release1"></script>
-    <script src="/static/i18n.js?v=20260609-v212-canvas-assets-release1"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260609-v212-canvas-assets-release1">
+    <script src="/static/theme.js?v=20260609-v213-update-restart-hotfix1"></script>
+    <script src="/static/i18n.js?v=20260609-v213-update-restart-hotfix1"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260609-v213-update-restart-hotfix1">
     <style>
         :root {
             --bg:#f7f8fa;
@@ -640,8 +640,8 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.1.2 源码主线重构版</div>
-                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是切换 Go + Next.js 画布主体，并保留云账户、API 设置和自动更新模块。</div>
+                        <div class="welcome-title">v2.1.3 桌面自动更新热修版</div>
+                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是提升桌面端自动更新、程序替换和重启的稳定性。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
                 </div>
@@ -1262,13 +1262,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.1.2' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.1.3' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.1.2';
+            const version = appInfo?.version || '2.1.3';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }
@@ -2094,7 +2094,7 @@
                 const staticHealth = info.static_health || {};
                 const updateCapability = info.update_capability || {};
                 const checks = [
-                    {label:'当前版本', ok:info.version === '2.1.2', detail:info.version || '-'},
+                    {label:'当前版本', ok:info.version === '2.1.3', detail:info.version || '-'},
                     {label:'前端依赖', ok:!!staticHealth.ok, detail:staticHealth.ok ? `${Number(staticHealth.checked_count || 0)} 项完整` : `缺失 ${Number(staticHealth.missing_count || 0)} 项`},
                     {label:'素材文件', ok:Number(assets.missing_count || 0) === 0, detail:`缺失 ${Number(assets.missing_count || 0)} 个`},
                     {label:'缩略图', ok:Number(assets.thumb_missing_count || 0) === 0, detail:`待重建 ${Number(assets.thumb_missing_count || 0)} 个`, warnOnly:true},

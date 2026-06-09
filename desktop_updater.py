@@ -35,6 +35,123 @@ CRITICAL_RELATIVE_FILES = (
 )
 
 
+def ps_quote(value: str) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def run_powershell_json(script: str, timeout: int = 12):
+    try:
+        completed = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except Exception:
+        return []
+    if completed.returncode != 0:
+        return []
+    output = (completed.stdout or "").strip()
+    if not output:
+        return []
+    try:
+        data = json.loads(output)
+    except Exception:
+        return []
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        return [data]
+    return []
+
+
+def find_processes_in_app_dir(app_dir: str, exclude_pids: set[int] | None = None):
+    if not sys.platform.startswith("win"):
+        return []
+    app_abs = os.path.abspath(app_dir)
+    exclude = {int(pid) for pid in (exclude_pids or set()) if int(pid) > 0}
+    exclude.add(os.getpid())
+    exclude_literal = ",".join(str(pid) for pid in sorted(exclude)) or "0"
+    script = f"""
+$prefix = [System.IO.Path]::GetFullPath({ps_quote(app_abs)}).TrimEnd('\\') + '\\'
+$exclude = @({exclude_literal})
+$items = Get-CimInstance Win32_Process | Where-Object {{
+  $_.ExecutablePath -and
+  $_.ExecutablePath.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase) -and
+  ($exclude -notcontains [int]$_.ProcessId)
+}} | Select-Object ProcessId,Name,ExecutablePath
+if ($items) {{ $items | ConvertTo-Json -Compress }}
+"""
+    processes = []
+    for item in run_powershell_json(script):
+        try:
+            pid = int(item.get("ProcessId") or 0)
+        except Exception:
+            pid = 0
+        if pid <= 0 or pid in exclude:
+            continue
+        processes.append({
+            "pid": pid,
+            "name": str(item.get("Name") or ""),
+            "path": str(item.get("ExecutablePath") or ""),
+        })
+    return processes
+
+
+def wait_for_app_processes(app_dir: str, exclude_pids: set[int] | None = None, timeout: int = 15):
+    deadline = time.time() + timeout
+    processes = []
+    while time.time() < deadline:
+        processes = find_processes_in_app_dir(app_dir, exclude_pids)
+        if not processes:
+            return []
+        time.sleep(0.5)
+    return processes
+
+
+def terminate_processes(processes: list[dict], state_path: str = "", state: dict | None = None):
+    killed = []
+    for item in processes:
+        pid = int(item.get("pid") or 0)
+        if pid <= 0 or pid == os.getpid():
+            continue
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/F"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=8,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            killed.append(item)
+        except Exception as exc:
+            item = dict(item)
+            item["error"] = str(exc)
+            killed.append(item)
+    if state is not None and killed:
+        state["terminated_processes"] = killed
+        write_state(state_path, state)
+    return killed
+
+
+def release_app_locks(app_dir: str, state_path: str = "", state: dict | None = None, exclude_pids: set[int] | None = None):
+    remaining = wait_for_app_processes(app_dir, exclude_pids, timeout=12)
+    if state is not None:
+        state["blocking_processes"] = remaining
+        write_state(state_path, state)
+    if remaining:
+        terminate_processes(remaining, state_path, state)
+        time.sleep(1.0)
+    return find_processes_in_app_dir(app_dir, exclude_pids)
+
+
 def wait_for_pid(pid: int, timeout: int = 90):
     if pid <= 0:
         return
@@ -224,7 +341,14 @@ def restart_app(exe_path: str, app_dir: str, state_path: str = "", state: dict |
         return False
     try:
         time.sleep(2.0)
-        subprocess.Popen([resolved], cwd=os.path.dirname(resolved), close_fds=True)
+        creationflags = 0
+        if sys.platform.startswith("win"):
+            creationflags = (
+                getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+                | getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            )
+        subprocess.Popen([resolved], cwd=os.path.dirname(resolved), close_fds=True, creationflags=creationflags)
         if state is not None:
             state["restart_exe"] = resolved
             write_state(state_path, state)
@@ -261,6 +385,9 @@ def main():
     write_state(args.state, state)
     try:
         wait_for_pid(args.pid)
+        state["phase"] = "releasing_locks"
+        write_state(args.state, state)
+        release_app_locks(args.app_dir, args.state, state, {args.pid})
         state["phase"] = "extracting"
         write_state(args.state, state)
         staging = tempfile.mkdtemp(prefix="lumaforge-update-")
@@ -271,8 +398,22 @@ def main():
                 raise RuntimeError("Update package does not contain a recognizable LumaForge app root.")
             state["phase"] = "replacing"
             write_state(args.state, state)
-            backup_dir, replaced = replace_app(root, args.app_dir, args.state, state)
-            validate_app_install(args.app_dir)
+            backup_dir = ""
+            replaced = []
+            for attempt in range(1, 6):
+                state["replace_attempt"] = attempt
+                write_state(args.state, state)
+                try:
+                    backup_dir, replaced = replace_app(root, args.app_dir, args.state, state)
+                    validate_app_install(args.app_dir)
+                    break
+                except Exception as exc:
+                    state["replace_error"] = str(exc)
+                    write_state(args.state, state)
+                    if attempt >= 5:
+                        raise
+                    release_app_locks(args.app_dir, args.state, state, {args.pid})
+                    time.sleep(1.5)
             state.update({
                 "ok": True,
                 "phase": "done",

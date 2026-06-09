@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	LumaForgeVersion = "2.1.2"
-	LumaForgeBuildID = "20260609-v212-canvas-assets-release1"
+	LumaForgeVersion = "2.1.3"
+	LumaForgeBuildID = "20260609-v213-update-restart-hotfix1"
 )
 
 var (
