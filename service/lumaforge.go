@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	LumaForgeVersion = "2.1.0"
-	LumaForgeBuildID = "20260605-v210-source-refactor1"
+	LumaForgeVersion = "2.1.1"
+	LumaForgeBuildID = "20260608-v211-account-assets1"
 )
 
 var (
@@ -83,6 +83,13 @@ func LumaAssetsDir() string {
 	if value := strings.TrimSpace(os.Getenv("APP_ASSETS_DIR")); value != "" {
 		return value
 	}
+	if value := strings.TrimSpace(lumaLoadAppPathSettings()["save"]); value != "" {
+		return value
+	}
+	return lumaDefaultAssetsDir()
+}
+
+func lumaDefaultAssetsDir() string {
 	if value := strings.TrimSpace(os.Getenv("USERPROFILE")); value != "" {
 		return filepath.Join(value, "Pictures", "LumaForge")
 	}
@@ -93,6 +100,17 @@ func LumaOutputDir() string {
 	if value := strings.TrimSpace(os.Getenv("APP_OUTPUT_DIR")); value != "" {
 		return value
 	}
+	settings := lumaLoadAppPathSettings()
+	if value := strings.TrimSpace(settings["output"]); value != "" {
+		return value
+	}
+	if saveDir := strings.TrimSpace(settings["save"]); saveDir != "" {
+		return filepath.Join(saveDir, "output")
+	}
+	return lumaDefaultOutputDir()
+}
+
+func lumaDefaultOutputDir() string {
 	if value := strings.TrimSpace(os.Getenv("APP_RUNTIME_DIR")); value != "" {
 		return filepath.Join(value, "output")
 	}
@@ -232,12 +250,23 @@ func LumaCloudAuth(action string, payload map[string]any) (map[string]any, error
 		User:          user,
 	}
 	_ = LumaSaveCloudSession(session)
+	configSync := map[string]any{"ok": false}
+	if syncData, syncErr := LumaCloudConfigDownload(); syncErr == nil {
+		configSync = map[string]any{
+			"ok":               true,
+			"cloud_updated_at": syncData["cloud_updated_at"],
+			"applied":          syncData["applied"],
+		}
+	} else {
+		configSync["error"] = syncErr.Error()
+	}
 	return map[string]any{
 		"token":                token,
 		"user":                 lumaAuthUserFromSession(session),
 		"base_url":             baseURL,
 		"custom_cloud":         custom,
 		"cloud_config_missing": false,
+		"config_sync":          configSync,
 	}, nil
 }
 
@@ -363,28 +392,57 @@ func LumaCloudConfigDownload() (map[string]any, error) {
 
 func LumaBuildCloudConfig(includeSecrets bool) map[string]any {
 	providers := LumaPublicProviders(LumaLoadProviders())
+	apiKeys := map[string]string{}
 	if includeSecrets {
 		keys := LumaLoadProviderKeys()
 		for i := range providers {
 			if key := strings.TrimSpace(keys[providers[i].ID]); key != "" {
 				providers[i].APIKey = key
+				apiKeys[providers[i].ID] = key
 			}
 		}
 	}
-	return map[string]any{
+	config := map[string]any{
 		"schema_version": "lumaforge-2.1.0",
 		"api_providers":  providers,
 		"updated_at":     time.Now().UnixMilli(),
 	}
+	if includeSecrets {
+		config["api_keys"] = apiKeys
+	}
+	return config
 }
 
 func LumaApplyCloudConfig(configMap map[string]any) (map[string]any, error) {
-	result := map[string]any{"providers": false}
+	result := map[string]any{"providers": false, "keys": false}
 	if configMap == nil {
 		return result, nil
 	}
+	cloudKeys := map[string]string{}
+	if rawKeys, ok := configMap["api_keys"].(map[string]any); ok {
+		for id, value := range rawKeys {
+			providerID := strings.ToLower(strings.TrimSpace(id))
+			key := strings.TrimSpace(fmt.Sprint(value))
+			if providerIDRE.MatchString(providerID) && key != "" {
+				cloudKeys[providerID] = key
+			}
+		}
+	}
 	rawProviders, ok := configMap["api_providers"].([]any)
 	if !ok {
+		if len(cloudKeys) > 0 {
+			keys := lumaLoadProviderKeyFile()
+			for id, key := range cloudKeys {
+				if strings.TrimSpace(keys[id]) == "" {
+					keys[id] = key
+				}
+			}
+			if err := writeJSONFile(lumaPath("api_provider_keys.json"), keys); err != nil {
+				return result, err
+			}
+			result["keys"] = true
+			result["keys_count"] = len(cloudKeys)
+		}
 		return result, nil
 	}
 	providers := make([]LumaAPIProvider, 0, len(rawProviders))
@@ -392,6 +450,10 @@ func LumaApplyCloudConfig(configMap map[string]any) (map[string]any, error) {
 		data, _ := json.Marshal(raw)
 		var provider LumaAPIProvider
 		if json.Unmarshal(data, &provider) == nil && strings.TrimSpace(provider.ID) != "" {
+			provider.ID = strings.ToLower(strings.TrimSpace(provider.ID))
+			if strings.TrimSpace(provider.APIKey) == "" {
+				provider.APIKey = cloudKeys[provider.ID]
+			}
 			providers = append(providers, provider)
 		}
 	}
@@ -403,6 +465,10 @@ func LumaApplyCloudConfig(configMap map[string]any) (map[string]any, error) {
 	}
 	result["providers"] = true
 	result["providers_count"] = len(providers)
+	if len(cloudKeys) > 0 {
+		result["keys"] = true
+		result["keys_count"] = len(cloudKeys)
+	}
 	return result, nil
 }
 
@@ -578,14 +644,70 @@ func LumaProviderKeyDiagnostics() map[string]any {
 		}
 	}
 	sort.Strings(orphanKeys)
+	keyPath := lumaPath("api_provider_keys.json")
+	_, statErr := os.Stat(keyPath)
+	cloudAvailable, recoverableCount, cloudErr := lumaCloudRecoverableProviderKeyCount(providers, keys)
 	return map[string]any{
-		"providers":            providers,
-		"provider_count":       len(providers),
-		"stored_key_count":     referencedCount,
-		"orphan_keys":          orphanKeys,
-		"orphan_count":         len(orphanKeys),
-		"has_environment_keys": hasProviderEnvironmentKeys(providers),
+		"providers":               providers,
+		"provider_count":          len(providers),
+		"stored_key_count":        referencedCount,
+		"orphan_keys":             orphanKeys,
+		"orphan_count":            len(orphanKeys),
+		"has_environment_keys":    hasProviderEnvironmentKeys(providers),
+		"local_key_file_exists":   statErr == nil,
+		"cloud_config_available":  cloudAvailable,
+		"recoverable_from_cloud":  recoverableCount > 0,
+		"recoverable_key_count":   recoverableCount,
+		"cloud_diagnostics_error": cloudErr,
 	}
+}
+
+func lumaCloudRecoverableProviderKeyCount(providers []LumaAPIProvider, localKeys map[string]string) (bool, int, string) {
+	session := LumaLoadCloudSession()
+	if strings.TrimSpace(session.Token) == "" || strings.TrimSpace(session.BaseURL) == "" {
+		return false, 0, ""
+	}
+	data, _, err := lumaCloudJSON(http.MethodGet, session.BaseURL, "/api/configs/current", session.Token, nil)
+	if err != nil {
+		return false, 0, err.Error()
+	}
+	configMap, _ := data["config"].(map[string]any)
+	if configMap == nil {
+		return false, 0, ""
+	}
+	cloudKeys := map[string]string{}
+	if rawKeys, ok := configMap["api_keys"].(map[string]any); ok {
+		for id, value := range rawKeys {
+			providerID := strings.ToLower(strings.TrimSpace(id))
+			key := strings.TrimSpace(fmt.Sprint(value))
+			if providerIDRE.MatchString(providerID) && key != "" {
+				cloudKeys[providerID] = key
+			}
+		}
+	}
+	if rawProviders, ok := configMap["api_providers"].([]any); ok {
+		for _, raw := range rawProviders {
+			data, _ := json.Marshal(raw)
+			var provider LumaAPIProvider
+			if json.Unmarshal(data, &provider) == nil {
+				provider.ID = strings.ToLower(strings.TrimSpace(provider.ID))
+				if providerIDRE.MatchString(provider.ID) && strings.TrimSpace(provider.APIKey) != "" {
+					cloudKeys[provider.ID] = strings.TrimSpace(provider.APIKey)
+				}
+			}
+		}
+	}
+	providerIDs := map[string]bool{}
+	for _, provider := range providers {
+		providerIDs[provider.ID] = true
+	}
+	count := 0
+	for id, key := range cloudKeys {
+		if providerIDs[id] && strings.TrimSpace(localKeys[id]) == "" && key != "" {
+			count += 1
+		}
+	}
+	return true, count, ""
 }
 
 func LumaClearOrphanProviderKeys() map[string]any {
@@ -827,6 +949,7 @@ func classifiedModelPayload(models []string, status int, message string) map[str
 }
 
 func LumaAppInfo() map[string]any {
+	paths := LumaAppPaths()
 	return map[string]any{
 		"name":                    "LumaForge",
 		"display_name":            "光绘工坊",
@@ -835,10 +958,110 @@ func LumaAppInfo() map[string]any {
 		"runtime_dir":             filepath.Dir(LumaDataDir()),
 		"data_dir":                LumaDataDir(),
 		"assets_dir":              LumaAssetsDir(),
+		"output_dir":              LumaOutputDir(),
+		"paths":                   paths,
 		"update_capable":          true,
 		"update_check_configured": strings.TrimSpace(config.Cfg.UpdateCheckURL) != "",
 		"update_check_url":        config.Cfg.UpdateCheckURL,
 		"legacy_api_url":          strings.TrimRight(config.Cfg.LumaForgeLegacyAPI, "/"),
+	}
+}
+
+func LumaAppPaths() map[string]string {
+	settings := lumaLoadAppPathSettings()
+	defaults := lumaDefaultAppPaths()
+	paths := map[string]string{}
+	for key, value := range defaults {
+		if override := strings.TrimSpace(settings[key]); override != "" {
+			paths[key] = override
+		} else {
+			paths[key] = value
+		}
+	}
+	if strings.TrimSpace(settings["save"]) != "" {
+		if strings.TrimSpace(settings["output"]) == "" {
+			paths["output"] = filepath.Join(paths["save"], "output")
+		}
+		if strings.TrimSpace(settings["input"]) == "" {
+			paths["input"] = filepath.Join(paths["save"], "input")
+		}
+		if strings.TrimSpace(settings["thumbs"]) == "" {
+			paths["thumbs"] = filepath.Join(paths["save"], "thumbs")
+		}
+	}
+	return paths
+}
+
+func LumaSaveAppPath(target string, rawPath string) (map[string]string, error) {
+	target = strings.ToLower(strings.TrimSpace(target))
+	if !lumaValidAppPathTarget(target) || target == "data" {
+		return nil, fmt.Errorf("不支持修改该目录")
+	}
+	path := strings.TrimSpace(rawPath)
+	if path == "" {
+		return nil, fmt.Errorf("目录不能为空")
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(absPath, 0755); err != nil {
+		return nil, err
+	}
+	settings := lumaLoadAppPathSettings()
+	settings[target] = absPath
+	if target == "save" {
+		for _, child := range []string{"input", "output", "thumbs"} {
+			if strings.TrimSpace(settings[child]) == "" {
+				_ = os.MkdirAll(filepath.Join(absPath, child), 0755)
+			}
+		}
+	}
+	if err := writeJSONFile(lumaPath("app_paths.json"), settings); err != nil {
+		return nil, err
+	}
+	return LumaAppPaths(), nil
+}
+
+func LumaAppPath(target string) (string, error) {
+	target = strings.ToLower(strings.TrimSpace(target))
+	paths := LumaAppPaths()
+	path := strings.TrimSpace(paths[target])
+	if path == "" || !lumaValidAppPathTarget(target) {
+		return "", fmt.Errorf("未知目录")
+	}
+	if err := os.MkdirAll(path, 0755); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func lumaLoadAppPathSettings() map[string]string {
+	paths := map[string]string{}
+	_ = readJSONFile(lumaPath("app_paths.json"), &paths)
+	return paths
+}
+
+func lumaDefaultAppPaths() map[string]string {
+	runtimeDir := filepath.Dir(LumaDataDir())
+	saveDir := lumaDefaultAssetsDir()
+	return map[string]string{
+		"save":   saveDir,
+		"output": lumaDefaultOutputDir(),
+		"input":  filepath.Join(saveDir, "input"),
+		"thumbs": filepath.Join(saveDir, "thumbs"),
+		"logs":   filepath.Join(runtimeDir, "logs"),
+		"cache":  filepath.Join(runtimeDir, "cache"),
+		"data":   LumaDataDir(),
+	}
+}
+
+func lumaValidAppPathTarget(target string) bool {
+	switch target {
+	case "save", "output", "input", "thumbs", "logs", "cache", "data":
+		return true
+	default:
+		return false
 	}
 }
 

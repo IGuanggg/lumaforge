@@ -496,13 +496,13 @@
     }
 
     .canvas-connection-glow {
-        stroke-dasharray: 18 102;
-        animation: canvas-connection-flow 1.45s linear infinite;
+        stroke-dasharray: 30 150;
+        animation: canvas-connection-flow 3.4s linear infinite;
     }
 
     .canvas-connection-core {
-        stroke-dasharray: 7 113;
-        animation: canvas-connection-flow 0.9s linear infinite;
+        stroke-dasharray: none;
+        animation: none;
     }
 
     .canvas-connection-active .canvas-connection-glow {
@@ -525,7 +525,7 @@
     }
 
     .canvas-connection-preview path:last-child {
-        animation: canvas-connection-flow 1s linear infinite;
+        animation: canvas-connection-flow 2.2s linear infinite;
     }
 
     @keyframes canvas-node-link-breathe {

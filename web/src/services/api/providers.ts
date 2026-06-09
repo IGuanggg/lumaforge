@@ -40,6 +40,12 @@ export type ProviderKeyDiagnostics = {
     removed_count?: number;
     provider_count?: number;
     stored_key_count?: number;
+    orphan_count?: number;
+    local_key_file_exists?: boolean;
+    cloud_config_available?: boolean;
+    recoverable_from_cloud?: boolean;
+    recoverable_key_count?: number;
+    cloud_diagnostics_error?: string;
 };
 
 type WrappedResponse<T> = {

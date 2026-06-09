@@ -18,7 +18,7 @@ type InfiniteCanvasProps = {
     children: React.ReactNode;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onCanvasDeselect, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const panState = useRef({
         isPanning: false,
@@ -67,6 +67,18 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         const target = event.target instanceof Element ? event.target : null;
         if (target?.closest("[data-canvas-no-zoom],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown")) return;
 
+        event.preventDefault();
+        if (!(event.ctrlKey || event.metaKey || event.altKey)) {
+            const dx = event.deltaX || (event.shiftKey ? event.deltaY : 0);
+            const dy = event.shiftKey ? 0 : event.deltaY;
+            onViewportChange({
+                x: viewport.x - dx,
+                y: viewport.y - dy,
+                k: viewport.k,
+            });
+            return;
+        }
+
         const delta = -event.deltaY;
         const factor = Math.pow(1.1, delta / 100);
         const newScale = Math.min(Math.max(viewport.k * factor, 0.05), 5);
@@ -85,36 +97,41 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         });
     };
 
+    const startPan = (event: React.PointerEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        panState.current = {
+            isPanning: true,
+            startX: event.clientX,
+            startY: event.clientY,
+            initialX: viewport.x,
+            initialY: viewport.y,
+            hasMoved: false,
+        };
+        document.body.style.cursor = "grabbing";
+    };
+
     const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
         const target = event.target instanceof Element ? event.target : null;
         if (target?.closest("[data-canvas-no-zoom]")) return;
         if (target?.closest("[data-connection-create-menu]")) return;
         const isBackgroundClick = !target?.closest("[data-node-id],[data-connection-id]");
 
-        if (event.button === 0 && (event.ctrlKey || event.metaKey) && isBackgroundClick) {
-            event.preventDefault();
-            event.currentTarget.setPointerCapture(event.pointerId);
-            onCanvasMouseDown?.(event);
-            return;
-        }
-
-        if (event.button === 1 || (event.button === 0 && !isSpacePressed && isBackgroundClick)) {
-            event.preventDefault();
-            event.currentTarget.setPointerCapture(event.pointerId);
-            panState.current = {
-                isPanning: true,
-                startX: event.clientX,
-                startY: event.clientY,
-                initialX: viewport.x,
-                initialY: viewport.y,
-                hasMoved: false,
-            };
-            document.body.style.cursor = "grabbing";
+        if (event.button === 1) {
+            startPan(event);
             return;
         }
 
         if (event.button === 0 && isSpacePressed && isBackgroundClick) {
+            startPan(event);
+            return;
+        }
+
+        if (event.button === 0 && isBackgroundClick) {
             event.preventDefault();
+            event.currentTarget.setPointerCapture(event.pointerId);
+            onCanvasMouseDown?.(event);
+            return;
         }
     };
 
@@ -143,11 +160,8 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         const handlePointerUp = () => {
             if (!panState.current.isPanning) return;
 
-            if (!panState.current.hasMoved) {
-                onCanvasDeselect?.();
-            }
             panState.current.isPanning = false;
-            document.body.style.cursor = "default";
+            document.body.style.cursor = "";
         };
 
         window.addEventListener("pointermove", handlePointerMove);
@@ -156,21 +170,12 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             window.removeEventListener("pointermove", handlePointerMove);
             window.removeEventListener("pointerup", handlePointerUp);
         };
-    }, [onCanvasDeselect, onViewportChange]);
-
-    useEffect(() => {
-        const container = containerRef.current;
-        if (!container) return;
-
-        const preventWheelScroll = (event: WheelEvent) => event.preventDefault();
-        container.addEventListener("wheel", preventWheelScroll, { passive: false });
-        return () => container.removeEventListener("wheel", preventWheelScroll);
-    }, [containerRef]);
+    }, [onViewportChange]);
 
     return (
         <div
             ref={containerRef}
-            className="relative h-full w-full cursor-grab select-none overflow-hidden"
+            className={`relative h-full w-full select-none overflow-hidden ${isSpacePressed ? "cursor-grab" : "cursor-default"}`}
             style={{ background: theme.canvas.background }}
             onPointerDown={handlePointerDown}
             onWheel={handleWheel}

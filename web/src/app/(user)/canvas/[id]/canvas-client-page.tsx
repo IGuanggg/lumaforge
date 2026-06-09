@@ -20,7 +20,7 @@ import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { cropDataUrl, upscaleDataUrl } from "../utils/canvas-image-data";
+import { cropDataUrl, splitGridDataUrl, upscaleDataUrl } from "../utils/canvas-image-data";
 import { fitNodeSize, nodeSizeFromRatio } from "../utils/canvas-node-size";
 import { App, Button, Dropdown, Modal } from "antd";
 import { NODE_DEFAULT_SIZE, getNodeSpec } from "../constants";
@@ -32,6 +32,7 @@ import { CanvasNodeContextMenu } from "../components/canvas-context-menu";
 import { CanvasNodeAngleDialog, type CanvasImageAngleParams } from "../components/canvas-node-angle-dialog";
 import { CanvasNodeCropDialog, type CanvasImageCropRect } from "../components/canvas-node-crop-dialog";
 import { CanvasNodeMaskEditDialog, type CanvasImageMaskEditPayload } from "../components/canvas-node-mask-edit-dialog";
+import { CanvasNodeGridSplitDialog } from "../components/canvas-node-grid-split-dialog";
 import { CanvasNodeUpscaleDialog, type CanvasImageUpscaleParams } from "../components/canvas-node-upscale-dialog";
 import { buildNodeChatMessages, buildNodeGenerationContext, buildNodeGenerationInputs, hydrateNodeGenerationContext, type NodeGenerationInput } from "../components/canvas-node-generation";
 import { CanvasNodeHoverToolbar, CanvasNodeInfoModal } from "../components/canvas-node-hover-toolbar";
@@ -85,17 +86,13 @@ type CanvasHistoryEntry = Pick<CanvasClipboard, "nodes" | "connections"> & {
 
 const VIDEO_NODE_MAX_WIDTH = 420;
 const VIDEO_NODE_MAX_HEIGHT = 420;
-const CONNECTION_HANDLE_HIT_RADIUS = 40;
-const CONNECTION_NODE_HIT_PADDING = 32;
+const CONNECTION_HANDLE_HIT_RADIUS = 72;
+const CONNECTION_NODE_HIT_PADDING = 56;
 const NODE_STATUS_LOADING = "loading" as const;
 const NODE_STATUS_SUCCESS = "success" as const;
 const NODE_STATUS_ERROR = "error" as const;
 const IMAGE_PROMPT_REVERSE_PRESET = `请根据参考图片反推一段适合用于 AI 生图的提示词。
-
-要求：
-1. 只输出提示词正文，不要解释。
-2. 覆盖主体、构图、风格、光线、色彩、材质、镜头和氛围。
-3. 尽量写成可直接用于生图模型的完整提示词。`;
+要求：1. 只输出提示词正文，不要解释。2. 覆盖主体、构图、风格、光线、色彩、材质、镜头和氛围。3. 尽量写成可直接用于生图模型的完整提示词。`;
 
 function createCanvasNode(type: CanvasNodeType, position: Position, metadata?: CanvasNodeMetadata): CanvasNodeData {
     const spec = getNodeSpec(type);
@@ -190,7 +187,6 @@ function ConnectionCreateMenu({ pending, onCreate, onClose }: { pending: Pending
         </div>
     );
 }
-
 function ConnectionCreateOption({ theme, icon, title, description, onClick }: { theme: (typeof canvasThemes)[keyof typeof canvasThemes]; icon: React.ReactNode; title: string; description?: string; onClick?: () => void }) {
     return (
         <button type="button" className="flex h-16 w-full cursor-pointer items-center gap-3 rounded-2xl px-3 text-left transition" style={{ color: theme.node.text }} onClick={onClick} onMouseEnter={(event) => (event.currentTarget.style.background = theme.node.fill)} onMouseLeave={(event) => (event.currentTarget.style.background = "transparent")}>
@@ -243,6 +239,7 @@ function InfiniteCanvasPage() {
     const isAiConfigReady = useConfigStore((state) => state.isAiConfigReady);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const addAsset = useAssetStore((state) => state.addAsset);
+    const localAssets = useAssetStore((state) => state.assets);
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
     const hydrated = useCanvasStore((state) => state.hydrated);
     const createProject = useCanvasStore((state) => state.createProject);
@@ -283,6 +280,7 @@ function InfiniteCanvasPage() {
     const [infoNodeId, setInfoNodeId] = useState<string | null>(null);
     const [cropNodeId, setCropNodeId] = useState<string | null>(null);
     const [maskEditNodeId, setMaskEditNodeId] = useState<string | null>(null);
+    const [gridSplitNodeId, setGridSplitNodeId] = useState<string | null>(null);
     const [upscaleNodeId, setUpscaleNodeId] = useState<string | null>(null);
     const [superResolveNodeId, setSuperResolveNodeId] = useState<string | null>(null);
     const [angleNodeId, setAngleNodeId] = useState<string | null>(null);
@@ -540,7 +538,7 @@ function InfiniteCanvasPage() {
             const handleRadius = CONNECTION_HANDLE_HIT_RADIUS / scale;
             let isNearNode = false;
             let bestNodeId: string | null = null;
-            let bestPriority = Number.POSITIVE_INFINITY;
+            let bestScore = Number.POSITIVE_INFINITY;
 
             [...nodesRef.current]
                 .filter((node) => !isHiddenBatchChild(node, nodesRef.current))
@@ -549,18 +547,22 @@ function InfiniteCanvasPage() {
                     const anchor = getConnectionTargetAnchor(node, current);
                     const dx = world.x - anchor.x;
                     const dy = world.y - anchor.y;
-                    const hitsHandle = dx * dx + dy * dy <= handleRadius * handleRadius;
+                    const handleDistance = Math.hypot(dx, dy);
+                    const rectDistanceX = world.x < node.position.x ? node.position.x - world.x : world.x > node.position.x + node.width ? world.x - (node.position.x + node.width) : 0;
+                    const rectDistanceY = world.y < node.position.y ? node.position.y - world.y : world.y > node.position.y + node.height ? world.y - (node.position.y + node.height) : 0;
+                    const rectDistance = Math.hypot(rectDistanceX, rectDistanceY);
+                    const hitsHandle = handleDistance <= handleRadius;
                     const hitsInside = world.x >= node.position.x && world.x <= node.position.x + node.width && world.y >= node.position.y && world.y <= node.position.y + node.height;
-                    const hitsExpanded = world.x >= node.position.x - padding && world.x <= node.position.x + node.width + padding && world.y >= node.position.y - padding && world.y <= node.position.y + node.height + padding;
+                    const hitsExpanded = rectDistance <= padding;
 
                     if (!hitsHandle && !hitsInside && !hitsExpanded) return;
                     isNearNode = true;
                     if (node.id === current.nodeId || !normalizeConnection(current.nodeId, node.id, nodesRef.current, current.handleType)) return;
 
-                    const priority = hitsInside ? 0 : hitsHandle ? 1 : 2;
-                    if (priority < bestPriority) {
+                    const score = Math.min(handleDistance, hitsInside ? rectDistance + 18 : rectDistance + 36);
+                    if (score < bestScore) {
                         bestNodeId = node.id;
-                        bestPriority = priority;
+                        bestScore = score;
                     }
                 });
 
@@ -587,6 +589,7 @@ function InfiniteCanvasPage() {
     const infoNode = infoNodeId ? nodeById.get(infoNodeId) || null : null;
     const cropNode = cropNodeId ? nodeById.get(cropNodeId) || null : null;
     const maskEditNode = maskEditNodeId ? nodeById.get(maskEditNodeId) || null : null;
+    const gridSplitNode = gridSplitNodeId ? nodeById.get(gridSplitNodeId) || null : null;
     const upscaleNode = upscaleNodeId ? nodeById.get(upscaleNodeId) || null : null;
     const superResolveNode = superResolveNodeId ? nodeById.get(superResolveNodeId) || null : null;
     const angleNode = angleNodeId ? nodeById.get(angleNodeId) || null : null;
@@ -911,25 +914,19 @@ function InfiniteCanvasPage() {
             if (pendingConnectionCreateRef.current) cancelPendingConnectionCreate();
             if (event.button !== 0) return;
 
-            if (!event.ctrlKey && !event.metaKey) {
-                setSelectionBox(null);
-                setSelectedNodeIds(new Set());
-                setSelectedConnectionId(null);
-                return;
-            }
-
             const world = screenToCanvas(event.clientX, event.clientY);
+            const additive = event.shiftKey || event.ctrlKey || event.metaKey;
             const nextSelectionBox = {
                 startWorldX: world.x,
                 startWorldY: world.y,
                 currentWorldX: world.x,
                 currentWorldY: world.y,
-                additive: event.shiftKey,
-                initialSelectedNodeIds: event.shiftKey ? Array.from(selectedNodeIdsRef.current) : [],
+                additive,
+                initialSelectedNodeIds: additive ? Array.from(selectedNodeIdsRef.current) : [],
             };
             selectionBoxRef.current = nextSelectionBox;
             setSelectionBox(nextSelectionBox);
-            if (!event.shiftKey) {
+            if (!additive) {
                 setSelectedNodeIds(new Set());
             }
 
@@ -961,6 +958,7 @@ function InfiniteCanvasPage() {
         }
 
         setSelectedNodeIds(nextSelected);
+        setToolbarNodeId(nextSelected.size === 1 ? nodeId : null);
         const dragIds = new Set(nextSelected);
         currentNodes.forEach((node) => {
             if (nextSelected.has(node.id)) node.metadata?.batchChildIds?.forEach((childId) => dragIds.add(childId));
@@ -1199,7 +1197,7 @@ function InfiniteCanvasPage() {
 
             const node = {
                 ...createCanvasNode(CanvasNodeType.Text, getCanvasCenter(), { content: trimmed, status: NODE_STATUS_SUCCESS }),
-                title: trimmed.slice(0, 32) || "剪切板文本",
+                title: trimmed.slice(0, 32) || "剪贴板文本",
             };
 
             setNodes((prev) => [...prev, node]);
@@ -1223,12 +1221,12 @@ function InfiniteCanvasPage() {
             const blob = await imageItem.getType(imageType);
             const file = new File([blob], "clipboard-image.png", { type: imageType });
             void createImageFileNode(file, getCanvasCenter());
-            message.success("已从剪切板添加图片");
+            message.success("已从剪贴板添加图片");
             return;
         }
 
         const text = await navigator.clipboard.readText();
-        if (createTextNodeFromClipboard(text)) message.success("已从剪切板添加文本");
+        if (createTextNodeFromClipboard(text)) message.success("已从剪贴板添加文本");
     }, [createImageFileNode, createTextNodeFromClipboard, getCanvasCenter, message]);
 
     useEffect(() => {
@@ -1304,6 +1302,7 @@ function InfiniteCanvasPage() {
 
     const handleConnectStart = useCallback(
         (event: ReactMouseEvent, nodeId: string, handleType: "source" | "target") => {
+            event.preventDefault();
             event.stopPropagation();
             setMouseWorld(screenToCanvas(event.clientX, event.clientY));
             setConnecting({ nodeId, handleType });
@@ -1401,27 +1400,35 @@ function InfiniteCanvasPage() {
         setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, prompt } } : node)));
     }, []);
 
+    const renameNode = useCallback((nodeId: string, title: string) => {
+        const nextTitle = title.trim();
+        if (!nextTitle) return;
+        setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, title: nextTitle } : node)));
+    }, []);
+
     const handleConfigNodeChange = useCallback((nodeId: string, patch: Partial<CanvasNodeData["metadata"]>) => {
         setNodes((prev) => prev.map((node) => (node.id === nodeId ? applyNodeConfigPatch(node, patch) : node)));
     }, []);
 
     const downloadNodeImage = useCallback((node: CanvasNodeData) => {
         if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) || !node.metadata?.content) return;
-        saveAs(node.metadata.content, `canvas-${node.type}-${node.id}.${node.type === CanvasNodeType.Video ? "mp4" : node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`);
+        const title = safeFileStem(node.title || node.metadata?.prompt || `canvas-${node.type}-${node.id}`);
+        saveAs(node.metadata.content, `${title}.${node.type === CanvasNodeType.Video ? "mp4" : node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`);
     }, []);
 
     const saveNodeAsset = useCallback(
-        async (node: CanvasNodeData) => {
+        async (node: CanvasNodeData, grid: { columns: number; rows: number } = { columns: 3, rows: 3 }) => {
+            const assetTitle = uniqueAssetTitle(node.title || node.metadata?.prompt || "画布素材", localAssets.map((asset) => asset.title));
             if (node.type === CanvasNodeType.Text) {
                 const content = node.metadata?.content?.trim();
                 if (!content) return message.error("没有可保存的文本");
-                addAsset({ kind: "text", title: node.metadata?.prompt?.slice(0, 24) || "画布文本", coverUrl: "", tags: [], source: "Canvas", data: { content }, metadata: { source: "canvas", nodeId: node.id } });
+                addAsset({ kind: "text", title: assetTitle, coverUrl: "", tags: [], source: "Canvas", data: { content }, metadata: { source: "canvas", nodeId: node.id } });
                 message.success("已加入我的素材");
                 return;
             }
             if (node.type === CanvasNodeType.Video) {
                 if (!node.metadata?.content) return message.error("没有可保存的视频");
-                addAsset({ kind: "video", title: node.metadata?.prompt?.slice(0, 24) || "画布视频", coverUrl: "", tags: [], source: "Canvas", data: { url: node.metadata.content, storageKey: node.metadata.storageKey, width: node.width, height: node.height, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "video/mp4" }, metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt } });
+                addAsset({ kind: "video", title: assetTitle, coverUrl: "", tags: [], source: "Canvas", data: { url: node.metadata.content, storageKey: node.metadata.storageKey, width: node.width, height: node.height, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "video/mp4" }, metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt } });
                 message.success("已加入我的素材");
                 return;
             }
@@ -1429,7 +1436,7 @@ function InfiniteCanvasPage() {
             const dataUrl = await imageToDataUrl({ dataUrl: node.metadata.content, storageKey: node.metadata.storageKey });
             addAsset({
                 kind: "image",
-                title: node.metadata?.prompt?.slice(0, 24) || "画布图片",
+                title: assetTitle,
                 coverUrl: node.metadata.content,
                 tags: [],
                 source: "Canvas",
@@ -1444,14 +1451,14 @@ function InfiniteCanvasPage() {
                 metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt },
             });
             try {
-                await uploadAssetDataUrl(dataUrl, `${node.title || node.id}.png`);
+                await uploadAssetDataUrl(dataUrl, `${safeFileStem(assetTitle)}.${imageExtension(dataUrl)}`);
                 message.success("已加入我的素材和旧素材库");
             } catch (error) {
                 console.warn("Asset library sync failed", error);
                 message.warning("已加入本地素材，旧素材库同步失败");
             }
         },
-        [addAsset, message],
+        [addAsset, localAssets, message],
     );
 
     const createImageReversePromptNodes = useCallback(
@@ -1499,6 +1506,58 @@ function InfiniteCanvasPage() {
             setContextMenu(null);
         },
         [effectiveConfig.model, effectiveConfig.textModel, message],
+    );
+
+    const splitImageNodeGrid = useCallback(
+        async (node: CanvasNodeData, grid: { columns: number; rows: number } = { columns: 3, rows: 3 }) => {
+            if (node.type !== CanvasNodeType.Image || !node.metadata?.content) {
+                message.warning("图片节点为空，无法拆分");
+                return;
+            }
+            try {
+                const columns = Math.max(1, Math.min(6, Math.floor(grid.columns || 3)));
+                const rows = Math.max(1, Math.min(6, Math.floor(grid.rows || 3)));
+                const dataUrl = await imageToDataUrl({ dataUrl: node.metadata.content, storageKey: node.metadata.storageKey });
+                const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
+                const baseTitle = node.title || node.metadata?.prompt || "\u56fe\u7247";
+                const existingTitles = nodesRef.current.map((item) => item.title);
+                const childNodes = await Promise.all(
+                    pieces.map(async (piece) => {
+                        const image = await uploadImage(piece.dataUrl);
+                        const size = fitNodeSize(image.width, image.height, Math.min(imageConfig.width, node.width), Math.min(imageConfig.height, node.height));
+                        const title = uniqueAssetTitle(`${baseTitle}-${piece.index + 1}`, existingTitles);
+                        existingTitles.push(title);
+                        return {
+                            id: nanoid(),
+                            type: CanvasNodeType.Image,
+                            title,
+                            position: {
+                                x: node.position.x + node.width + 96 + piece.column * (size.width + 28),
+                                y: node.position.y + piece.row * (size.height + 28),
+                            },
+                            width: size.width,
+                            height: size.height,
+                            metadata: {
+                                ...imageMetadata(image),
+                                prompt: node.metadata?.prompt,
+                                splitFromNodeId: node.id,
+                                splitGrid: { columns, rows, index: piece.index, column: piece.column, row: piece.row, sourceNodeId: node.id },
+                            },
+                        } satisfies CanvasNodeData;
+                    }),
+                );
+                setNodes((prev) => [...prev, ...childNodes]);
+                setConnections((prev) => [...prev, ...childNodes.map((child) => ({ id: nanoid(), fromNodeId: node.id, toNodeId: child.id }))]);
+                setSelectedNodeIds(new Set(childNodes.map((child) => child.id)));
+                setSelectedConnectionId(null);
+                setDialogNodeId(childNodes[0]?.id || null);
+                setGridSplitNodeId(null);
+                message.success(`已拆分为 ${columns} x ${rows} 多宫格节点`);
+            } catch (error) {
+                message.error(error instanceof Error ? error.message : "多宫格拆分失败");
+            }
+        },
+        [message],
     );
 
     const cropImageNode = useCallback(async (node: CanvasNodeData, crop: CanvasImageCropRect) => {
@@ -1747,7 +1806,7 @@ function InfiniteCanvasPage() {
         (file: File) => {
             const position = screenToCanvas((containerRef.current?.getBoundingClientRect().left || 0) + size.width / 2, (containerRef.current?.getBoundingClientRect().top || 0) + size.height / 2);
             void createImageFileNode(file, position);
-            message.success("已从剪切板添加图片");
+            message.success("已从剪贴板添加图片");
         },
         [createImageFileNode, message, screenToCanvas, size.height, size.width],
     );
@@ -1787,7 +1846,7 @@ function InfiniteCanvasPage() {
             const sourceTextContent = sourceNode?.type === CanvasNodeType.Text ? sourceNode.metadata?.content?.trim() || "" : "";
             const editingTextNode = mode === "text" && Boolean(sourceTextContent);
             const generationContext = await hydrateNodeGenerationContext(
-                buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本。\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : prompt),
+                buildNodeGenerationContext(nodeId, nodesRef.current, connectionsRef.current, editingTextNode ? `请根据要求修改以下文本：\n\n原文：\n${sourceTextContent}\n\n修改要求：\n${prompt}` : prompt),
             );
             const effectivePrompt = generationContext.prompt.trim();
             const markSourceStatus = sourceNode?.type !== CanvasNodeType.Image && !editingTextNode;
@@ -2400,6 +2459,7 @@ function InfiniteCanvasPage() {
                             }}
                             onConnectStart={handleConnectStart}
                             onResize={handleNodeResize}
+                            onTitleChange={renameNode}
                             onContentChange={handleNodeContentChange}
                             onToggleBatch={toggleBatchExpanded}
                             onSetBatchPrimary={setBatchPrimary}
@@ -2445,6 +2505,7 @@ function InfiniteCanvasPage() {
                     onSaveAsset={(node) => void saveNodeAsset(node)}
                     onMaskEdit={(node) => setMaskEditNodeId(node.id)}
                     onCrop={(node) => setCropNodeId(node.id)}
+                    onSplitGrid={(node) => setGridSplitNodeId(node.id)}
                     onUpscale={(node) => setUpscaleNodeId(node.id)}
                     onSuperResolve={(node) => setSuperResolveNodeId(node.id)}
                     onAngle={(node) => setAngleNodeId(node.id)}
@@ -2515,6 +2576,16 @@ function InfiniteCanvasPage() {
                 {cropNode?.metadata?.content ? <CanvasNodeCropDialog dataUrl={cropNode.metadata.content} open={Boolean(cropNode)} onClose={() => setCropNodeId(null)} onConfirm={(crop) => void cropImageNode(cropNode!, crop)} /> : null}
 
                 {maskEditNode?.metadata?.content ? <CanvasNodeMaskEditDialog dataUrl={maskEditNode.metadata.content} open={Boolean(maskEditNode)} onClose={() => setMaskEditNodeId(null)} onConfirm={(payload) => void maskEditImageNode(maskEditNode!, payload)} /> : null}
+
+                {gridSplitNode?.metadata?.content ? (
+                    <CanvasNodeGridSplitDialog
+                        dataUrl={gridSplitNode.metadata.content}
+                        title={gridSplitNode.title}
+                        open={Boolean(gridSplitNode)}
+                        onClose={() => setGridSplitNodeId(null)}
+                        onConfirm={(grid) => void splitImageNodeGrid(gridSplitNode!, grid)}
+                    />
+                ) : null}
 
                 {upscaleNode?.metadata?.content ? <CanvasNodeUpscaleDialog dataUrl={upscaleNode.metadata.content} open={Boolean(upscaleNode)} onClose={() => setUpscaleNodeId(null)} onConfirm={(params) => void upscaleImageNode(upscaleNode!, params)} /> : null}
 
@@ -2661,8 +2732,8 @@ function CanvasTopBar({
                                 { type: "divider" },
                                 { key: "import", icon: <Upload className="size-4" />, label: "导入素材", onClick: onImportImage },
                                 { type: "divider" },
-                                { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="⌘ Z" />, onClick: onUndo },
-                                { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="⌘ ⇧ Z / ⌘ Y" />, onClick: onRedo },
+                                { key: "undo", disabled: !canUndo, icon: <Undo2 className="size-4" />, label: <MenuLabel text="撤销" shortcut="Ctrl Z" />, onClick: onUndo },
+                                { key: "redo", disabled: !canRedo, icon: <Redo2 className="size-4" />, label: <MenuLabel text="重做" shortcut="Ctrl Shift Z / Ctrl Y" />, onClick: onRedo },
                             ],
                         }}
                     >
@@ -2720,27 +2791,28 @@ function CanvasTopBar({
                                 icon={<MessageSquare className="size-4" />}
                                 onClick={onExpandAssistant}
                             >
-                                助手
+                                {"\u52a9\u624b"}
                             </Button>
                         </>
                     ) : null}
                 </div>
             </div>
-            <Modal title="快捷键" open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
+            <Modal title={"\u5feb\u6377\u952e"} open={shortcutsOpen} onCancel={() => setShortcutsOpen(false)} footer={null} centered>
                 <div className="space-y-2 border-t pt-4 text-sm" style={{ borderColor: theme.node.stroke }}>
-                    <Shortcut keys={["拖动画布"]} value="平移视图" />
-                    <Shortcut keys={["滚轮"]} value="缩放画布" />
-                    <Shortcut keys={["缩放滑杆"]} value="精确调整缩放" />
-                    <Shortcut keys={["Ctrl / Cmd", "拖动"]} value="框选多个节点" />
-                    <Shortcut keys={["Shift / Ctrl / Cmd", "点击"]} value="追加选择节点" />
-                    <Shortcut keys={["Ctrl / Cmd", "A"]} value="全选节点" />
-                    <Shortcut keys={["Ctrl / Cmd", "C / V"]} value="复制 / 粘贴节点，或粘贴剪切板文本/图片" />
-                    <Shortcut keys={["Ctrl / Cmd", "Z"]} value="撤销" />
-                    <Shortcut keys={["Ctrl / Cmd", "Shift", "Z"]} value="重做" />
-                    <Shortcut keys={["Ctrl / Cmd", "Y"]} value="重做" />
-                    <Shortcut keys={["Delete / Backspace"]} value="删除选中" />
-                    <Shortcut keys={["Esc"]} value="取消选择并关闭浮层" />
-                    <Shortcut keys={["拖入图片/视频/音频"]} value="上传到画布" />
+                    <Shortcut keys={["\u5de6\u952e"]} value="\u9009\u62e9\u8282\u70b9 / \u7a7a\u767d\u5904\u6846\u9009" />
+                    <Shortcut keys={["\u4e2d\u952e\u62d6\u52a8"]} value="\u5e73\u79fb\u753b\u5e03" />
+                    <Shortcut keys={["\u7a7a\u683c", "\u5de6\u952e\u62d6\u52a8"]} value="\u5e73\u79fb\u753b\u5e03" />
+                    <Shortcut keys={["Ctrl / Alt", "\u6eda\u8f6e"]} value="\u7f29\u653e\u753b\u5e03" />
+                    <Shortcut keys={["\u666e\u901a\u6eda\u8f6e"]} value="\u6eda\u52a8\u753b\u5e03\u89c6\u56fe" />
+                    <Shortcut keys={["Shift / Ctrl / Cmd", "\u70b9\u51fb"]} value="\u8ffd\u52a0\u9009\u62e9\u8282\u70b9" />
+                    <Shortcut keys={["Ctrl / Cmd", "A"]} value="\u5168\u9009\u8282\u70b9" />
+                    <Shortcut keys={["Ctrl / Cmd", "C / V"]} value="\u590d\u5236 / \u7c98\u8d34\u8282\u70b9\uff0c\u6216\u7c98\u8d34\u526a\u8d34\u677f\u6587\u672c\u3001\u56fe\u7247" />
+                    <Shortcut keys={["Ctrl / Cmd", "Z"]} value="\u64a4\u9500" />
+                    <Shortcut keys={["Ctrl / Cmd", "Shift", "Z"]} value="\u91cd\u505a" />
+                    <Shortcut keys={["Ctrl / Cmd", "Y"]} value="\u91cd\u505a" />
+                    <Shortcut keys={["Delete / Backspace"]} value="\u5220\u9664\u9009\u4e2d" />
+                    <Shortcut keys={["Esc"]} value="\u53d6\u6d88\u9009\u62e9\u5e76\u5173\u95ed\u6d6e\u5c42" />
+                    <Shortcut keys={["\u62d6\u5165\u56fe\u7247/\u89c6\u9891/\u97f3\u9891"]} value="\u4e0a\u4f20\u5230\u753b\u5e03" />
                 </div>
             </Modal>
         </>
@@ -2788,6 +2860,27 @@ function audioExtension(mimeType?: string) {
     if (mimeType?.includes("flac")) return "flac";
     if (mimeType?.includes("pcm")) return "pcm";
     return "mp3";
+}
+
+function safeFileStem(value: string) {
+    return (
+        String(value || "")
+            .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 80) || "canvas-asset"
+    );
+}
+
+function uniqueAssetTitle(value: string, existingTitles: string[]) {
+    const base = safeFileStem(value);
+    const used = new Set(existingTitles.map((title) => safeFileStem(title).toLowerCase()));
+    if (!used.has(base.toLowerCase())) return base;
+    for (let index = 2; index < 1000; index += 1) {
+        const next = `${base}-${index}`;
+        if (!used.has(next.toLowerCase())) return next;
+    }
+    return `${base}-${Date.now()}`;
 }
 
 function imageMetadata(image: UploadedImage): CanvasNodeMetadata {

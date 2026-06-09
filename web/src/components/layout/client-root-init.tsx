@@ -20,10 +20,14 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     const canvasHydrated = useCanvasStore((state) => state.hydrated);
     const importProject = useCanvasStore((state) => state.importProject);
     const loadPublicSettings = useConfigStore((state) => state.loadPublicSettings);
-    const publicSettings = useConfigStore((state) => state.publicSettings);
-    const updateConfig = useConfigStore((state) => state.updateConfig);
-    const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const isLoginPage = pathname === "/login" || pathname === "/admin/login";
+
+    useEffect(() => {
+        if (window.location.hostname !== "localhost") return;
+        const nextUrl = new URL(window.location.href);
+        nextUrl.hostname = "127.0.0.1";
+        window.location.replace(nextUrl.toString());
+    }, []);
 
     useEffect(() => {
         void loadPublicSettings();
@@ -91,23 +95,14 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
         const baseUrl = searchParams.get("baseUrl") || searchParams.get("baseurl");
         const apiKey = searchParams.get("apiKey") || searchParams.get("apikey");
         if (!baseUrl && !apiKey) return;
-        if (!publicSettings) return;
         handledConfigParams.current = true;
         searchParams.delete("baseUrl");
         searchParams.delete("baseurl");
         searchParams.delete("apiKey");
         searchParams.delete("apikey");
         window.history.replaceState(null, "", `${window.location.pathname}${searchParams.size ? `?${searchParams}` : ""}${window.location.hash}`);
-        if (!publicSettings.modelChannel.allowCustomChannel) {
-            openConfigDialog(false);
-            message.error("后台未允许用户自定义渠道，请联系管理员进行配置");
-            return;
-        }
-        updateConfig("channelMode", "local");
-        if (baseUrl) updateConfig("baseUrl", baseUrl);
-        if (apiKey) updateConfig("apiKey", apiKey);
-        openConfigDialog(false);
-    }, [message, openConfigDialog, publicSettings, updateConfig]);
+        message.info("请在 API 设置里添加本地 API 平台");
+    }, [message]);
 
     return <>{children}</>;
 }

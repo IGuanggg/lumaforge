@@ -251,11 +251,11 @@ func LumaCloudUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 func LumaCloudDownload(w http.ResponseWriter, r *http.Request) {
-	if proxyLegacy(w, r) {
-		return
-	}
 	data, err := service.LumaCloudConfigDownload()
 	if err != nil {
+		if proxyLegacy(w, r) {
+			return
+		}
 		writeRawError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -459,11 +459,8 @@ func LumaUpdateAuto(w http.ResponseWriter, r *http.Request) {
 
 func LumaLocalDataHealth(w http.ResponseWriter, r *http.Request) {
 	writeRawJSON(w, map[string]any{
-		"ok": true,
-		"paths": map[string]any{
-			"data_dir":   service.LumaDataDir(),
-			"assets_dir": service.LumaAssetsDir(),
-		},
+		"ok":    true,
+		"paths": service.LumaAppPaths(),
 	})
 }
 
@@ -483,6 +480,40 @@ func LumaBackupNoop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeRawJSON(w, map[string]any{"ok": true, "message": "2.1.0 Go 主体保留备份接口；深度备份由 legacy API 或后续迁移器执行。"})
+}
+
+func LumaAppOpenPath(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Target string `json:"target"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&payload)
+	path, err := service.LumaAppPath(payload.Target)
+	if err != nil {
+		writeRawError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := openExternalPath(path); err != nil {
+		writeRawError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeRawJSON(w, map[string]any{"ok": true, "path": path})
+}
+
+func LumaAppSelectPath(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		Target string `json:"target"`
+		Path   string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeRawError(w, http.StatusBadRequest, fmt.Errorf("缺少目录参数"))
+		return
+	}
+	paths, err := service.LumaSaveAppPath(payload.Target, payload.Path)
+	if err != nil {
+		writeRawError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeRawJSON(w, map[string]any{"ok": true, "target": payload.Target, "path": paths[payload.Target], "paths": paths})
 }
 
 func LumaAppOpenURL(w http.ResponseWriter, r *http.Request) {
@@ -523,6 +554,19 @@ func openExternalURL(rawURL string) (string, error) {
 		return "", err
 	}
 	return safeURL, nil
+}
+
+func openExternalPath(path string) error {
+	var command *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		command = exec.Command("explorer.exe", path)
+	case "darwin":
+		command = exec.Command("open", path)
+	default:
+		command = exec.Command("xdg-open", path)
+	}
+	return command.Start()
 }
 
 func LumaAssetsHealth(w http.ResponseWriter, r *http.Request) {

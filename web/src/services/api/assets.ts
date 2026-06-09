@@ -50,7 +50,8 @@ export async function uploadAssetDataUrl(dataUrl: string, filename = "canvas-ima
 }
 
 function normalizeAssetLibraryResponse(data: Record<string, unknown>): AssetLibraryResponse {
-    const items = Array.isArray(data.items) ? data.items.map(normalizeAssetLibraryItem).filter(Boolean) : [];
+    const rawItems = firstArray(data.items, data.assets, data.data);
+    const items = rawItems.map(normalizeAssetLibraryItem).filter(Boolean);
     const tagSet = new Set<string>();
     for (const item of items) item.tags.forEach((tag) => tagSet.add(tag));
     const tags = Array.isArray(data.tags) ? data.tags.map(String).filter(Boolean) : Array.from(tagSet);
@@ -63,17 +64,17 @@ function normalizeAssetLibraryResponse(data: Record<string, unknown>): AssetLibr
 
 function normalizeAssetLibraryItem(raw: unknown): AssetLibraryItem {
     const item = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-    const url = firstString(item.url, item.local_url, item.source_url);
-    const coverUrl = firstString(item.coverUrl, item.cover_url, item.thumb_url, item.local_url, item.url);
+    const url = firstString(item.url, item.local_url, item.source_url, item.cloud_url);
+    const coverUrl = firstString(item.coverUrl, item.cover_url, item.thumb_url, item.local_url, item.url, item.cloud_url);
     const typeValue = firstString(item.type, item.kind).toLowerCase();
     const type: AssetLibraryItem["type"] = typeValue === "video" ? "video" : typeValue === "text" ? "text" : "image";
     return {
-        id: firstString(item.id) || `asset-${Math.random().toString(36).slice(2)}`,
+        id: firstString(item.id, item.asset_id, item.sha256) || `asset-${Math.random().toString(36).slice(2)}`,
         title: firstString(item.title, item.name) || "未命名素材",
         type,
         coverUrl,
         tags: normalizeTags(item.tags),
-        category: firstString(item.category, item.category_id) || "inbox",
+        category: firstString(item.category, item.category_id, item.source_type) || "素材库",
         description: firstString(item.description, item.prompt, item.model),
         content: firstString(item.content, item.prompt),
         url,
@@ -82,9 +83,18 @@ function normalizeAssetLibraryItem(raw: unknown): AssetLibraryItem {
     };
 }
 
+function firstArray(...values: unknown[]) {
+    for (const value of values) {
+        if (Array.isArray(value)) return value;
+        if (value && typeof value === "object" && Array.isArray((value as Record<string, unknown>).items)) return (value as Record<string, unknown>).items as unknown[];
+    }
+    return [];
+}
+
 function firstString(...values: unknown[]) {
     for (const value of values) {
         if (typeof value === "string" && value.trim()) return value.trim();
+        if (typeof value === "number" && Number.isFinite(value)) return String(value);
     }
     return "";
 }

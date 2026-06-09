@@ -76,6 +76,9 @@ func TestLumaConfigsCurrentDownloadsAndAppliesCloudProviders(t *testing.T) {
 						"image_models": []string{"gpt-image-2-vip"},
 						"chat_models":  []string{"gpt-5.5"},
 					}},
+					"api_keys": map[string]any{
+						"openai": "sk-cloud-openai",
+					},
 				},
 			})
 		default:
@@ -106,6 +109,10 @@ func TestLumaConfigsCurrentDownloadsAndAppliesCloudProviders(t *testing.T) {
 	}
 	if !containsString(providers[0].ImageModels, "nano-banana") {
 		t.Fatalf("provider defaults were not merged: %#v", providers[0].ImageModels)
+	}
+	keys := service.LumaLoadProviderKeys()
+	if keys["openai"] != "sk-cloud-openai" {
+		t.Fatalf("cloud api key was not restored: %#v", keys)
 	}
 }
 

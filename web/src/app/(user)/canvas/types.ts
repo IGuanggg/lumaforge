@@ -56,6 +56,15 @@ export type CanvasNodeMetadata = {
     mimeType?: string;
     bytes?: number;
     durationMs?: number;
+    splitFromNodeId?: string;
+    splitGrid?: {
+        columns: number;
+        rows: number;
+        index: number;
+        column: number;
+        row: number;
+        sourceNodeId?: string;
+    };
 };
 
 export type CanvasNodeData = {

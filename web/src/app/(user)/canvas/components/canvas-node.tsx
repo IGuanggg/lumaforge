@@ -41,6 +41,7 @@ type CanvasNodeProps = {
     onHoverEnd: (nodeId: string) => void;
     onConnectStart: (event: React.MouseEvent, nodeId: string, handleType: "source" | "target") => void;
     onResize: (nodeId: string, width: number, height: number, position?: Position) => void;
+    onTitleChange: (nodeId: string, title: string) => void;
     onContentChange: (nodeId: string, content: string) => void;
     onToggleBatch?: (nodeId: string) => void;
     onSetBatchPrimary?: (node: CanvasNodeData) => void;
@@ -96,6 +97,7 @@ export const CanvasNode = React.memo(function CanvasNode({
     onHoverEnd,
     onConnectStart,
     onResize,
+    onTitleChange,
     onContentChange,
     onToggleBatch,
     onSetBatchPrimary,
@@ -106,6 +108,8 @@ export const CanvasNode = React.memo(function CanvasNode({
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const [hovered, setHovered] = useState(false);
     const [isEditingContent, setIsEditingContent] = useState(false);
+    const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [titleDraft, setTitleDraft] = useState(data.title || "");
     const hasImageContent = data.type === CanvasNodeType.Image && Boolean(data.metadata?.content);
     const hasVideoContent = data.type === CanvasNodeType.Video && Boolean(data.metadata?.content);
     const hasAudioContent = data.type === CanvasNodeType.Audio && Boolean(data.metadata?.content);
@@ -113,7 +117,6 @@ export const CanvasNode = React.memo(function CanvasNode({
     const isBatchChild = data.type === CanvasNodeType.Image && Boolean(data.metadata?.batchRootId);
     const isActive = isConnectionTarget || isSelected || isFocusRelated;
     const imageBorderColor = isActive ? selectionBlue : isRelated && !isBatchChild ? theme.node.muted : "transparent";
-    const zoomBias = Math.min(1, Math.max(0, Math.abs(Math.log2(Math.max(scale || 1, 0.08))) / 1.6));
     const connectionClass = isConnectionTarget ? "canvas-node-connection-target" : isConnectionSource ? "canvas-node-connection-source" : isConnecting ? "canvas-node-connection-candidate" : "";
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const resizeRef = useRef({
@@ -149,6 +152,16 @@ export const CanvasNode = React.memo(function CanvasNode({
         if (!editRequestNonce || data.type !== CanvasNodeType.Text) return;
         setIsEditingContent(true);
     }, [data.type, editRequestNonce]);
+
+    useEffect(() => {
+        if (!isEditingTitle) setTitleDraft(data.title || "");
+    }, [data.title, isEditingTitle]);
+
+    const finishTitleEditing = useCallback(() => {
+        const nextTitle = titleDraft.trim();
+        if (nextTitle && nextTitle !== data.title) onTitleChange(data.id, nextTitle);
+        setIsEditingTitle(false);
+    }, [data.id, data.title, onTitleChange, titleDraft]);
 
     useEffect(() => {
         if (!isEditingContent) return;
@@ -248,9 +261,8 @@ export const CanvasNode = React.memo(function CanvasNode({
                 height: data.height,
                 transition: "box-shadow 200ms ease",
                 contain: "layout style",
-                "--canvas-node-zoom-bias": zoomBias,
-                "--canvas-node-media-padding": `${Math.round(zoomBias * 14)}px`,
-                "--canvas-node-input-scale": 1 + zoomBias * 0.18,
+                "--canvas-node-media-padding": "0px",
+                "--canvas-node-input-scale": 1,
             } as React.CSSProperties}
             onMouseEnter={() => {
                 setHovered(true);
@@ -262,6 +274,19 @@ export const CanvasNode = React.memo(function CanvasNode({
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
         >
+            <NodeTitleLabel
+                title={data.title}
+                titleDraft={titleDraft}
+                isEditing={isEditingTitle}
+                theme={theme}
+                onDraftChange={setTitleDraft}
+                onStartEditing={() => setIsEditingTitle(true)}
+                onFinishEditing={finishTitleEditing}
+                onCancelEditing={() => {
+                    setTitleDraft(data.title || "");
+                    setIsEditingTitle(false);
+                }}
+            />
             <div
                 className={`canvas-node-shell relative h-full w-full overflow-visible rounded-3xl border-2 ${connectionClass}`}
                 style={{
@@ -281,6 +306,42 @@ export const CanvasNode = React.memo(function CanvasNode({
                     setIsEditingContent(true);
                 }}
             >
+                <div
+                    className="hidden"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onDoubleClick={(event) => {
+                        event.stopPropagation();
+                        setIsEditingTitle(true);
+                    }}
+                >
+                    {isEditingTitle ? (
+                        <input
+                            autoFocus
+                            value={titleDraft}
+                            onChange={(event) => setTitleDraft(event.target.value)}
+                            onBlur={finishTitleEditing}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter") finishTitleEditing();
+                                if (event.key === "Escape") {
+                                    setTitleDraft(data.title || "");
+                                    setIsEditingTitle(false);
+                                }
+                            }}
+                            className="h-7 max-w-52 rounded-md border px-2 text-xs font-semibold outline-none"
+                            style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
+                        />
+                    ) : (
+                        <button
+                            type="button"
+                            className="max-w-52 truncate rounded-md border px-2 py-1 text-left text-xs font-semibold opacity-75 shadow-sm backdrop-blur transition hover:opacity-100"
+                            style={{ background: `${theme.toolbar.panel}d9`, borderColor: `${theme.toolbar.border}cc`, color: theme.node.text }}
+                            title="双击修改节点名称"
+                        >
+                            {data.title || "未命名节点"}
+                        </button>
+                    )}
+                </div>
                 <div
                     className={`relative flex h-full w-full items-center justify-center rounded-[inherit] ${isBatchRoot ? "overflow-visible" : "overflow-hidden"}`}
                     style={
@@ -333,6 +394,62 @@ export const CanvasNode = React.memo(function CanvasNode({
         </div>
     );
 });
+
+function NodeTitleLabel({
+    title,
+    titleDraft,
+    isEditing,
+    theme,
+    onDraftChange,
+    onStartEditing,
+    onFinishEditing,
+    onCancelEditing,
+}: {
+    title: string;
+    titleDraft: string;
+    isEditing: boolean;
+    theme: (typeof canvasThemes)[keyof typeof canvasThemes];
+    onDraftChange: (value: string) => void;
+    onStartEditing: () => void;
+    onFinishEditing: () => void;
+    onCancelEditing: () => void;
+}) {
+    return (
+        <div
+            className="absolute left-3 top-0 z-[80] max-w-[min(280px,calc(100%-24px))] -translate-y-[calc(100%+8px)]"
+            onMouseDown={(event) => event.stopPropagation()}
+            onPointerDown={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => {
+                event.stopPropagation();
+                onStartEditing();
+            }}
+        >
+            {isEditing ? (
+                <input
+                    autoFocus
+                    value={titleDraft}
+                    onChange={(event) => onDraftChange(event.target.value)}
+                    onBlur={onFinishEditing}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter") onFinishEditing();
+                        if (event.key === "Escape") onCancelEditing();
+                    }}
+                    className="h-7 max-w-[260px] rounded-md border px-2 text-xs font-semibold outline-none"
+                    style={{ background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
+                />
+            ) : (
+                <button
+                    type="button"
+                    className="block max-w-[260px] truncate rounded-md border px-2.5 py-1 text-left text-xs font-semibold opacity-85 shadow-sm backdrop-blur transition hover:opacity-100"
+                    style={{ background: `${theme.toolbar.panel}e8`, borderColor: `${theme.toolbar.border}cc`, color: theme.node.text }}
+                    title={title || "双击修改节点名称"}
+                >
+                    {title || "未命名节点"}
+                </button>
+            )}
+        </div>
+    );
+}
 
 function NodeContent(props: NodeContentRendererProps) {
     if (props.node.type === CanvasNodeType.Config && props.renderNodeContent) return props.renderNodeContent(props.node);
@@ -554,9 +671,10 @@ function ImageContent({
             {isBatchRoot ? (
                 <button
                     type="button"
-                    className="absolute right-2.5 top-2.5 z-30 flex h-8 items-center justify-center gap-1 rounded-full border px-2.5 text-xs font-semibold shadow-[0_6px_18px_rgba(15,23,42,.10)] backdrop-blur-md transition hover:scale-[1.02]"
+                    className="absolute right-2.5 top-2.5 z-30 flex h-8 items-center justify-center gap-1.5 rounded-full border px-2.5 text-xs font-semibold shadow-[0_6px_18px_rgba(15,23,42,.10)] backdrop-blur-md transition hover:scale-[1.02]"
                     style={{ background: `${theme.toolbar.panel}d9`, borderColor: `${theme.toolbar.border}cc`, color: theme.node.text }}
-                    aria-label={batchExpanded ? "图片组已展开" : "图片组已收起"}
+                    aria-label={batchExpanded ? "收起图片组" : "展开图片组"}
+                    title={batchExpanded ? "收起图片组，隐藏组内子图" : "展开图片组，显示组内子图"}
                     onClick={(event) => {
                         event.stopPropagation();
                         onToggleBatch?.();
@@ -565,6 +683,7 @@ function ImageContent({
                     onPointerDown={(event) => event.stopPropagation()}
                 >
                     <span className="leading-none text-[#2f80ff]">{batchCount}</span>
+                    <span className="leading-none">{batchExpanded ? "收起组" : "展开组"}</span>
                     <ChevronRight className={`size-3.5 opacity-55 transition-transform ${batchExpanded ? "rotate-90" : ""}`} />
                 </button>
             ) : null}

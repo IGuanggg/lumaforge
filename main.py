@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.1.0")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260605-v210-source-refactor1")
+APP_VERSION = os.getenv("APP_VERSION", "2.1.1")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260608-v211-account-assets1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -732,7 +732,7 @@ def normalize_provider(item):
         raise HTTPException(status_code=400, detail=f"API 平台 ID 不合法：{provider_id or '(empty)'}")
     name = re.sub(r"\s+", " ", str(item.get("name") or provider_id).strip())[:60] or provider_id
     base_url = str(item.get("base_url") or "").strip().rstrip("/")
-    if "dashscope.aliyuncs.com" in base_url.lower() and (not name or name == provider_id or name in {"겟조"} or "�" in name):
+    if "dashscope.aliyuncs.com" in base_url.lower() and (not name or name == provider_id or "\ufffd" in name):
         name = "百炼"
     if base_url and not re.match(r"^https?://", base_url):
         raise HTTPException(status_code=400, detail=f"{name} 的 Base URL 需要以 http:// 或 https:// 开头")

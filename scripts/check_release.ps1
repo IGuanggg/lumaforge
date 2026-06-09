@@ -1,6 +1,6 @@
 ﻿param(
-    [string]$Version = "2.1.0",
-    [string]$BuildId = "20260605-v210-source-refactor1",
+    [string]$Version = "2.1.1",
+    [string]$BuildId = "20260608-v211-account-assets1",
     [string]$ToolRoot = $(Join-Path $env:LOCALAPPDATA "LumaForgeDevTools")
 )
 

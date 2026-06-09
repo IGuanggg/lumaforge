@@ -93,9 +93,8 @@ type ConfigStore = {
 };
 
 function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
-    const hasLocalConfig = Boolean(config.baseUrl.trim() && config.apiKey.trim());
-    const channelMode = modelChannel?.allowCustomChannel && config.channelMode === "local" && hasLocalConfig ? "local" : "remote";
-    if (channelMode === "local" || !modelChannel) return { ...config, channelMode };
+    const channelMode = "remote";
+    if (!modelChannel) return { ...config, channelMode };
     const providerModels = normalizeProviderModelOptions(modelChannel.providerModels);
     const imageProviderModels = filterProviderModelsByCapability(providerModels, "image");
     const videoProviderModels = filterProviderModelsByCapability(providerModels, "video");
@@ -258,7 +257,7 @@ function providerModelListKey(capability: ModelCapability) {
 }
 
 function isAiConfigReady(config: AiConfig, model: string) {
-    return Boolean(model.trim()) && (config.channelMode === "remote" || Boolean(config.baseUrl.trim() && config.apiKey.trim()));
+    return Boolean(model.trim());
 }
 
 export const useConfigStore = create<ConfigStore>()(
@@ -304,7 +303,7 @@ export const useConfigStore = create<ConfigStore>()(
                     ...current,
                     config: {
                         ...config,
-                        channelMode: config.channelMode || "remote",
+                        channelMode: "remote",
                         imageModel: config.imageModel || config.model,
                         videoModel: config.videoModel || "grok-imagine-video",
                         textModel: config.textModel || config.model,

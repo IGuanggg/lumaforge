@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { createPortal } from "react-dom";
-import { Settings2 } from "lucide-react";
 import { Button } from "antd";
+import { Settings2 } from "lucide-react";
 
 import { ImageSettingsPanel, imageQualityLabel, imageSizeLabel } from "@/components/image-settings-panel";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -19,9 +19,10 @@ type CanvasImageSettingsPopoverProps = {
     getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement;
     placement?: "topLeft" | "top" | "topRight" | "bottomLeft" | "bottom" | "bottomRight";
     autoAdjustOverflow?: boolean;
+    compactSummary?: boolean;
 };
 
-export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChange, buttonClassName, placement = "topLeft" }: CanvasImageSettingsPopoverProps) {
+export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChange, buttonClassName, placement = "topLeft", compactSummary = false }: CanvasImageSettingsPopoverProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const buttonRef = useRef<HTMLSpanElement>(null);
     const panelRef = useRef<HTMLDivElement>(null);
@@ -30,6 +31,8 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
     const quality = config.quality || "auto";
     const count = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const activeSize = config.size || "auto";
+    const summary = `${imageQualityLabel(quality)} · ${imageSizeLabel(activeSize)} · ${count} 张`;
+
     const updateOpen = (nextOpen: boolean) => {
         setOpen(nextOpen);
         onOpenChange?.(nextOpen);
@@ -64,13 +67,31 @@ export function CanvasImageSettingsPopover({ config, onConfigChange, onOpenChang
         <>
             <span ref={buttonRef} className="inline-flex min-w-0">
                 <Button size="small" type="text" className={buttonClassName || "!h-8 !max-w-[180px] !justify-start !rounded-full !px-2.5"} style={{ background: theme.node.fill, color: theme.node.text }} icon={<Settings2 className="size-3.5" />} onClick={() => updateOpen(!open)}>
-                    <span className="truncate">
-                        {imageQualityLabel(quality)} · {imageSizeLabel(activeSize)} · {count} 张
+                    {compactSummary ? (
+                        <span className="grid min-w-0 flex-1 grid-cols-3 items-center gap-1 text-[10px] leading-none">
+                            <SummarySegment label="质量" value={imageQualityLabel(quality)} />
+                            <SummarySegment label="比例" value={imageSizeLabel(activeSize)} />
+                            <SummarySegment label="张数" value={`${count} 张`} />
+                        </span>
+                    ) : (
+                        <span className="truncate">{summary}</span>
+                    )}
+                    <span className="hidden" aria-hidden="true">
+                        {summary}
                     </span>
                 </Button>
             </span>
             {panel}
         </>
+    );
+}
+
+function SummarySegment({ label, value }: { label: string; value: string }) {
+    return (
+        <span className="min-w-0 rounded-md bg-black/[0.04] px-1.5 py-1 text-center dark:bg-white/[0.06]">
+            <span className="block truncate text-[9px] opacity-55">{label}</span>
+            <span className="block truncate font-semibold">{value}</span>
+        </span>
     );
 }
 

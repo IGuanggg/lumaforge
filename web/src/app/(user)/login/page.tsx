@@ -15,13 +15,10 @@ type LoginFormValues = {
     confirmPassword?: string;
 };
 
-// 仅放行站内相对路径，拦截开放重定向。浏览器会忽略 URL 中的 Tab/换行/回车，并把
-// //host 或 /\host 解析为协议相对的跨站地址，因此先剥离控制字符，再拒绝 // 与 /\ 前缀。
+// 只允许站内相对路径，避免开放重定向。
 function safeRedirect(value: string | null): string {
     const cleaned = (value ?? "").replace(/[\t\n\r]/g, "");
-    if (!cleaned.startsWith("/") || cleaned.startsWith("//") || cleaned.startsWith("/\\")) {
-        return "/";
-    }
+    if (!cleaned.startsWith("/") || cleaned.startsWith("//") || cleaned.startsWith("/\\")) return "/";
     return cleaned;
 }
 
@@ -40,6 +37,8 @@ function LoginContent() {
     const login = useUserStore((state) => state.login);
     const register = useUserStore((state) => state.register);
     const setSession = useUserStore((state) => state.setSession);
+    const clearSession = useUserStore((state) => state.clearSession);
+    const storedToken = useUserStore((state) => state.token);
     const isLoading = useUserStore((state) => state.isLoading);
     const allowRegister = useConfigStore((state) => state.publicSettings?.auth?.allowRegister !== false);
     const [mode, setMode] = useState<"login" | "register">("login");
@@ -59,6 +58,24 @@ function LoginContent() {
     }, [message, redirect, router, searchParams, setSession]);
 
     useEffect(() => {
+        if (!storedToken) return;
+        let cancelled = false;
+        void fetchCurrentUser(storedToken)
+            .then((user) => {
+                if (cancelled) return;
+                setSession(storedToken, user);
+                router.replace(user.role === "admin" ? redirect : "/");
+                router.refresh();
+            })
+            .catch(() => {
+                if (!cancelled) clearSession();
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [clearSession, redirect, router, setSession, storedToken]);
+
+    useEffect(() => {
         if (!allowRegister && mode === "register") setMode("login");
     }, [allowRegister, mode]);
 
@@ -75,9 +92,8 @@ function LoginContent() {
             const action = mode === "register" ? register : login;
             const user = await action({ username: values.username, password: values.password });
             message.success(mode === "register" ? "注册成功" : "登录成功");
-            router.replace(redirect);
+            router.replace(user.role === "admin" ? redirect : "/");
             router.refresh();
-            if (user.role !== "admin") router.replace("/");
         } catch (error) {
             message.error(error instanceof Error ? error.message : "登录失败");
         }

@@ -2,7 +2,7 @@
 
 import { AlertCircle, CheckCircle2, CircleDashed, Copy, DatabaseZap, ExternalLink, EyeOff, KeyRound, LoaderCircle, Plus, RefreshCcw, Save, Settings, ShieldCheck, SlidersHorizontal, Trash2, UserCog, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, App, Button, Empty, Input, Popconfirm, Select, Spin, Switch, Tag, Tooltip, Typography } from "antd";
 
 import {
@@ -18,13 +18,14 @@ import {
     type ProviderKeyDiagnostics,
     type ProviderModelsResponse,
 } from "@/services/api/providers";
+import { downloadCloudConfig, fetchCloudStatus } from "@/services/api/cloud";
 import { cn } from "@/lib/utils";
 
 type ProviderDraft = LumaProvider & {
     draft_new?: boolean;
 };
 
-type ActionKey = "save" | "refresh" | "test" | "probe" | "fetch" | "clear-key" | "diagnostics" | "";
+type ActionKey = "save" | "refresh" | "test" | "probe" | "fetch" | "clear-key" | "diagnostics" | "recover" | "";
 
 const PROVIDER_ID_RE = /^[a-z0-9][a-z0-9_-]{1,48}$/;
 const MODEL_SECTIONS = [
@@ -40,6 +41,7 @@ export default function ApiSettingsPage() {
     const [diagnostics, setDiagnostics] = useState<ProviderKeyDiagnostics | null>(null);
     const [checkResult, setCheckResult] = useState<ProviderModelsResponse | null>(null);
     const [action, setAction] = useState<ActionKey>("refresh");
+    const autoRecoverRef = useRef(false);
 
     const selectedIndex = useMemo(() => providers.findIndex((provider) => provider.id === selectedId), [providers, selectedId]);
     const selected = selectedIndex >= 0 ? providers[selectedIndex] : providers[0];
@@ -54,6 +56,37 @@ export default function ApiSettingsPage() {
         return data;
     }, []);
 
+    const recoverCloudKeys = useCallback(
+        async (silent = false) => {
+            setAction("recover");
+            try {
+                const status = await fetchCloudStatus(true);
+                if (!status.logged_in) {
+                    if (!silent) message.warning("请先登录云端账户");
+                    return false;
+                }
+                await downloadCloudConfig();
+                const data = await fetchProviders();
+                const next = data.map((provider) => ({ ...provider, draft_new: false }));
+                setProviders(next);
+                setSelectedId((current) => pickSelectedId(next, current));
+                const nextDiagnostics = await refreshDiagnostics();
+                broadcastProvidersChanged();
+                if (!silent) {
+                    const count = nextDiagnostics.stored_key_count || 0;
+                    message.success(count ? `已从云端恢复 ${count} 个 API Key` : "已同步云端配置");
+                }
+                return true;
+            } catch (error) {
+                if (!silent) message.error(error instanceof Error ? error.message : "云端配置恢复失败");
+                return false;
+            } finally {
+                setAction("");
+            }
+        },
+        [message, refreshDiagnostics],
+    );
+
     const loadProviders = useCallback(async () => {
         setAction("refresh");
         try {
@@ -61,14 +94,18 @@ export default function ApiSettingsPage() {
             const next = data.map((provider) => ({ ...provider, draft_new: false }));
             setProviders(next);
             setSelectedId((current) => pickSelectedId(next, current));
-            await refreshDiagnostics();
+            const keyDiagnostics = await refreshDiagnostics();
             setCheckResult(null);
+            if (!autoRecoverRef.current && keyDiagnostics.recoverable_from_cloud && !keyDiagnostics.stored_key_count) {
+                autoRecoverRef.current = true;
+                void recoverCloudKeys(true);
+            }
         } catch (error) {
             message.error(error instanceof Error ? error.message : "API 平台读取失败");
         } finally {
             setAction("");
         }
-    }, [message, refreshDiagnostics]);
+    }, [message, recoverCloudKeys, refreshDiagnostics]);
 
     useEffect(() => {
         void loadProviders();
@@ -316,6 +353,21 @@ export default function ApiSettingsPage() {
                 </aside>
 
                 <section className="thin-scrollbar min-h-0 overflow-y-auto rounded-lg border border-stone-200 bg-card shadow-sm dark:border-stone-800">
+                    {diagnostics?.recoverable_from_cloud && !diagnostics.stored_key_count ? (
+                        <div className="m-4 mb-0 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950 shadow-sm dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-100">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                    <div className="font-semibold">检测到云端有可恢复的 API Key</div>
+                                    <div className="mt-0.5 text-xs opacity-80">
+                                        本地当前没有保存 Key，可从云端配置恢复 {diagnostics.recoverable_key_count || 0} 个 Key。恢复过程不会显示明文，也不会清空本地已有 Key。
+                                    </div>
+                                </div>
+                                <Button size="small" type="primary" icon={<RefreshCcw className="size-4" />} loading={action === "recover"} onClick={() => void recoverCloudKeys(false)}>
+                                    从云端恢复 API Key
+                                </Button>
+                            </div>
+                        </div>
+                    ) : null}
                     {selected ? (
                         <div className="mx-auto grid max-w-6xl gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_310px]">
                             <div className="space-y-4">
@@ -456,7 +508,7 @@ export default function ApiSettingsPage() {
                                         <UserCog className="size-4" />
                                         用户偏好
                                     </div>
-                                    默认走后端平台转发；本地直连保留为兼容模式，不会覆盖多平台 providers。
+                                    默认走本地 API 平台；内置云端渠道单独配置，当前不会覆盖多平台 providers。
                                 </div>
                             </aside>
                         </div>
@@ -476,7 +528,7 @@ function PreferenceSummary({ enabledCount, savedKeyCount, defaultImagePreview, r
         <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
             <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-medium text-stone-600 dark:border-stone-800 dark:bg-stone-950 dark:text-stone-300">
                 <Settings className="size-4 text-stone-800 dark:text-stone-100" />
-                <span>后端平台转发</span>
+                <span>本地 API 平台</span>
             </div>
             <div className="flex items-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-medium text-stone-600 dark:border-stone-800 dark:bg-stone-950 dark:text-stone-300">
                 <ShieldCheck className="size-4 text-stone-800 dark:text-stone-100" />

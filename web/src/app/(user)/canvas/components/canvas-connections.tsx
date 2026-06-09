@@ -73,12 +73,12 @@ export function ConnectionPath({
             />
             <g className="canvas-connection-dots" style={{ pointerEvents: "none" }}>
                 <circle className="canvas-connection-dot" r={active ? 3.8 : 3}>
-                    <animateMotion dur={active ? "1.35s" : "1.65s"} begin="0s" repeatCount="indefinite" rotate="auto">
+                    <animateMotion dur={active ? "2.35s" : "3.05s"} begin="0s" repeatCount="indefinite" rotate="auto">
                         <mpath href={`#${motionPathId}`} />
                     </animateMotion>
                 </circle>
                 <circle className="canvas-connection-dot canvas-connection-dot-hot" r={active ? 2.4 : 1.9}>
-                    <animateMotion dur={active ? "1.35s" : "1.65s"} begin="-.48s" repeatCount="indefinite" rotate="auto">
+                    <animateMotion dur={active ? "2.35s" : "3.05s"} begin="-1.05s" repeatCount="indefinite" rotate="auto">
                         <mpath href={`#${motionPathId}`} />
                     </animateMotion>
                 </circle>

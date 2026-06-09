@@ -34,6 +34,32 @@ export async function cropDataUrl(dataUrl: string, crop?: ImageCropRect) {
     return drawCrop(image, sx, sy, size, size);
 }
 
+export async function splitGridDataUrl(dataUrl: string, columns = 3, rows = columns) {
+    const image = await loadImage(dataUrl);
+    const safeColumns = Math.max(1, Math.min(6, Math.floor(columns)));
+    const safeRows = Math.max(1, Math.min(6, Math.floor(rows)));
+    const pieces: Array<{ dataUrl: string; column: number; row: number; index: number; width: number; height: number }> = [];
+    for (let row = 0; row < safeRows; row += 1) {
+        for (let column = 0; column < safeColumns; column += 1) {
+            const sx = Math.floor((image.width * column) / safeColumns);
+            const sy = Math.floor((image.height * row) / safeRows);
+            const nextX = Math.floor((image.width * (column + 1)) / safeColumns);
+            const nextY = Math.floor((image.height * (row + 1)) / safeRows);
+            const width = Math.max(1, nextX - sx);
+            const height = Math.max(1, nextY - sy);
+            pieces.push({
+                dataUrl: drawCrop(image, sx, sy, width, height),
+                column,
+                row,
+                index: pieces.length,
+                width,
+                height,
+            });
+        }
+    }
+    return pieces;
+}
+
 export async function transformAngleDataUrl(dataUrl: string, params: ImageAngleTransform) {
     const image = await loadImage(dataUrl);
     const canvas = document.createElement("canvas");

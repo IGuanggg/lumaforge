@@ -37,7 +37,6 @@ export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, on
     const hasAnyInput = Boolean(inputSummary.textCount || inputSummary.imageCount || inputSummary.videoCount || inputSummary.audioCount);
     const hasComposerContent = Boolean((node.metadata?.composerContent ?? node.metadata?.prompt ?? "").trim());
     const canGenerate = hasComposerContent || (mode === "audio" ? inputSummary.textCount > 0 : hasAnyInput);
-    const zoomBias = Math.min(1, Math.max(0, Math.abs(Math.log2(Math.max(scale || 1, 0.08))) / 1.6));
 
     return (
         <div
@@ -45,9 +44,8 @@ export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, on
             style={
                 {
                     color: theme.node.text,
-                    "--canvas-config-zoom-bias": zoomBias,
-                    "--canvas-config-panel-gap": `${0.35 + zoomBias * 0.2}rem`,
-                    "--canvas-config-control-scale": 1 + zoomBias * 0.04,
+                    "--canvas-config-panel-gap": "0.35rem",
+                    "--canvas-config-control-scale": 1,
                 } as CSSProperties
             }
             onWheel={(event) => event.stopPropagation()}
@@ -113,12 +111,12 @@ export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, on
                 </button>
             </div>
 
-            <div className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "image" || mode === "video" || mode === "audio" ? "grid-cols-[minmax(0,1fr)_148px]" : "grid-cols-1"}`} onMouseDown={(event) => event.stopPropagation()}>
+            <div className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "image" || mode === "video" || mode === "audio" ? "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(176px,210px)]" : "grid-cols-1"}`} onMouseDown={(event) => event.stopPropagation()}>
                 <ModelPicker className="canvas-compact-control h-10" config={config} value={config.model} onChange={(model) => onConfigChange(node.id, { model })} capability={mode} onMissingConfig={() => openConfigDialog(true)} fullWidth />
                 {mode === "video" ? (
                     <CanvasVideoSettingsPopover config={config} placement="topRight" buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, videoConfigPatch(key, value))} />
                 ) : mode === "image" ? (
-                    <CanvasImageSettingsPopover config={config} placement="topRight" autoAdjustOverflow={false} buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })} />
+                    <CanvasImageSettingsPopover config={config} placement="topRight" autoAdjustOverflow={false} buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" compactSummary onConfigChange={(key, value) => onConfigChange(node.id, key === "count" ? { count: Number(value) || 1 } : { [key]: value })} />
                 ) : mode === "audio" ? (
                     <CanvasAudioSettingsPopover config={config} placement="topRight" buttonClassName="canvas-compact-control !h-10 !w-full !justify-start !rounded-lg !px-2" onConfigChange={(key, value) => onConfigChange(node.id, audioConfigPatch(key, value))} />
                 ) : null}

@@ -439,7 +439,7 @@ export default function AdminSettingsPage() {
                                         </Form.Item>
                                     </Col>
                                     <Col span={24}>
-                                        <Form.Item name={["public", "modelChannel", "allowCustomChannel"]} label="是否允许用户自定义渠道" extra="开启后，前端可提供走后端渠道和用户自定义 baseUrl 直连两种模式" valuePropName="checked">
+                                        <Form.Item name={["public", "modelChannel", "allowCustomChannel"]} label="是否显示云端/本地 API 平台切换" extra="开启后，配置弹窗可区分内置云端渠道和本地 API 平台" valuePropName="checked">
                                             <Switch />
                                         </Form.Item>
                                     </Col>

@@ -1,12 +1,12 @@
 "use client";
 
 import { App, Button, Form, Input, Modal, Segmented, Select } from "antd";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ModelPicker } from "@/components/model-picker";
-import { fetchImageModels } from "@/services/api/image";
+import { fetchProviders, type LumaProvider } from "@/services/api/providers";
 import { audioFormatOptions, audioVoiceOptions, normalizeAudioSpeedValue } from "@/lib/audio-generation";
-import { filterModelsByCapability, useConfigStore, useEffectiveConfig, type AiConfig, type ModelCapability } from "@/stores/use-config-store";
+import { useConfigStore, useEffectiveConfig, type ModelCapability } from "@/stores/use-config-store";
 
 type ModelGroup = {
     capability: ModelCapability;
@@ -15,6 +15,8 @@ type ModelGroup = {
     defaultLabel: string;
     optionsLabel: string;
 };
+
+type ChannelView = "cloud" | "local-api";
 
 const modelGroups: ModelGroup[] = [
     { capability: "image", modelKey: "imageModel", modelsKey: "imageModels", defaultLabel: "默认生图模型", optionsLabel: "生图模型可选项" },
@@ -25,7 +27,9 @@ const modelGroups: ModelGroup[] = [
 
 export function AppConfigModal() {
     const { message } = App.useApp();
-    const [loadingModels, setLoadingModels] = useState(false);
+    const [providers, setProviders] = useState<LumaProvider[]>([]);
+    const [loadingProviders, setLoadingProviders] = useState(false);
+    const [channelView, setChannelView] = useState<ChannelView>("local-api");
     const config = useConfigStore((state) => state.config);
     const updateConfig = useConfigStore((state) => state.updateConfig);
     const isConfigOpen = useConfigStore((state) => state.isConfigOpen);
@@ -36,59 +40,42 @@ export function AppConfigModal() {
     const effectiveConfig = useEffectiveConfig();
     const modelChannel = publicSettings?.modelChannel;
     const allowCustomChannel = modelChannel?.allowCustomChannel === true;
-    const effectiveMode = allowCustomChannel ? config.channelMode : "remote";
-    const modelConfig = effectiveMode === "remote" ? effectiveConfig : config;
-    const modelOptions = config.models.map((model) => ({ label: model, value: model }));
+    const modelConfig = effectiveConfig;
+    const enabledProviders = providers.filter((provider) => provider.enabled);
+    const primaryProvider = providers.find((provider) => provider.primary) || enabledProviders[0];
+    const providerSummary = useMemo(() => summarizeProviders(providers), [providers]);
+
+    useEffect(() => {
+        if (!isConfigOpen) return;
+        setChannelView("local-api");
+        if (config.channelMode !== "remote") updateConfig("channelMode", "remote");
+        setLoadingProviders(true);
+        void fetchProviders()
+            .then(setProviders)
+            .catch((error) => {
+                message.warning(error instanceof Error ? error.message : "API 平台读取失败");
+            })
+            .finally(() => setLoadingProviders(false));
+    }, [config.channelMode, isConfigOpen, message, updateConfig]);
 
     if (!isConfigOpen) return null;
 
     const finishConfig = () => {
         setConfigDialogOpen(false);
-        if (effectiveMode === "local" && (!config.baseUrl.trim() || !config.apiKey.trim())) return;
+        if (channelView === "cloud") {
+            message.info("内置云端渠道暂未配置，已保留当前本地配置");
+            clearPromptContinue();
+            return;
+        }
         if (!modelConfig.imageModel.trim() || !modelConfig.videoModel.trim() || !modelConfig.textModel.trim()) return;
         if (!allowCustomChannel && config.channelMode !== "remote") updateConfig("channelMode", "remote");
         message.success(shouldPromptContinue ? "配置已保存，请继续刚才的请求" : "配置已保存");
         clearPromptContinue();
     };
 
-    const refreshModels = async () => {
-        if (effectiveMode === "remote") return;
-        if (!config.baseUrl.trim() || !config.apiKey.trim()) {
-            message.error("请先填写 Base URL 和 API Key");
-            return;
-        }
-        setLoadingModels(true);
-        try {
-            const models = await fetchImageModels(config);
-            const imageModels = filterModelsByCapability(models, "image");
-            const videoModels = filterModelsByCapability(models, "video");
-            const textModels = filterModelsByCapability(models, "text");
-            const audioModels = filterModelsByCapability(models, "audio");
-            const nextImageModels = resolveNextCapabilityModels(config.imageModels, imageModels, models);
-            const nextVideoModels = resolveNextCapabilityModels(config.videoModels, videoModels, models);
-            const nextTextModels = resolveNextCapabilityModels(config.textModels, textModels, models);
-            const nextAudioModels = resolveNextCapabilityModels(config.audioModels, audioModels, models);
-            updateConfig("models", models);
-            updateConfig("imageModels", nextImageModels);
-            updateConfig("videoModels", nextVideoModels);
-            updateConfig("textModels", nextTextModels);
-            updateConfig("audioModels", nextAudioModels);
-            if (nextImageModels.length && !nextImageModels.includes(config.imageModel)) updateConfig("imageModel", nextImageModels[0]);
-            if (nextVideoModels.length && !nextVideoModels.includes(config.videoModel)) updateConfig("videoModel", nextVideoModels[0]);
-            if (nextTextModels.length && !nextTextModels.includes(config.textModel)) updateConfig("textModel", nextTextModels[0]);
-            if (nextAudioModels.length && !nextAudioModels.includes(config.audioModel)) updateConfig("audioModel", nextAudioModels[0]);
-            message.success("模型列表已更新");
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "读取模型失败");
-        } finally {
-            setLoadingModels(false);
-        }
-    };
-
-    const updateCapabilityModels = (group: ModelGroup, models: string[]) => {
-        const next = uniqueModels(models);
-        updateConfig(group.modelsKey, next);
-        if (!next.includes(config[group.modelKey])) updateConfig(group.modelKey, next[0] || "");
+    const updateChannelView = (value: ChannelView) => {
+        setChannelView(value);
+        if (value === "local-api") updateConfig("channelMode", "remote");
     };
 
     return (
@@ -117,108 +104,109 @@ export function AppConfigModal() {
                             <Segmented
                                 block
                                 size="middle"
-                                value={effectiveMode}
-                                onChange={(value) => updateConfig("channelMode", value as AiConfig["channelMode"])}
+                                value={channelView}
+                                onChange={(value) => updateChannelView(value as ChannelView)}
                                 options={[
-                                    { label: "本地直连", value: "local" },
-                                    { label: "云端渠道", value: "remote" },
+                                    { label: "云端", value: "cloud" },
+                                    { label: "本地 API 平台", value: "local-api" },
                                 ]}
                             />
                         </Form.Item>
                     ) : null}
-                    {effectiveMode === "local" ? (
-                        <>
-                            <div className="grid gap-4 md:grid-cols-2">
-                                <Form.Item label="Base URL" className="mb-4">
-                                    <Input value={config.baseUrl} onChange={(event) => updateConfig("baseUrl", event.target.value)} />
-                                </Form.Item>
-                                <Form.Item label="API Key" className="mb-4">
-                                    <Input.Password value={config.apiKey} onChange={(event) => updateConfig("apiKey", event.target.value)} />
-                                </Form.Item>
-                            </div>
-                            <div className="mb-5 flex items-center justify-between gap-3 rounded-lg border border-stone-200 px-3 py-2 dark:border-stone-800">
-                                <div className="min-w-0">
-                                    <div className="text-sm font-medium">模型列表</div>
-                                    <div className="mt-1 text-xs text-stone-500">当前已保存 {config.models.length} 个模型</div>
+                    {channelView === "cloud" ? (
+                        <section className="mb-5 rounded-lg border border-dashed border-stone-300 bg-transparent p-4 dark:border-stone-700">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div>
+                                    <div className="text-sm font-semibold text-stone-950 dark:text-stone-100">内置云端渠道</div>
+                                    <div className="mt-1 text-xs text-stone-500">这是 LumaForge 自带的云端渠道，和本地 API 平台分开管理。</div>
                                 </div>
-                                <Button size="small" loading={loadingModels} onClick={() => void refreshModels()}>
-                                    拉取模型列表
-                                </Button>
+                                <span className="rounded bg-stone-500/15 px-2 py-1 text-xs font-semibold text-stone-500">未配置</span>
                             </div>
-                        </>
-                    ) : (
-                        <div className="mb-5 rounded-lg border border-stone-200 p-3 text-sm text-stone-500 dark:border-stone-800">
-                            <div className="font-medium text-stone-900 dark:text-stone-100">云端渠道</div>
-                            <div className="mt-1">由系统后台渠道转发请求，当前可用 {modelChannel?.availableModels.length || 0} 个模型。</div>
-                        </div>
-                    )}
-                    {effectiveMode === "local" ? (
-                        <section className="mb-5 rounded-lg border border-stone-200 p-3 dark:border-stone-800">
-                            <div className="mb-3">
-                                <div className="text-sm font-semibold">本地模型可选项</div>
-                                <div className="mt-1 text-xs text-stone-500">从已拉取模型中选择哪些模型可进入各类下拉。</div>
-                            </div>
-                            <div className="grid gap-4 md:grid-cols-2">
-                                {modelGroups.map((group) => (
-                                    <Form.Item key={group.modelsKey} label={group.optionsLabel} className="mb-0">
-                                        <Select
-                                            mode="multiple"
-                                            showSearch
-                                            allowClear
-                                            maxTagCount="responsive"
-                                            placeholder={config.models.length ? `请选择${group.optionsLabel}` : "请先拉取模型列表"}
-                                            value={config[group.modelsKey]}
-                                            options={modelOptions}
-                                            onChange={(models) => updateCapabilityModels(group, models)}
-                                        />
-                                    </Form.Item>
-                                ))}
+                            <div className="mt-3 rounded-md border border-stone-200 bg-stone-50 px-3 py-2 text-xs leading-6 text-stone-500 dark:border-stone-800 dark:bg-stone-950">
+                                云端渠道现在不显示任何本地平台，也不会修改你已经保存的本地 API 设置。等内置云端配置完成后，这里只展示云端自己的状态和模型。
                             </div>
                         </section>
                     ) : null}
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        {modelGroups.map((group) => (
-                            <Form.Item key={group.modelKey} label={group.defaultLabel} className="mb-4">
-                                <ModelPicker config={modelConfig} value={modelConfig[group.modelKey]} onChange={(model) => updateConfig(group.modelKey, model)} capability={group.capability} fullWidth />
+                    {channelView === "local-api" ? (
+                        <section className="mb-5 rounded-lg border border-stone-200 bg-stone-50/70 p-4 dark:border-stone-800 dark:bg-stone-900/60">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div>
+                                    <div className="text-sm font-semibold text-stone-950 dark:text-stone-100">本地 API 平台</div>
+                                    <div className="mt-1 text-xs text-stone-500">
+                                        这些是你在 API 设置里自己添加的平台。已添加 {providers.length} 个，启用 {enabledProviders.length} 个，已保存 Key {providerSummary.keyCount} 个。默认请求按“平台 / 模型”精确路由。
+                                    </div>
+                                </div>
+                                <Button size="small" href="/api-settings">
+                                    打开 API 设置
+                                </Button>
+                            </div>
+                            {loadingProviders ? (
+                                <div className="mt-3 rounded-md border border-stone-200 px-3 py-2 text-xs text-stone-500 dark:border-stone-800">正在读取 API 平台...</div>
+                            ) : providers.length ? (
+                                <div className="mt-4 grid gap-2 md:grid-cols-2">
+                                    {providers.map((provider) => (
+                                        <ProviderSummaryCard key={provider.id} provider={provider} />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="mt-3 rounded-md border border-stone-200 px-3 py-2 text-xs text-stone-500 dark:border-stone-800">还没有 API 平台，请先到 API 设置添加。</div>
+                            )}
+                            {primaryProvider ? (
+                                <div className="mt-3 text-xs text-stone-500">
+                                    当前主平台：<span className="font-semibold text-stone-800 dark:text-stone-200">{primaryProvider.name}</span>
+                                    {primaryProvider.base_url ? <span className="ml-2 break-all">{primaryProvider.base_url}</span> : null}
+                                </div>
+                            ) : null}
+                        </section>
+                    ) : null}
+                    {channelView === "local-api" ? (
+                        <div className="mb-5 rounded-lg border border-stone-200 p-3 text-sm text-stone-500 dark:border-stone-800">
+                            <div className="font-medium text-stone-900 dark:text-stone-100">当前使用：本地 API 平台</div>
+                            <div className="mt-1">由本地 LumaForge 后端按你已启用的平台转发请求，当前可用 {modelChannel?.availableModels.length || 0} 个模型。</div>
+                        </div>
+                    ) : null}
+                    {channelView !== "cloud" ? (
+                        <>
+                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                                {modelGroups.map((group) => (
+                                    <Form.Item key={group.modelKey} label={group.defaultLabel} className="mb-4">
+                                        <ModelPicker config={modelConfig} value={modelConfig[group.modelKey]} onChange={(model) => updateConfig(group.modelKey, model)} capability={group.capability} fullWidth />
+                                    </Form.Item>
+                                ))}
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-4">
+                                <Form.Item label="画布默认生图张数" extra="新建画布生图和配置节点默认使用，单个节点仍可单独覆盖。" className="mb-4">
+                                    <Input
+                                        type="number"
+                                        min={1}
+                                        max={15}
+                                        value={config.canvasImageCount}
+                                        onChange={(event) => updateConfig("canvasImageCount", event.target.value)}
+                                        onBlur={(event) => updateConfig("canvasImageCount", normalizeImageCount(event.target.value))}
+                                    />
+                                </Form.Item>
+                                <Form.Item label="默认音频声音" className="mb-4">
+                                    <Select value={config.audioVoice} options={audioVoiceOptions} onChange={(value) => updateConfig("audioVoice", value)} />
+                                </Form.Item>
+                                <Form.Item label="默认音频格式" className="mb-4">
+                                    <Select value={config.audioFormat} options={audioFormatOptions} onChange={(value) => updateConfig("audioFormat", value)} />
+                                </Form.Item>
+                                <Form.Item label="默认音频语速" className="mb-4">
+                                    <Input
+                                        type="number"
+                                        min={0.25}
+                                        max={4}
+                                        step={0.05}
+                                        value={config.audioSpeed}
+                                        onChange={(event) => updateConfig("audioSpeed", event.target.value)}
+                                        onBlur={(event) => updateConfig("audioSpeed", normalizeAudioSpeedValue(event.target.value))}
+                                    />
+                                </Form.Item>
+                            </div>
+                            <Form.Item label="默认音频指令" className="mb-4">
+                                <Input.TextArea rows={2} value={config.audioInstructions} placeholder="例如：自然、温暖、适合旁白。" onChange={(event) => updateConfig("audioInstructions", event.target.value)} />
                             </Form.Item>
-                        ))}
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-4">
-                        <Form.Item label="画布默认生图张数" extra="新建画布生图和配置节点默认使用，单个节点仍可单独覆盖。" className="mb-4">
-                            <Input
-                                type="number"
-                                min={1}
-                                max={15}
-                                value={config.canvasImageCount}
-                                onChange={(event) => updateConfig("canvasImageCount", event.target.value)}
-                                onBlur={(event) => updateConfig("canvasImageCount", normalizeImageCount(event.target.value))}
-                            />
-                        </Form.Item>
-                        <Form.Item label="默认音频声音" className="mb-4">
-                            <Select value={config.audioVoice} options={audioVoiceOptions} onChange={(value) => updateConfig("audioVoice", value)} />
-                        </Form.Item>
-                        <Form.Item label="默认音频格式" className="mb-4">
-                            <Select value={config.audioFormat} options={audioFormatOptions} onChange={(value) => updateConfig("audioFormat", value)} />
-                        </Form.Item>
-                        <Form.Item label="默认音频语速" className="mb-4">
-                            <Input
-                                type="number"
-                                min={0.25}
-                                max={4}
-                                step={0.05}
-                                value={config.audioSpeed}
-                                onChange={(event) => updateConfig("audioSpeed", event.target.value)}
-                                onBlur={(event) => updateConfig("audioSpeed", normalizeAudioSpeedValue(event.target.value))}
-                            />
-                        </Form.Item>
-                    </div>
-                    <Form.Item label="默认音频指令" className="mb-4">
-                        <Input.TextArea rows={2} value={config.audioInstructions} placeholder="例如：自然、温暖、适合旁白。" onChange={(event) => updateConfig("audioInstructions", event.target.value)} />
-                    </Form.Item>
-                    {effectiveMode === "local" ? (
-                        <Form.Item label="系统提示词" className="mb-0">
-                            <Input.TextArea rows={3} value={config.systemPrompt} placeholder="例如：你是一位擅长电影感写实摄影的视觉导演。" onChange={(event) => updateConfig("systemPrompt", event.target.value)} />
-                        </Form.Item>
+                        </>
                     ) : null}
                 </Form>
             </div>
@@ -230,12 +218,37 @@ function normalizeImageCount(value: string) {
     return String(Math.max(1, Math.min(15, Math.floor(Math.abs(Number(value)) || 3))));
 }
 
-function resolveNextCapabilityModels(current: string[], suggested: string[], allModels: string[]) {
-    const available = new Set(allModels);
-    const kept = uniqueModels(current).filter((model) => available.has(model));
-    return kept.length ? kept : suggested;
+function summarizeProviders(providers: LumaProvider[]) {
+    return providers.reduce(
+        (summary, provider) => ({
+            keyCount: summary.keyCount + (provider.has_key ? 1 : 0),
+            modelCount: summary.modelCount + provider.image_models.length + provider.chat_models.length + provider.video_models.length,
+        }),
+        { keyCount: 0, modelCount: 0 },
+    );
 }
 
-function uniqueModels(models: string[]) {
-    return Array.from(new Set(models.map((model) => model.trim()).filter(Boolean)));
+function ProviderSummaryCard({ provider }: { provider: LumaProvider }) {
+    const modelCount = provider.image_models.length + provider.chat_models.length + provider.video_models.length;
+    return (
+        <div className="min-w-0 rounded-lg border border-stone-200 bg-white p-3 dark:border-stone-800 dark:bg-stone-950">
+            <div className="flex min-w-0 items-start justify-between gap-2">
+                <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-stone-950 dark:text-stone-100">{provider.name}</div>
+                    <div className="mt-1 truncate text-xs text-stone-500">{provider.base_url || "未填写 Base URL"}</div>
+                </div>
+                <div className="flex shrink-0 gap-1">
+                    {provider.primary ? <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-300">主平台</span> : null}
+                    <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${provider.enabled ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300" : "bg-stone-500/15 text-stone-500"}`}>{provider.enabled ? "启用" : "停用"}</span>
+                </div>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] font-medium">
+                <span className="rounded bg-stone-100 px-2 py-1 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{modelCount} 模型</span>
+                <span className={`rounded px-2 py-1 ${provider.has_key ? "bg-blue-500/15 text-blue-600 dark:text-blue-300" : "bg-stone-100 text-stone-500 dark:bg-stone-900"}`}>{provider.has_key ? `Key 已保存 ${provider.key_preview || ""}` : "无 Key"}</span>
+                {provider.image_models.length ? <span className="rounded bg-stone-100 px-2 py-1 text-stone-600 dark:bg-stone-900 dark:text-stone-300">生图 {provider.image_models.length}</span> : null}
+                {provider.chat_models.length ? <span className="rounded bg-stone-100 px-2 py-1 text-stone-600 dark:bg-stone-900 dark:text-stone-300">文本 {provider.chat_models.length}</span> : null}
+                {provider.video_models.length ? <span className="rounded bg-stone-100 px-2 py-1 text-stone-600 dark:bg-stone-900 dark:text-stone-300">视频 {provider.video_models.length}</span> : null}
+            </div>
+        </div>
+    );
 }
