@@ -190,10 +190,17 @@ async function remoteImageToDataUrl(url: string) {
 }
 
 function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => void }) {
+    const { message } = App.useApp();
     const assets = useAssetStore((state) => state.assets);
     const [keyword, setKeyword] = useState("");
     const [kindFilter, setKindFilter] = useState("all");
     const [page, setPage] = useState(1);
+    const [inserting, setInserting] = useState<string | null>(null);
+    const backendQuery = useQuery({
+        queryKey: ["asset-picker-my-assets-backend", keyword, kindFilter],
+        queryFn: () => fetchAssetLibrary({ keyword, type: kindFilter === "all" ? "" : kindFilter, page: 1, pageSize: 120 }),
+        retry: false,
+    });
 
     const filtered = useMemo(() => {
         const query = keyword.trim().toLowerCase();
@@ -203,12 +210,30 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
             .filter((a) => !query || [a.title, ...(a.tags || [])].join(" ").toLowerCase().includes(query));
     }, [assets, keyword, kindFilter]);
 
-    const visible = useMemo(() => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [filtered, page]);
+    const backendItems = useMemo(() => {
+        const localKeys = new Set(
+            filtered.flatMap((asset) => [
+                asset.title,
+                asset.kind === "image" ? asset.data.storageKey || asset.data.dataUrl : "",
+                asset.kind === "video" || asset.kind === "audio" ? asset.data.storageKey || asset.data.url : "",
+            ]).filter(Boolean),
+        );
+        return (backendQuery.data?.items || []).filter((asset) => !localKeys.has(asset.title) && !localKeys.has(asset.url));
+    }, [backendQuery.data?.items, filtered]);
+
+    const totalCount = filtered.length + backendItems.length;
+    const visible = useMemo(() => {
+        const merged = [
+            ...filtered.map((asset) => ({ source: "local" as const, asset })),
+            ...backendItems.map((asset) => ({ source: "backend" as const, asset })),
+        ];
+        return merged.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+    }, [backendItems, filtered, page]);
 
     useEffect(() => {
-        const maxPage = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+        const maxPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
         setPage((v) => Math.min(v, maxPage));
-    }, [filtered.length]);
+    }, [totalCount]);
 
     const handleInsert = (asset: Asset) => {
         if (asset.kind === "text") {
@@ -217,6 +242,26 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
             onInsert({ kind: "audio", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, durationMs: asset.data.durationMs });
         } else {
             onInsert(asset.kind === "video" ? { kind: "video", url: asset.data.url, storageKey: asset.data.storageKey, title: asset.title, width: asset.data.width, height: asset.data.height } : { kind: "image", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey, title: asset.title });
+        }
+    };
+
+    const handleBackendInsert = async (asset: AssetLibraryItem) => {
+        try {
+            setInserting(asset.id);
+            if (asset.type === "text") {
+                onInsert({ kind: "text", content: asset.content, title: asset.title });
+            } else if (asset.type === "video") {
+                onInsert({ kind: "video", url: asset.url, title: asset.title });
+            } else if (asset.type === "audio") {
+                onInsert({ kind: "audio", url: asset.url, title: asset.title });
+            } else {
+                const dataUrl = await remoteImageToDataUrl(asset.url);
+                onInsert({ kind: "image", dataUrl, title: asset.title });
+            }
+        } catch {
+            message.error("插入失败");
+        } finally {
+            setInserting(null);
         }
     };
 
@@ -252,19 +297,27 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
                 </div>
             </div>
 
-            {visible.length ? (
+            {backendQuery.isLoading && !visible.length ? (
+                <div className="flex justify-center py-16">
+                    <Spin />
+                </div>
+            ) : visible.length ? (
                 <div className="grid grid-cols-4 gap-3">
-                    {visible.map((asset) => (
-                        <PickerCard key={asset.id} title={asset.title} kind={asset.kind} cover={asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "")} onClick={() => handleInsert(asset)} />
+                    {visible.map((item) => (
+                        item.source === "local" ? (
+                            <PickerCard key={`local-${item.asset.id}`} title={item.asset.title} kind={item.asset.kind} cover={item.asset.coverUrl || (item.asset.kind === "image" ? item.asset.data.dataUrl : "")} onClick={() => handleInsert(item.asset)} />
+                        ) : (
+                            <PickerCard key={`backend-${item.asset.id}`} title={item.asset.title} kind={item.asset.type} cover={item.asset.coverUrl} loading={inserting === item.asset.id} onClick={() => void handleBackendInsert(item.asset)} />
+                        )
                     ))}
                 </div>
             ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有素材" className="py-12" />
             )}
 
-            {filtered.length > PAGE_SIZE && (
+            {totalCount > PAGE_SIZE && (
                 <div className="flex justify-center">
-                    <Pagination size="small" current={page} pageSize={PAGE_SIZE} total={filtered.length} onChange={setPage} showSizeChanger={false} />
+                    <Pagination size="small" current={page} pageSize={PAGE_SIZE} total={totalCount} onChange={setPage} showSizeChanger={false} />
                 </div>
             )}
         </div>

@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	LumaForgeVersion = "2.1.6"
-	LumaForgeBuildID = "20260609-v216-login-session-stability1"
+	LumaForgeVersion = "2.1.7"
+	LumaForgeBuildID = "20260609-v217-feature-integration1"
 )
 
 var (

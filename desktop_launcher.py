@@ -285,6 +285,8 @@ def start_v21_processes(port, paths, log_file):
 
     api_env = env.copy()
     api_env["PORT"] = str(api_port)
+    api_env["LUMAFORGE_APP_URL"] = f"http://127.0.0.1:{port}/"
+    api_env["LUMAFORGE_API_URL"] = f"http://127.0.0.1:{api_port}"
     api_process = subprocess.Popen(
         [str(bundle["server"])],
         cwd=str(bundle["server"].parent),
@@ -297,6 +299,7 @@ def start_v21_processes(port, paths, log_file):
     web_env["HOSTNAME"] = "127.0.0.1"
     web_env["PORT"] = str(port)
     web_env["API_BASE_URL"] = f"http://127.0.0.1:{api_port}"
+    web_env["LUMAFORGE_APP_URL"] = f"http://127.0.0.1:{port}/"
     web_process = subprocess.Popen(
         [str(bundle["node"]), str(bundle["web_server"])],
         cwd=str(bundle["web_dir"]),

@@ -9,7 +9,7 @@ import { saveAs } from "file-saver";
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
 import { requestVideoGeneration, storeGeneratedVideo } from "@/services/api/video";
-import { uploadAssetDataUrl } from "@/services/api/assets";
+import { uploadAssetDataUrl, uploadAssetFileWithMetadata } from "@/services/api/assets";
 import { DOCS_URL } from "@/constant/env";
 import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { imageToDataUrl, resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
@@ -113,7 +113,50 @@ function createCanvasNode(type: CanvasNodeType, position: Position, metadata?: C
     };
 }
 
-function addCanvasGeneratedImageAsset({ nodeId, title, prompt, image }: { nodeId: string; title: string; prompt: string; image: UploadedImage }) {
+type CanvasGeneratedAssetSync = {
+    kind: "image" | "video" | "audio";
+    url: string;
+    title: string;
+    prompt: string;
+    canvasId: string;
+    nodeId: string;
+    model?: string;
+    storageKey?: string;
+    mimeType?: string;
+};
+
+async function syncCanvasGeneratedAssetToBackend(asset: CanvasGeneratedAssetSync) {
+    if (!asset.url) return;
+    const response = await fetch(asset.url);
+    if (!response.ok) throw new Error("素材文件读取失败");
+    const blob = await response.blob();
+    const fallbackExt = asset.kind === "video" ? "mp4" : asset.kind === "audio" ? "mp3" : "png";
+    const filename = `${safeFileStem(asset.title || asset.prompt || `canvas-${asset.kind}`)}.${extensionFromMime(asset.mimeType || blob.type, fallbackExt)}`;
+    await uploadAssetFileWithMetadata(new File([blob], filename, { type: blob.type || asset.mimeType || "application/octet-stream" }), {
+        sourceType: "canvas",
+        prompt: asset.prompt,
+        model: asset.model,
+        canvasId: asset.canvasId,
+        nodeId: asset.nodeId,
+        storageKey: asset.storageKey,
+        tags: ["canvas"],
+    });
+}
+
+function extensionFromMime(mimeType: string | undefined, fallback: string) {
+    const value = (mimeType || "").toLowerCase();
+    if (value.includes("webp")) return "webp";
+    if (value.includes("jpeg") || value.includes("jpg")) return "jpg";
+    if (value.includes("gif")) return "gif";
+    if (value.includes("mp4")) return "mp4";
+    if (value.includes("webm")) return "webm";
+    if (value.includes("mpeg") || value.includes("mp3")) return "mp3";
+    if (value.includes("wav")) return "wav";
+    if (value.includes("ogg")) return "ogg";
+    return fallback;
+}
+
+function addCanvasGeneratedImageAsset({ nodeId, title, prompt, image, canvasId, model }: { nodeId: string; title: string; prompt: string; image: UploadedImage; canvasId: string; model?: string }) {
     const store = useAssetStore.getState();
     if (store.assets.some((asset) => asset.kind === "image" && asset.data.storageKey === image.storageKey)) return;
     const assetTitle = uniqueAssetTitle(title || prompt || "画布生成图片", store.assets.map((asset) => asset.title));
@@ -124,11 +167,12 @@ function addCanvasGeneratedImageAsset({ nodeId, title, prompt, image }: { nodeId
         tags: [],
         source: "Canvas",
         data: { dataUrl: image.url, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType },
-        metadata: { source: "canvas-auto", nodeId, prompt, storageKey: image.storageKey },
+        metadata: { source: "canvas-auto", canvasId, nodeId, prompt, model, storageKey: image.storageKey },
     });
+    void syncCanvasGeneratedAssetToBackend({ kind: "image", url: image.url, title: assetTitle, prompt, canvasId, nodeId, model, storageKey: image.storageKey, mimeType: image.mimeType }).catch((error) => console.warn("Canvas asset backend sync failed", error));
 }
 
-function addCanvasGeneratedVideoAsset({ nodeId, title, prompt, video, width, height }: { nodeId: string; title: string; prompt: string; video: UploadedFile; width: number; height: number }) {
+function addCanvasGeneratedVideoAsset({ nodeId, title, prompt, video, width, height, canvasId, model }: { nodeId: string; title: string; prompt: string; video: UploadedFile; width: number; height: number; canvasId: string; model?: string }) {
     const store = useAssetStore.getState();
     if (store.assets.some((asset) => asset.kind === "video" && asset.data.storageKey === video.storageKey)) return;
     const assetTitle = uniqueAssetTitle(title || prompt || "画布生成视频", store.assets.map((asset) => asset.title));
@@ -139,11 +183,12 @@ function addCanvasGeneratedVideoAsset({ nodeId, title, prompt, video, width, hei
         tags: [],
         source: "Canvas",
         data: { url: video.url, storageKey: video.storageKey, width, height, bytes: video.bytes, mimeType: video.mimeType || "video/mp4" },
-        metadata: { source: "canvas-auto", nodeId, prompt, storageKey: video.storageKey },
+        metadata: { source: "canvas-auto", canvasId, nodeId, prompt, model, storageKey: video.storageKey },
     });
+    void syncCanvasGeneratedAssetToBackend({ kind: "video", url: video.url, title: assetTitle, prompt, canvasId, nodeId, model, storageKey: video.storageKey, mimeType: video.mimeType || "video/mp4" }).catch((error) => console.warn("Canvas asset backend sync failed", error));
 }
 
-function addCanvasGeneratedAudioAsset({ nodeId, title, prompt, audio }: { nodeId: string; title: string; prompt: string; audio: UploadedFile }) {
+function addCanvasGeneratedAudioAsset({ nodeId, title, prompt, audio, canvasId, model }: { nodeId: string; title: string; prompt: string; audio: UploadedFile; canvasId: string; model?: string }) {
     const store = useAssetStore.getState();
     if (store.assets.some((asset) => asset.kind === "audio" && asset.data.storageKey === audio.storageKey)) return;
     const assetTitle = uniqueAssetTitle(title || prompt || "画布生成音频", store.assets.map((asset) => asset.title));
@@ -154,11 +199,12 @@ function addCanvasGeneratedAudioAsset({ nodeId, title, prompt, audio }: { nodeId
         tags: [],
         source: "Canvas",
         data: { url: audio.url, storageKey: audio.storageKey, bytes: audio.bytes, mimeType: audio.mimeType || "audio/mpeg", durationMs: audio.durationMs },
-        metadata: { source: "canvas-auto", nodeId, prompt, storageKey: audio.storageKey },
+        metadata: { source: "canvas-auto", canvasId, nodeId, prompt, model, storageKey: audio.storageKey },
     });
+    void syncCanvasGeneratedAssetToBackend({ kind: "audio", url: audio.url, title: assetTitle, prompt, canvasId, nodeId, model, storageKey: audio.storageKey, mimeType: audio.mimeType || "audio/mpeg" }).catch((error) => console.warn("Canvas asset backend sync failed", error));
 }
 
-function addCanvasGeneratedTextAsset({ nodeId, title, prompt, content }: { nodeId: string; title: string; prompt: string; content: string }) {
+function addCanvasGeneratedTextAsset({ nodeId, title, prompt, content, canvasId, model }: { nodeId: string; title: string; prompt: string; content: string; canvasId: string; model?: string }) {
     const trimmed = content.trim();
     if (!trimmed) return;
     const store = useAssetStore.getState();
@@ -171,15 +217,19 @@ function addCanvasGeneratedTextAsset({ nodeId, title, prompt, content }: { nodeI
         tags: [],
         source: "Canvas",
         data: { content: trimmed },
-        metadata: { source: "canvas-auto", nodeId, prompt },
+        metadata: { source: "canvas-auto", canvasId, nodeId, prompt, model, backendSync: "text-frontend-only" },
     });
 }
 
 function expandBatchSelection(ids: Iterable<string>, nodes: CanvasNodeData[]) {
-    const expanded = new Set(ids);
-    nodes.forEach((node) => {
-        if (!expanded.has(node.id)) return;
-        node.metadata?.batchChildIds?.forEach((childId) => expanded.add(childId));
+    const expanded = new Set<string>();
+    Array.from(ids).forEach((id) => {
+        const node = nodes.find((item) => item.id === id);
+        if (!node) {
+            expanded.add(id);
+            return;
+        }
+        getLayerGroupIds(node, nodes).forEach((groupId) => expanded.add(groupId));
     });
     return expanded;
 }
@@ -586,6 +636,15 @@ function InfiniteCanvasPage() {
         if (rafRef.current) {
             cancelAnimationFrame(rafRef.current);
             rafRef.current = null;
+        }
+        if (dragRef.current.hasMoved && dragRef.current.initialSelectedNodes.length) {
+            const initialPositions = dragRef.current.initialSelectedNodes;
+            setNodes((prev) =>
+                prev.map((node) => {
+                    const initial = initialPositions.find((item) => item.id === node.id);
+                    return initial ? { ...node, position: { x: initial.x, y: initial.y } } : node;
+                }),
+            );
         }
         dragRef.current.isDraggingNode = false;
         dragRef.current.hasMoved = false;
@@ -1594,12 +1653,14 @@ function InfiniteCanvasPage() {
             if (node.type === CanvasNodeType.Video) {
                 if (!node.metadata?.content) return message.error("没有可保存的视频");
                 addAsset({ kind: "video", title: assetTitle, coverUrl: "", tags: [], source: "Canvas", data: { url: node.metadata.content, storageKey: node.metadata.storageKey, width: node.width, height: node.height, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "video/mp4" }, metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt } });
+                void syncCanvasGeneratedAssetToBackend({ kind: "video", url: node.metadata.content, title: assetTitle, prompt: node.metadata?.prompt || "", canvasId: projectId, nodeId: node.id, model: node.metadata?.model, storageKey: node.metadata.storageKey, mimeType: node.metadata.mimeType || "video/mp4" }).catch((error) => console.warn("Canvas asset backend sync failed", error));
                 message.success("已加入我的素材");
                 return;
             }
             if (node.type === CanvasNodeType.Audio) {
                 if (!node.metadata?.content) return message.error("没有可保存的音频");
                 addAsset({ kind: "audio", title: assetTitle, coverUrl: "", tags: [], source: "Canvas", data: { url: node.metadata.content, storageKey: node.metadata.storageKey, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "audio/mpeg", durationMs: node.metadata.durationMs }, metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt } });
+                void syncCanvasGeneratedAssetToBackend({ kind: "audio", url: node.metadata.content, title: assetTitle, prompt: node.metadata?.prompt || "", canvasId: projectId, nodeId: node.id, model: node.metadata?.model, storageKey: node.metadata.storageKey, mimeType: node.metadata.mimeType || "audio/mpeg" }).catch((error) => console.warn("Canvas asset backend sync failed", error));
                 message.success("已加入我的素材");
                 return;
             }
@@ -1622,14 +1683,22 @@ function InfiniteCanvasPage() {
                 metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt },
             });
             try {
-                await uploadAssetDataUrl(dataUrl, `${safeFileStem(assetTitle)}.${imageExtension(dataUrl)}`);
+                await uploadAssetDataUrl(dataUrl, `${safeFileStem(assetTitle)}.${imageExtension(dataUrl)}`, {
+                    sourceType: "canvas",
+                    prompt: node.metadata?.prompt,
+                    model: node.metadata?.model,
+                    canvasId: projectId,
+                    nodeId: node.id,
+                    storageKey: node.metadata.storageKey,
+                    tags: ["canvas"],
+                });
                 message.success("已加入我的素材和旧素材库");
             } catch (error) {
                 console.warn("Asset library sync failed", error);
                 message.warning("已加入本地素材，旧素材库同步失败");
             }
         },
-        [addAsset, localAssets, message],
+        [addAsset, localAssets, message, projectId],
     );
 
     const createImageReversePromptNodes = useCallback(
@@ -2135,7 +2204,7 @@ function InfiniteCanvasPage() {
                                     ? await requestEdit({ ...generationConfig, count: "1" }, effectivePrompt, referenceImages).then((items) => items[0])
                                     : await requestGeneration({ ...generationConfig, count: "1" }, effectivePrompt).then((items) => items[0]);
                                 const uploaded = await uploadImage(image.dataUrl);
-                                addCanvasGeneratedImageAsset({ nodeId: targetId, title: effectivePrompt.slice(0, 32) || "Generated Image", prompt: effectivePrompt, image: uploaded });
+                                addCanvasGeneratedImageAsset({ nodeId: targetId, title: effectivePrompt.slice(0, 32) || "Generated Image", prompt: effectivePrompt, image: uploaded, canvasId: projectId, model: generationConfig.model });
                                 const imageSize = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
                                 setNodes((prev) => {
                                     const root = prev.find((node) => node.id === rootId);
@@ -2206,7 +2275,7 @@ function InfiniteCanvasPage() {
                     if (!isEmptyVideoNode) setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: nodeId, toNodeId: videoId }]);
                     const video = await storeGeneratedVideo(await requestVideoGeneration(generationConfig, effectivePrompt, generationContext.referenceImages, generationContext.referenceVideos, generationContext.referenceAudios));
                     const videoSize = fitNodeSize(video.width || spec.width, video.height || spec.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
-                    addCanvasGeneratedVideoAsset({ nodeId: videoId, title: videoNode.title, prompt: effectivePrompt, video, width: video.width || videoSize.width, height: video.height || videoSize.height });
+                    addCanvasGeneratedVideoAsset({ nodeId: videoId, title: videoNode.title, prompt: effectivePrompt, video, width: video.width || videoSize.width, height: video.height || videoSize.height, canvasId: projectId, model: generationConfig.model });
                     setNodes((prev) => prev.map((node) => (node.id === videoId ? { ...node, width: videoSize.width, height: videoSize.height, position: { x: node.position.x + node.width / 2 - videoSize.width / 2, y: node.position.y + node.height / 2 - videoSize.height / 2 }, metadata: { ...node.metadata, ...videoMetadata(video), prompt: effectivePrompt, model: generationConfig.model, size: generationConfig.size, seconds: generationConfig.videoSeconds, vquality: generationConfig.vquality, generateAudio: generationConfig.videoGenerateAudio, watermark: generationConfig.videoWatermark, references: generationReferenceUrls(generationContext) } } : node)));
                     return;
                 }
@@ -2229,7 +2298,7 @@ function InfiniteCanvasPage() {
                     setNodes((prev) => (isEmptyAudioNode ? prev.map((node) => (node.id === nodeId ? { ...node, ...audioNode } : node)) : [...prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS } } : node)), audioNode]));
                     if (!isEmptyAudioNode) setConnections((prev) => [...prev, { id: nanoid(), fromNodeId: nodeId, toNodeId: audioId }]);
                     const audio = await storeGeneratedAudio(await requestAudioGeneration(generationConfig, effectivePrompt), generationConfig.audioFormat);
-                    addCanvasGeneratedAudioAsset({ nodeId: audioId, title: audioNode.title, prompt: effectivePrompt, audio });
+                    addCanvasGeneratedAudioAsset({ nodeId: audioId, title: audioNode.title, prompt: effectivePrompt, audio, canvasId: projectId, model: generationConfig.model });
                     setNodes((prev) => prev.map((node) => (node.id === audioId ? { ...node, metadata: { ...node.metadata, ...audioMetadata(audio), prompt: effectivePrompt, ...buildAudioGenerationMetadata(generationConfig) } } : node)));
                     return;
                 }
@@ -2271,7 +2340,7 @@ function InfiniteCanvasPage() {
                     }),
                 );
                 const answerByNodeId = new Map(answers.map((item) => [item.nodeId, item.content]));
-                answers.forEach((item) => addCanvasGeneratedTextAsset({ nodeId: item.nodeId, title: effectivePrompt.slice(0, 32) || "Generated Text", prompt: effectivePrompt, content: item.content }));
+                answers.forEach((item) => addCanvasGeneratedTextAsset({ nodeId: item.nodeId, title: effectivePrompt.slice(0, 32) || "Generated Text", prompt: effectivePrompt, content: item.content, canvasId: projectId, model: generationConfig.model }));
                 setNodes((prev) =>
                     prev.map((node) =>
                         childIds.includes(node.id)
@@ -2345,27 +2414,27 @@ function InfiniteCanvasPage() {
                         streamed = text;
                         setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, type: CanvasNodeType.Text, metadata: { ...item.metadata, content: text, status: NODE_STATUS_LOADING } } : item)));
                     });
-                    addCanvasGeneratedTextAsset({ nodeId: node.id, title: node.title || prompt.slice(0, 32) || "Generated Text", prompt, content: answer || streamed });
+                    addCanvasGeneratedTextAsset({ nodeId: node.id, title: node.title || prompt.slice(0, 32) || "Generated Text", prompt, content: answer || streamed, canvasId: projectId, model: generationConfig.model });
                     setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, type: CanvasNodeType.Text, metadata: { ...item.metadata, content: answer || streamed, prompt, status: NODE_STATUS_SUCCESS } } : item)));
                     return;
                 }
                 if (node.type === CanvasNodeType.Video) {
                     const video = await storeGeneratedVideo(await requestVideoGeneration(generationConfig, prompt, retryImages, context?.referenceVideos || [], context?.referenceAudios || []));
                     const videoSize = fitNodeSize(video.width || node.width, video.height || node.height, VIDEO_NODE_MAX_WIDTH, VIDEO_NODE_MAX_HEIGHT);
-                    addCanvasGeneratedVideoAsset({ nodeId: node.id, title: node.title || prompt.slice(0, 32) || "Generated Video", prompt, video, width: video.width || videoSize.width, height: video.height || videoSize.height });
+                    addCanvasGeneratedVideoAsset({ nodeId: node.id, title: node.title || prompt.slice(0, 32) || "Generated Video", prompt, video, width: video.width || videoSize.width, height: video.height || videoSize.height, canvasId: projectId, model: generationConfig.model });
                     setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, width: videoSize.width, height: videoSize.height, position: { x: item.position.x + item.width / 2 - videoSize.width / 2, y: item.position.y + item.height / 2 - videoSize.height / 2 }, metadata: { ...item.metadata, ...videoMetadata(video), prompt, model: generationConfig.model, size: generationConfig.size, seconds: generationConfig.videoSeconds, vquality: generationConfig.vquality, generateAudio: generationConfig.videoGenerateAudio, watermark: generationConfig.videoWatermark } } : item)));
                     return;
                 }
                 if (node.type === CanvasNodeType.Audio) {
                     const audio = await storeGeneratedAudio(await requestAudioGeneration(generationConfig, prompt), generationConfig.audioFormat);
-                    addCanvasGeneratedAudioAsset({ nodeId: node.id, title: node.title || prompt.slice(0, 32) || "Generated Audio", prompt, audio });
+                    addCanvasGeneratedAudioAsset({ nodeId: node.id, title: node.title || prompt.slice(0, 32) || "Generated Audio", prompt, audio, canvasId: projectId, model: generationConfig.model });
                     setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, ...audioMetadata(audio), prompt, ...buildAudioGenerationMetadata(generationConfig) } } : item)));
                     return;
                 }
 
                 const image = useReferenceImages ? await requestEdit(generationConfig, prompt, retryImages).then((items) => items[0]) : await requestGeneration(generationConfig, prompt).then((items) => items[0]);
                 const uploadedImage = await uploadImage(image.dataUrl);
-                addCanvasGeneratedImageAsset({ nodeId: node.id, title: node.title || prompt.slice(0, 32) || "Generated Image", prompt, image: uploadedImage });
+                addCanvasGeneratedImageAsset({ nodeId: node.id, title: node.title || prompt.slice(0, 32) || "Generated Image", prompt, image: uploadedImage, canvasId: projectId, model: generationConfig.model });
                 const imageConfig = NODE_DEFAULT_SIZE[CanvasNodeType.Image];
                 const imageSize = fitNodeSize(uploadedImage.width, uploadedImage.height, imageConfig.width, imageConfig.height);
                 const generationMetadata = savedImageMetadata?.generationType
@@ -2453,8 +2522,9 @@ function InfiniteCanvasPage() {
             setSelectedNodeIds(new Set([id]));
             setSelectedConnectionId(null);
             setDialogNodeId(id);
+            addCanvasGeneratedImageAsset({ nodeId: id, title: node.title, prompt: image.prompt, image: { ...storedImage, width: meta.width, height: meta.height }, canvasId: projectId, model: effectiveConfig.imageModel || effectiveConfig.model });
         },
-        [screenToCanvas, size.height, size.width],
+        [effectiveConfig.imageModel, effectiveConfig.model, projectId, screenToCanvas, size.height, size.width],
     );
 
     const insertAssistantText = useCallback(
@@ -2468,8 +2538,9 @@ function InfiniteCanvasPage() {
             setNodes((prev) => [...prev, node]);
             setSelectedNodeIds(new Set([node.id]));
             setSelectedConnectionId(null);
+            addCanvasGeneratedTextAsset({ nodeId: node.id, title: node.title, prompt: "", content: text, canvasId: projectId, model: effectiveConfig.model });
         },
-        [screenToCanvas, size.height, size.width],
+        [effectiveConfig.model, projectId, screenToCanvas, size.height, size.width],
     );
 
     const handleAssetInsert = useCallback(

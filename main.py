@@ -21,7 +21,7 @@ from threading import Lock, RLock
 import httpx
 from PIL import Image
 from io import BytesIO
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Header, Request
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, UploadFile, File, Header, Request, Form
 from fastapi.exceptions import RequestValidationError
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response, StreamingResponse, JSONResponse, RedirectResponse
@@ -32,10 +32,14 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.1.6")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260609-v216-login-session-stability1")
+APP_VERSION = os.getenv("APP_VERSION", "2.1.7")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260609-v217-feature-integration1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
+UPDATE_DOWNLOAD_STALL_SECONDS = max(10.0, float(os.getenv("UPDATE_DOWNLOAD_STALL_SECONDS", "45") or 45))
+UPDATE_DOWNLOAD_CONNECT_TIMEOUT = max(3.0, float(os.getenv("UPDATE_DOWNLOAD_CONNECT_TIMEOUT", "15") or 15))
+UPDATE_DOWNLOAD_READ_TIMEOUT = max(10.0, float(os.getenv("UPDATE_DOWNLOAD_READ_TIMEOUT", "45") or 45))
+UPDATE_AUTO_TASK: Optional[asyncio.Task] = None
 
 
 def make_async_client(*args, **kwargs):
@@ -1262,6 +1266,7 @@ app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".mov", ".m4v"}
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
 
 def asset_db():
     conn = sqlite3.connect(ASSET_DB_FILE)
@@ -1448,6 +1453,8 @@ def asset_type_for_path(path):
     ext = os.path.splitext(path)[1].lower()
     if ext in VIDEO_EXTENSIONS:
         return "video"
+    if ext in AUDIO_EXTENSIONS:
+        return "audio"
     if ext in IMAGE_EXTENSIONS:
         return "image"
     return "file"
@@ -3684,6 +3691,142 @@ def app_diagnostics_payload():
         "update_capability": capability,
     }
 
+def canvas_health_summary():
+    records = iter_canvas_records(include_deleted=False)
+    canvas_count = len(records)
+    connection_count = 0
+    node_count = 0
+    latest_title = ""
+    for record in records[:30]:
+        data = load_canvas_any(record.get("id") or "") or {}
+        node_count += len(data.get("nodes") or [])
+        connection_count += len(data.get("connections") or [])
+        if not latest_title:
+            latest_title = str(data.get("title") or "")
+    return {
+        "canvas_count": canvas_count,
+        "node_count": node_count,
+        "connection_count": connection_count,
+        "latest_title": latest_title,
+    }
+
+def canvas_asset_sync_summary():
+    summary = {"canvas_assets": 0, "latest_asset": "", "text_assets_backend_supported": False}
+    try:
+        with asset_db() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS c FROM assets
+                WHERE source_type = 'canvas'
+                   OR metadata_json LIKE '%"source": "canvas"%'
+                   OR metadata_json LIKE '%"source":"canvas"%'
+                """
+            ).fetchone()
+            summary["canvas_assets"] = int(row["c"] or 0) if row else 0
+            latest = conn.execute(
+                """
+                SELECT title FROM assets
+                WHERE source_type = 'canvas'
+                   OR metadata_json LIKE '%"source": "canvas"%'
+                   OR metadata_json LIKE '%"source":"canvas"%'
+                ORDER BY created_at DESC LIMIT 1
+                """
+            ).fetchone()
+            summary["latest_asset"] = latest["title"] if latest else ""
+    except Exception as exc:
+        summary["error"] = str(exc)
+    return summary
+
+def release_health_payload():
+    info = {
+        "version": APP_VERSION,
+        "build_id": APP_BUILD_ID,
+        "canonical_host": "127.0.0.1",
+        "canonical_url": os.getenv("LUMAFORGE_APP_URL", ""),
+        "api_url": os.getenv("LUMAFORGE_API_URL", ""),
+    }
+    update_state = update_state_payload()
+    update_capability = desktop_update_capability()
+    asset_health = asset_library_health(limit=40)
+    canvas_health = canvas_health_summary()
+    canvas_assets = canvas_asset_sync_summary()
+    session = load_cloud_session()
+    providers = load_api_providers()
+    checks = [
+        {
+            "id": "version",
+            "label": "版本与构建",
+            "status": "ok" if APP_VERSION and APP_BUILD_ID else "error",
+            "detail": f"{APP_VERSION} · {APP_BUILD_ID}",
+            "action": "",
+        },
+        {
+            "id": "entry",
+            "label": "桌面入口",
+            "status": "ok",
+            "detail": "桌面端使用 127.0.0.1 作为统一入口，localhost 会自动跳转。",
+            "action": "",
+        },
+        {
+            "id": "updates",
+            "label": "自动更新",
+            "status": "ok" if update_capability.get("supported") and APP_UPDATE_CHECK_URL else "error",
+            "detail": update_capability.get("mode") or update_capability.get("reason") or APP_UPDATE_CHECK_URL,
+            "action": "" if update_capability.get("supported") else "重新安装包含 LumaForgeUpdater.exe 的桌面版。",
+        },
+        {
+            "id": "update_state",
+            "label": "更新状态",
+            "status": "warn" if update_state.get("stalled") else "ok",
+            "detail": f"{update_state.get('phase') or 'idle'} · {update_state.get('download_progress', 0)}%",
+            "action": "清理半包后重试更新。" if update_state.get("stalled") else "",
+        },
+        {
+            "id": "login",
+            "label": "登录恢复",
+            "status": "ok" if session.get("token") or is_desktop_runtime() else "warn",
+            "detail": "已保存云端会话，可静默恢复。" if session.get("token") else "未保存云端会话；登录后会写入 cookie 与本地会话。",
+            "action": "" if session.get("token") else "登录一次后重新运行检查。",
+        },
+        {
+            "id": "api_config",
+            "label": "API 配置",
+            "status": "ok" if providers else "warn",
+            "detail": f"已配置 {len(providers)} 个平台。",
+            "action": "" if providers else "在 API 设置添加本地平台或等待云端内置配置。",
+        },
+        {
+            "id": "assets",
+            "label": "素材库",
+            "status": "ok" if asset_health.get("missing_count", 0) == 0 else "error",
+            "detail": f"{asset_health.get('checked', 0)} checked, {asset_health.get('missing_count', 0)} missing, {asset_health.get('thumb_missing_count', 0)} thumbs",
+            "action": "重新扫描或重建缩略图。" if asset_health.get("missing_count", 0) or asset_health.get("thumb_missing_count", 0) else "",
+        },
+        {
+            "id": "canvas",
+            "label": "画布保存与连线",
+            "status": "ok" if canvas_health.get("canvas_count", 0) >= 0 else "error",
+            "detail": f"{canvas_health.get('canvas_count', 0)} 个画布，{canvas_health.get('node_count', 0)} 个节点，{canvas_health.get('connection_count', 0)} 条连线。",
+            "action": "",
+        },
+        {
+            "id": "canvas_assets",
+            "label": "画布生成素材入库",
+            "status": "ok" if canvas_assets.get("canvas_assets", 0) > 0 else "warn",
+            "detail": f"后端素材库已记录 {canvas_assets.get('canvas_assets', 0)} 个画布素材；文本素材保留在画布素材面板。",
+            "action": "" if canvas_assets.get("canvas_assets", 0) > 0 else "在画布生成或保存一张素材后重查。",
+        },
+    ]
+    return {
+        "ok": all(item["status"] != "error" for item in checks),
+        "info": info,
+        "checks": checks,
+        "update_state": update_state,
+        "asset_health": asset_health,
+        "canvas_health": canvas_health,
+        "canvas_assets": canvas_assets,
+    }
+
 APP_PATH_TARGETS = {
     "save": {
         "env": "APP_ASSETS_DIR",
@@ -3964,6 +4107,15 @@ def save_update_state(state: dict):
 def update_state_payload():
     state = load_update_state()
     capability = desktop_update_capability()
+    downloaded = int(state.get("downloaded_bytes") or 0)
+    total = int(state.get("total_bytes") or state.get("package_size") or 0)
+    progress = round(downloaded / total * 100, 1) if total > 0 else 0
+    last_progress_at = float(state.get("last_progress_at") or state.get("saved_at") or 0)
+    now = now_ms()
+    stalled_seconds = max(0, int((now - last_progress_at) / 1000)) if last_progress_at else 0
+    phase = str(state.get("phase") or "")
+    temp_path = str(state.get("temp_path") or "")
+    can_cleanup = phase in {"failed", "downloading", "downloaded", "verifying", "idle"} and bool(temp_path or state.get("path") or state.get("filename"))
     return {
         **state,
         "state": state,
@@ -3975,6 +4127,11 @@ def update_state_payload():
         "assets_dir": ASSETS_DIR,
         "downloads_dir": UPDATE_DOWNLOADS_DIR,
         "update_state_file": UPDATE_STATE_FILE,
+        "download_progress": progress,
+        "stalled_seconds": stalled_seconds,
+        "stalled": phase == "downloading" and stalled_seconds >= UPDATE_DOWNLOAD_STALL_SECONDS,
+        "can_cleanup": can_cleanup,
+        "temp_path": temp_path,
     }
 
 def _probe_writable_dir(path: str, create: bool = True):
@@ -4202,6 +4359,12 @@ async def app_info():
         "update_check_url": APP_UPDATE_CHECK_URL,
         "update_state": load_update_state(),
         "paths": app_paths_payload(),
+        "entry": {
+            "canonical_host": "127.0.0.1",
+            "app_url": os.getenv("LUMAFORGE_APP_URL", ""),
+            "api_url": os.getenv("LUMAFORGE_API_URL", ""),
+            "legacy_api_url": LUMAFORGE_LEGACY_API_URL,
+        },
         "static_health": {
             "ok": static_health["ok"],
             "missing_count": static_health["missing_count"],
@@ -4233,6 +4396,10 @@ async def app_backup_restore(payload: AppBackupRestoreRequest):
 @app.get("/api/app/diagnostics")
 async def app_diagnostics():
     return app_diagnostics_payload()
+
+@app.get("/api/app/release-health")
+async def app_release_health():
+    return release_health_payload()
 
 @app.get("/api/app/cleanup-preview")
 async def app_cleanup_preview(backup_days: int = 14, keep_backups_per_canvas: int = 20):
@@ -4612,23 +4779,42 @@ async def app_update_download():
     os.makedirs(UPDATE_DOWNLOADS_DIR, exist_ok=True)
     filename = _sanitize_update_filename(selected.get("name"), latest)
     local_path = os.path.join(UPDATE_DOWNLOADS_DIR, filename)
+    temp_path = local_path + ".part"
+    for stale in (temp_path,):
+        if os.path.exists(stale):
+            try:
+                os.remove(stale)
+            except Exception:
+                pass
     total_bytes = int(selected.get("size") or 0)
+    started_at = now_ms()
+    expected_sha256 = (selected.get("sha256") or "").strip().lower()
     save_update_state({
         "phase": "downloading",
         "current_version": APP_VERSION,
         "target_version": latest,
         "version": latest,
         "filename": filename,
+        "path": local_path,
+        "temp_path": temp_path,
         "selected_asset": selected,
         "package_size": total_bytes,
         "downloaded_bytes": 0,
         "total_bytes": total_bytes,
-        "sha256_expected": (selected.get("sha256") or "").strip().lower() or None,
+        "sha256_expected": expected_sha256 or None,
         "sha256_verified": False,
+        "started_at": started_at,
+        "last_progress_at": started_at,
         "error": None,
     })
     try:
-        async with make_async_client(timeout=300, follow_redirects=True) as client:
+        timeout = httpx.Timeout(
+            connect=UPDATE_DOWNLOAD_CONNECT_TIMEOUT,
+            read=UPDATE_DOWNLOAD_READ_TIMEOUT,
+            write=UPDATE_DOWNLOAD_CONNECT_TIMEOUT,
+            pool=UPDATE_DOWNLOAD_CONNECT_TIMEOUT,
+        )
+        async with make_async_client(timeout=timeout, follow_redirects=True) as client:
             async with client.stream("GET", download_url) as dl_resp:
                 dl_resp.raise_for_status()
                 header_total = int(dl_resp.headers.get("content-length") or 0)
@@ -4636,7 +4822,7 @@ async def app_update_download():
                     total_bytes = header_total
                 downloaded = 0
                 last_state_at = 0.0
-                with open(local_path, "wb") as f:
+                with open(temp_path, "wb") as f:
                     async for chunk in dl_resp.aiter_bytes(1024 * 1024):
                         if not chunk:
                             continue
@@ -4644,25 +4830,44 @@ async def app_update_download():
                         downloaded += len(chunk)
                         now = time.time()
                         if now - last_state_at >= 0.25:
+                            progress_at = now_ms()
                             save_update_state({
                                 "phase": "downloading",
                                 "current_version": APP_VERSION,
                                 "target_version": latest,
                                 "version": latest,
                                 "filename": filename,
+                                "path": local_path,
+                                "temp_path": temp_path,
                                 "selected_asset": selected,
                                 "package_size": total_bytes,
                                 "downloaded_bytes": downloaded,
                                 "total_bytes": total_bytes,
-                                "sha256_expected": (selected.get("sha256") or "").strip().lower() or None,
+                                "sha256_expected": expected_sha256 or None,
                                 "sha256_verified": False,
+                                "started_at": started_at,
+                                "last_progress_at": progress_at,
                                 "error": None,
                             })
                             last_state_at = now
+                os.replace(temp_path, local_path)
     except Exception as exc:
-        if os.path.exists(local_path):
-            os.remove(local_path)
-        save_update_state({"phase": "failed", "current_version": APP_VERSION, "target_version": latest, "version": latest, "filename": filename, "error": str(exc)})
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        save_update_state({
+            "phase": "failed",
+            "current_version": APP_VERSION,
+            "target_version": latest,
+            "version": latest,
+            "filename": filename,
+            "path": local_path,
+            "temp_path": temp_path,
+            "downloaded_bytes": os.path.getsize(local_path) if os.path.exists(local_path) else 0,
+            "total_bytes": total_bytes,
+            "sha256_expected": expected_sha256 or None,
+            "sha256_verified": False,
+            "error": str(exc),
+        })
         raise HTTPException(status_code=502, detail=f"下载更新包失败：{exc}")
     file_size = os.path.getsize(local_path)
     save_update_state({
@@ -4671,22 +4876,25 @@ async def app_update_download():
         "target_version": latest,
         "version": latest,
         "filename": filename,
+        "path": local_path,
+        "temp_path": "",
         "selected_asset": selected,
         "package_size": file_size,
         "downloaded_bytes": file_size,
         "total_bytes": file_size,
-        "sha256_expected": (selected.get("sha256") or "").strip().lower() or None,
+        "sha256_expected": expected_sha256 or None,
         "sha256_verified": False,
+        "started_at": started_at,
+        "last_progress_at": now_ms(),
         "error": None,
     })
     actual_sha256 = _sha256_file(local_path)
-    expected_sha256 = (selected.get("sha256") or "").strip().lower()
     sha256_verified = False
     warning = ""
     if expected_sha256:
         if actual_sha256.lower() != expected_sha256:
             os.remove(local_path)
-            save_update_state({"phase": "failed", "current_version": APP_VERSION, "target_version": latest, "version": latest, "filename": filename, "sha256": actual_sha256, "sha256_expected": expected_sha256, "sha256_verified": False, "error": "SHA256 校验失败"})
+            save_update_state({"phase": "failed", "current_version": APP_VERSION, "target_version": latest, "version": latest, "filename": filename, "path": local_path, "temp_path": "", "sha256": actual_sha256, "sha256_expected": expected_sha256, "sha256_verified": False, "error": "SHA256 校验失败"})
             raise HTTPException(status_code=400, detail=f"更新包校验失败：SHA256 不匹配（期望 {expected_sha256[:16]}...，实际 {actual_sha256[:16]}...）")
         sha256_verified = True
     else:
@@ -4698,6 +4906,7 @@ async def app_update_download():
         "version": latest,
         "filename": filename,
         "path": local_path,
+        "temp_path": "",
         "size": file_size,
         "package_size": file_size,
         "downloaded_bytes": file_size,
@@ -4706,6 +4915,8 @@ async def app_update_download():
         "sha256": actual_sha256,
         "sha256_expected": expected_sha256 or None,
         "sha256_verified": sha256_verified,
+        "started_at": started_at,
+        "last_progress_at": now_ms(),
         "error": None,
     })
     return {
@@ -4841,8 +5052,60 @@ async def app_update_install():
     return await install_latest_update_package()
 
 
+async def run_auto_update_background():
+    try:
+        check = await app_update_check()
+        if not check.get("configured"):
+            save_update_state({"phase": "failed", "current_version": APP_VERSION, "error": check.get("message") or "未配置更新检查地址"})
+            return
+        if not check.get("is_newer"):
+            save_update_state({
+                "phase": "idle",
+                "current_version": APP_VERSION,
+                "latest_version": check.get("latest_version"),
+                "error": None,
+            })
+            return
+        if not check.get("auto_update_supported"):
+            save_update_state({
+                "phase": "failed",
+                "current_version": APP_VERSION,
+                "target_version": check.get("latest_version"),
+                "error": check.get("auto_update_reason") or "当前环境不支持自动升级",
+            })
+            return
+        download = await app_update_download()
+        await install_latest_update_package(check.get("latest_version") or "", download)
+    except HTTPException as exc:
+        state = load_update_state()
+        save_update_state({
+            **state,
+            "phase": "failed",
+            "current_version": APP_VERSION,
+            "error": exc.detail,
+        })
+    except Exception as exc:
+        state = load_update_state()
+        save_update_state({
+            **state,
+            "phase": "failed",
+            "current_version": APP_VERSION,
+            "error": str(exc),
+        })
+
+
 @app.post("/api/app/update-auto")
 async def app_update_auto():
+    global UPDATE_AUTO_TASK
+    if UPDATE_AUTO_TASK and not UPDATE_AUTO_TASK.done():
+        return {
+            "ok": True,
+            "updated": False,
+            "running": True,
+            "restart_required": False,
+            "update_state": update_state_payload(),
+            "message": "自动更新正在进行，请稍候查看进度。",
+        }
     check = await app_update_check()
     if not check.get("configured"):
         raise HTTPException(status_code=400, detail=check.get("message") or "未配置更新检查地址")
@@ -4857,19 +5120,46 @@ async def app_update_auto():
         }
     if not check.get("auto_update_supported"):
         raise HTTPException(status_code=400, detail=check.get("auto_update_reason") or "当前环境不支持自动升级")
-    download = await app_update_download()
-    install = await install_latest_update_package(check.get("latest_version") or "", download)
-    external_updater_started = bool(install.get("external_updater_started"))
+    save_update_state({
+        "phase": "queued",
+        "current_version": APP_VERSION,
+        "target_version": check.get("latest_version"),
+        "latest_version": check.get("latest_version"),
+        "selected_asset": check.get("selected_asset"),
+        "error": None,
+    })
+    UPDATE_AUTO_TASK = asyncio.create_task(run_auto_update_background())
     return {
         "ok": True,
         "updated": True,
-        "restart_required": not external_updater_started,
+        "running": True,
+        "restart_required": True,
         "current_version": check.get("current_version"),
         "latest_version": check.get("latest_version"),
-        "download": download,
-        "install": install,
-        "message": install.get("message") if external_updater_started else "自动升级已安装完成，请重启应用后生效。",
+        "update_state": update_state_payload(),
+        "message": "已开始自动更新，下载和安装进度会在状态面板中刷新。",
     }
+
+
+@app.post("/api/app/update-cleanup")
+async def app_update_cleanup():
+    state = load_update_state()
+    removed = []
+    for path in [state.get("temp_path"), os.path.join(UPDATE_DOWNLOADS_DIR, str(state.get("filename") or "") + ".part")]:
+        path = os.path.abspath(str(path or ""))
+        if not path or not is_safe_child_path(path, UPDATE_DOWNLOADS_DIR):
+            continue
+        if os.path.isfile(path):
+            os.remove(path)
+            removed.append(path)
+    save_update_state({
+        "phase": "idle",
+        "current_version": APP_VERSION,
+        "latest_version": state.get("latest_version") or state.get("target_version") or "",
+        "error": None,
+        "cleaned_files": removed,
+    })
+    return {"ok": True, "removed": removed, "update_state": update_state_payload()}
 
 
 @app.post("/api/app/restart")
@@ -5056,7 +5346,7 @@ def list_assets(type: str = "", q: str = "", favorite: Optional[bool] = None, li
     offset = max(0, int(offset or 0))
     clauses = []
     params = []
-    if type in {"image", "video", "file"}:
+    if type in {"image", "video", "audio", "file"}:
         clauses.append("type = ?")
         params.append(type)
     if favorite is not None:
@@ -5546,9 +5836,22 @@ async def upload_ai_reference(files: List[UploadFile] = File(...)):
     return {"files": uploaded}
 
 @app.post("/api/assets/upload")
-async def upload_assets(files: List[UploadFile] = File(...)):
+async def upload_assets(
+    files: List[UploadFile] = File(...),
+    source_type: str = Form(default="upload", max_length=80),
+    prompt: str = Form(default="", max_length=ONLINE_IMAGE_PROMPT_MAX_LENGTH),
+    model: str = Form(default="", max_length=MODEL_NAME_MAX_LENGTH),
+    canvas_id: str = Form(default="", max_length=120),
+    node_id: str = Form(default="", max_length=160),
+    storage_key: str = Form(default="", max_length=500),
+    tags: str = Form(default="", max_length=1000),
+):
     max_bytes = MAX_UPLOAD_SIZE_MB * 1024 * 1024
     uploaded = []
+    clean_source_type = (source_type or "upload").strip()[:80] or "upload"
+    clean_tags = [item.strip() for item in re.split(r"[,，]", tags or "") if item.strip()]
+    if clean_source_type == "canvas" and "canvas" not in clean_tags:
+        clean_tags.append("canvas")
     for file in files:
         content = await file.read()
         if len(content) > max_bytes:
@@ -5577,9 +5880,18 @@ async def upload_assets(files: List[UploadFile] = File(...)):
         local_url = output_url_for(filename, category)
         item = index_local_asset(
             local_url,
-            source_type="upload",
-            tags=["upload"],
+            source_type=clean_source_type,
+            prompt=prompt,
+            model=model,
+            tags=clean_tags or [clean_source_type],
             created_at=time.time(),
+            metadata={
+                "source": clean_source_type,
+                "canvas_id": canvas_id,
+                "node_id": node_id,
+                "storage_key": storage_key,
+                "original_name": original,
+            },
         )
         if item:
             with ASSET_LOCK:

@@ -50,6 +50,15 @@ export const useUserStore = create<UserStore>()(
                     }
                     set({ user, isReady: true, isLoading: false });
                 } catch {
+                    try {
+                        const recovered = await fetchCurrentUser();
+                        if (recovered.role !== "guest") {
+                            set({ token: "", user: recovered, isReady: true, isLoading: false });
+                            return;
+                        }
+                    } catch {
+                        // fall through to clearing the stale token
+                    }
                     set({ token: "", user: null, isReady: true, isLoading: false });
                 }
             },

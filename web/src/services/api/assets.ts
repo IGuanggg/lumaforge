@@ -44,9 +44,37 @@ export async function uploadAssetFile(file: File) {
     return data;
 }
 
-export async function uploadAssetDataUrl(dataUrl: string, filename = "canvas-image.png") {
+export type AssetUploadMetadata = {
+    sourceType?: string;
+    prompt?: string;
+    model?: string;
+    canvasId?: string;
+    nodeId?: string;
+    storageKey?: string;
+    tags?: string[];
+};
+
+export async function uploadAssetFileWithMetadata(file: File, metadata: AssetUploadMetadata = {}) {
+    const form = new FormData();
+    form.append("files", file);
+    if (metadata.sourceType) form.append("source_type", metadata.sourceType);
+    if (metadata.prompt) form.append("prompt", metadata.prompt);
+    if (metadata.model) form.append("model", metadata.model);
+    if (metadata.canvasId) form.append("canvas_id", metadata.canvasId);
+    if (metadata.nodeId) form.append("node_id", metadata.nodeId);
+    if (metadata.storageKey) form.append("storage_key", metadata.storageKey);
+    if (metadata.tags?.length) form.append("tags", metadata.tags.join(","));
+    const response = await fetch("/api/assets/upload", { method: "POST", body: form });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.code) {
+        throw new Error(data?.detail || data?.msg || data?.message || "素材上传失败");
+    }
+    return data;
+}
+
+export async function uploadAssetDataUrl(dataUrl: string, filename = "canvas-image.png", metadata: AssetUploadMetadata = {}) {
     const blob = await (await fetch(dataUrl)).blob();
-    return uploadAssetFile(new File([blob], filename, { type: blob.type || "image/png" }));
+    return uploadAssetFileWithMetadata(new File([blob], filename, { type: blob.type || "image/png" }), metadata);
 }
 
 function normalizeAssetLibraryResponse(data: Record<string, unknown>): AssetLibraryResponse {

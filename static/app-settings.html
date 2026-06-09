@@ -56,9 +56,9 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260609-v216-login-session-stability1"></script>
-    <script src="/static/i18n.js?v=20260609-v216-login-session-stability1"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260609-v216-login-session-stability1">
+    <script src="/static/theme.js?v=20260609-v217-feature-integration1"></script>
+    <script src="/static/i18n.js?v=20260609-v217-feature-integration1"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260609-v217-feature-integration1">
     <style>
         :root {
             --bg:#f7f8fa;
@@ -640,7 +640,7 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.1.6 登录状态稳定版</div>
+                        <div class="welcome-title">v2.1.7 登录状态稳定版</div>
                         <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是让桌面端重启、升级和入口切换后更稳定地保持登录状态。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
@@ -807,6 +807,9 @@
                             </button>
                             <button class="action-btn primary" id="restart-app-btn" type="button" style="display:none">
                                 <i data-lucide="rotate-cw" class="w-4 h-4"></i><span>重启应用</span>
+                            </button>
+                            <button class="action-btn" id="cleanup-update-btn" type="button" style="display:none">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i><span>清理半包</span>
                             </button>
                         </div>
                         <div class="status" id="update-status">等待检查。</div>
@@ -1041,9 +1044,11 @@
             const filename = state.filename || selectedAsset.name || (state.path ? String(state.path).split(/[\\/]/).pop() : '');
             const total = Number(state.total_bytes || state.package_size || state.size || selectedAsset.size || 0);
             const downloaded = Number(state.downloaded_bytes || 0);
-            const pct = phasePercent(state);
+            const pct = Number(state.download_progress || 0) || phasePercent(state);
+            const stalled = !!state.stalled;
+            const stalledText = stalled ? ` · 疑似卡住 ${Number(state.stalled_seconds || 0)}s` : '';
             setText('update-phase-text', UPDATE_PHASE_LABELS[phase] || phase || '等待检查');
-            setText('update-percent-text', phase === 'downloading' && total > 0 ? `${pct}% · ${formatBytes(downloaded)} / ${formatBytes(total)}` : (pct ? `${pct}%` : '-'));
+            setText('update-percent-text', phase === 'downloading' && total > 0 ? `${pct}% · ${formatBytes(downloaded)} / ${formatBytes(total)}${stalledText}` : (pct ? `${pct}%${stalledText}` : (stalled ? stalledText.slice(3) : '-')));
             const fill = document.getElementById('update-progress-fill');
             if(fill) fill.style.width = `${pct}%`;
             setText('update-state-version', state.target_version || state.latest_version || state.version || '-');
@@ -1057,12 +1062,14 @@
             setText('update-state-backup', state.backup_dir || '-');
             const failure = document.getElementById('update-failure');
             if(failure) {
-                const shouldShow = phase === 'failed' || phase === 'rollback' || phase === 'restart_failed' || !!state.error || !!state.rollback_error || !!state.restart_error;
+                const shouldShow = phase === 'failed' || phase === 'rollback' || phase === 'restart_failed' || !!state.error || !!state.rollback_error || !!state.restart_error || stalled;
                 failure.classList.toggle('show', shouldShow);
                 failure.textContent = shouldShow
-                    ? `错误：${state.error || state.restart_error || '-'}${state.backup_dir ? `。备份目录：${state.backup_dir}` : ''}${state.rollback_error ? `。回滚错误：${state.rollback_error}` : ''}${state.restart_candidates ? `。候选路径：${(state.restart_candidates || []).join('；')}` : ''}`
+                    ? `${stalled ? '下载进度长时间未变化，建议清理半包后重试。' : `错误：${state.error || state.restart_error || '-'}`}${state.backup_dir ? `。备份目录：${state.backup_dir}` : ''}${state.rollback_error ? `。回滚错误：${state.rollback_error}` : ''}${state.restart_candidates ? `。候选路径：${(state.restart_candidates || []).join('；')}` : ''}`
                     : '';
             }
+            const cleanupBtn = document.getElementById('cleanup-update-btn');
+            if(cleanupBtn) cleanupBtn.style.display = state.can_cleanup || stalled || phase === 'failed' ? '' : 'none';
             renderUpdatePostState(state);
             if(phase === 'failed' || phase === 'rollback' || phase === 'restart_failed') {
                 setStatus('update-status', phase === 'rollback' ? '更新失败，正在尝试回滚。' : (state.error || state.restart_error || '更新或重启失败。'), 'error');
@@ -1262,13 +1269,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.1.6' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.1.7' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.1.6';
+            const version = appInfo?.version || '2.1.7';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }
@@ -1977,30 +1984,20 @@
             }
             const btn = document.getElementById('auto-update-btn');
             if(btn) btn.disabled = true;
-            let externalStarted = false;
+            let keepPolling = false;
             try {
                 const preflight = await runUpdatePreflight({silent:true});
                 if(preflight && preflight.blocking_count){
                     setStatus('update-status', `安装前检查未通过：${preflight.blocking_count} 个阻塞项。`, 'error');
                     return;
                 }
-                setStatus('update-status', '正在自动升级：检查版本、下载更新包、安装替换...');
+                setStatus('update-status', '已开始自动升级，正在后台下载并安装...');
                 beginUpdatePolling();
                 const data = await fetch('/api/app/update-auto', { method:'POST' }).then(jsonOrThrow);
                 if(data.updated) {
-                    if(data.install?.external_updater_started) {
-                        externalStarted = true;
-                        renderUpdateState(data.install.update_state || data.install);
-                        setStatus('update-status', data.message || '已启动桌面更新器，应用即将关闭并自动重启。', 'ok');
-                        return;
-                    }
-                    const replaced = data.install?.replaced?.length || 0;
-                    setStatus('update-status', `自动升级完成，已替换 ${replaced} 项。请重启应用后生效。`, 'ok');
-                    await loadInfo();
-                    const restartBtn = document.getElementById('restart-app-btn');
-                    if(restartBtn) restartBtn.style.display = '';
-                    const actions = document.getElementById('update-actions');
-                    if(actions) actions.style.display = '';
+                    keepPolling = !!data.running;
+                    renderUpdateState(data.update_state || data);
+                    setStatus('update-status', data.message || '自动更新任务已启动，请等待进度完成。', 'ok');
                 } else {
                     if(data.check) renderUpdateResult(data.check);
                     setStatus('update-status', data.message || '当前已是最新版本。', data.ok === false ? 'warn' : 'ok');
@@ -2009,7 +2006,21 @@
                 setStatus('update-status', e.message || String(e), 'error');
                 await refreshUpdateState();
             } finally {
-                if(!externalStarted) stopUpdatePolling();
+                if(!keepPolling) stopUpdatePolling();
+                if(btn) btn.disabled = false;
+            }
+        }
+
+        async function cleanupUpdatePackage() {
+            const btn = document.getElementById('cleanup-update-btn');
+            if(btn) btn.disabled = true;
+            try {
+                const data = await fetch('/api/app/update-cleanup', {method:'POST'}).then(jsonOrThrow);
+                renderUpdateState(data.update_state || data);
+                setStatus('update-status', `已清理 ${Number(data.removed?.length || 0)} 个临时更新文件。`, 'ok');
+            } catch(e) {
+                setStatus('update-status', e.message || String(e), 'error');
+            } finally {
                 if(btn) btn.disabled = false;
             }
         }
@@ -2085,23 +2096,13 @@
             }
             setStatus('update-status', '正在执行发布检查...');
             try {
-                const [info, assets, backups] = await Promise.all([
-                    fetch('/api/app/info').then(jsonOrThrow),
-                    fetch('/api/assets/health').then(jsonOrThrow),
-                    fetch('/api/app/backups').then(jsonOrThrow)
-                ]);
-                appInfo = info || appInfo || {};
-                const staticHealth = info.static_health || {};
-                const updateCapability = info.update_capability || {};
-                const checks = [
-                    {label:'当前版本', ok:info.version === '2.1.6', detail:info.version || '-'},
-                    {label:'前端依赖', ok:!!staticHealth.ok, detail:staticHealth.ok ? `${Number(staticHealth.checked_count || 0)} 项完整` : `缺失 ${Number(staticHealth.missing_count || 0)} 项`},
-                    {label:'素材文件', ok:Number(assets.missing_count || 0) === 0, detail:`缺失 ${Number(assets.missing_count || 0)} 个`},
-                    {label:'缩略图', ok:Number(assets.thumb_missing_count || 0) === 0, detail:`待重建 ${Number(assets.thumb_missing_count || 0)} 个`, warnOnly:true},
-                    {label:'本地备份', ok:(backups.items || []).length > 0, detail:(backups.items || []).length ? `已有 ${(backups.items || []).length} 个备份` : '建议发布前创建一次备份', warnOnly:true},
-                    {label:'更新器能力', ok:!!updateCapability.supported, detail:updateCapability.supported ? updateModeText(updateCapability.mode) : (updateCapability.reason || '不可用'), warnOnly:true},
-                    {label:'更新检查地址', ok:!!info.update_check_configured, detail:info.update_check_configured ? (info.update_check_url || '已配置') : '未配置 APP_UPDATE_CHECK_URL', warnOnly:true}
-                ];
+                const data = await fetch('/api/app/release-health').then(jsonOrThrow);
+                const checks = (data.checks || []).map(item => ({
+                    label: item.label || item.id || '检查项',
+                    ok: item.status === 'ok',
+                    detail: item.detail || item.action || '',
+                    warnOnly: item.status === 'warn'
+                }));
                 const blocking = checks.filter(item => !item.ok && !item.warnOnly);
                 const warnings = checks.filter(item => !item.ok && item.warnOnly);
                 if(box) {
@@ -2122,7 +2123,7 @@
                                 ${warnings.length ? warnings.map(item => publishCheckItem(item.label, false, item.detail, true)).join('') : publishCheckItem('提醒项', true, '暂无')}
                             </div>
                         </div>
-                        <div class="update-result-notes">最终发版仍需运行 scripts/check_release.ps1，并在 GitHub Release 上传安装器、桌面 zip 和必要校验信息。</div>
+                        <div class="update-result-notes">发布检查覆盖版本、更新、登录、API 配置、素材库、画布保存/连线和画布生成素材入库。最终发版仍需运行脚本并上传 GitHub Release 资产。</div>
                     `;
                 }
                 setStatus('update-status', blocking.length ? '发布检查发现阻塞项。' : warnings.length ? '发布检查通过，但有提醒项。' : '发布检查通过。', blocking.length ? 'error' : warnings.length ? 'warn' : 'ok');
@@ -2166,6 +2167,7 @@
         document.getElementById('download-update-btn').addEventListener('click', downloadUpdate);
         document.getElementById('install-update-btn').addEventListener('click', installUpdate);
         document.getElementById('restart-app-btn').addEventListener('click', restartApp);
+        document.getElementById('cleanup-update-btn')?.addEventListener('click', cleanupUpdatePackage);
         document.getElementById('desktop-restart-btn')?.addEventListener('click', event => requestAppRestart('desktop-action-status', event.currentTarget));
         document.getElementById('desktop-exit-btn')?.addEventListener('click', requestAppExit);
         document.getElementById('close-release-notes-btn')?.addEventListener('click', closeReleaseNotes);
