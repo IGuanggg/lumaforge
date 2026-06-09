@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	LumaForgeVersion = "2.1.4"
-	LumaForgeBuildID = "20260609-v214-canvas-dblclick-node1"
+	LumaForgeVersion = "2.1.5"
+	LumaForgeBuildID = "20260609-v215-canvas-migration-links1"
 )
 
 var (

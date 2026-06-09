@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -51,7 +52,7 @@ func LumaMigrationImport() map[string]any {
 	} else {
 		if data, err := lumaLegacyJSON("/api/canvases"); err == nil {
 			for _, item := range anySlice(firstNonNil(data["canvases"], data["items"])) {
-				if project := convertLegacyCanvasProject(anyMap(item)); project != nil {
+				if project := convertLegacyCanvasProject(legacyCanvasDetail(anyMap(item))); project != nil {
 					projects = append(projects, project)
 				}
 			}
@@ -112,6 +113,28 @@ func lumaLegacyJSON(path string) (map[string]any, error) {
 
 func LumaLegacyJSON(path string) (map[string]any, error) {
 	return lumaLegacyJSON(path)
+}
+
+func legacyCanvasDetail(canvas map[string]any) map[string]any {
+	if len(canvas) == 0 {
+		return canvas
+	}
+	if len(anySlice(canvas["nodes"])) > 0 || len(anySlice(canvas["connections"])) > 0 {
+		return canvas
+	}
+	id := stringFromAny(canvas["id"])
+	if id == "" {
+		return canvas
+	}
+	data, err := lumaLegacyJSON("/api/canvases/" + url.PathEscape(id))
+	if err != nil {
+		return canvas
+	}
+	detail := anyMap(firstNonNil(data["canvas"], data["project"], data))
+	if len(detail) == 0 {
+		return canvas
+	}
+	return detail
 }
 
 func convertLegacyCanvasProject(canvas map[string]any) map[string]any {

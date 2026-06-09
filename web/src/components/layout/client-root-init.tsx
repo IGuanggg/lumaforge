@@ -10,7 +10,7 @@ import { useCanvasStore } from "@/app/(user)/canvas/stores/use-canvas-store";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 
-const V21_MIGRATION_MARKER = "lumaforge:v21_migration_done";
+const V21_MIGRATION_MARKER = "lumaforge:v21_migration_done:full-canvas-v2";
 
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const { message } = App.useApp();
@@ -71,7 +71,32 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
                 let imported = 0;
                 for (const project of data.projects || []) {
                     const legacyId = project.metadata?.legacyId;
-                    if (legacyId && existingLegacyIds.has(legacyId)) continue;
+                    if (legacyId && existingLegacyIds.has(legacyId)) {
+                        const existing = useCanvasStore.getState().projects.find((item) => item.metadata?.legacyId === legacyId);
+                        const hasIncomingData = Boolean(project.nodes?.length || project.connections?.length);
+                        const needsRepair = Boolean(existing && hasIncomingData && !existing.nodes.length && !existing.connections.length);
+                        if (!existing || !needsRepair) continue;
+                        useCanvasStore.setState((state) => ({
+                            projects: state.projects.map((item) =>
+                                item.id === existing.id
+                                    ? {
+                                          ...item,
+                                          title: project.title || item.title,
+                                          nodes: project.nodes || [],
+                                          connections: project.connections || [],
+                                          chatSessions: project.chatSessions || item.chatSessions,
+                                          activeChatId: project.activeChatId ?? item.activeChatId,
+                                          backgroundMode: project.backgroundMode || item.backgroundMode,
+                                          showImageInfo: project.showImageInfo ?? item.showImageInfo,
+                                          viewport: project.viewport || item.viewport,
+                                          metadata: { ...item.metadata, ...project.metadata },
+                                      }
+                                    : item,
+                            ),
+                        }));
+                        imported += 1;
+                        continue;
+                    }
                     importProject(project);
                     if (legacyId) existingLegacyIds.add(legacyId);
                     imported += 1;
