@@ -10,6 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+const lumaAuthCookieName = "lumaforge_auth_token"
+
 func AdminAuth(c *gin.Context) {
 	user, ok := authUser(c)
 	if !ok || user.Role != model.UserRoleAdmin {
@@ -45,6 +47,14 @@ func NotFoundJSON(c *gin.Context) {
 
 func authUser(c *gin.Context) (model.AuthUser, bool) {
 	token := strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer ")
+	if strings.TrimSpace(token) == "" {
+		if cookieToken, err := c.Cookie(lumaAuthCookieName); err == nil {
+			token = cookieToken
+		}
+	}
+	if strings.TrimSpace(token) == "" {
+		token = service.LumaLoadCloudSession().Token
+	}
 	if strings.TrimSpace(token) == "" {
 		return model.AuthUser{}, false
 	}

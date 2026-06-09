@@ -54,6 +54,10 @@ export function fetchCloudProfile() {
     return rawRequest<CloudStatus>("/api/cloud/profile", { timeoutMs: 8_000 });
 }
 
+export function logoutCloud() {
+    return rawRequest("/api/cloud/logout", { method: "POST", body: JSON.stringify({}), timeoutMs: 8_000 });
+}
+
 export function saveCloudProfile(payload: { email?: string; display_name?: string; avatar_url?: string }) {
     return rawRequest<CloudStatus>("/api/cloud/profile", { method: "PUT", body: JSON.stringify(payload) });
 }

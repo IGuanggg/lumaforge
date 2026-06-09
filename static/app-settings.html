@@ -56,9 +56,9 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260609-v215-canvas-migration-links1"></script>
-    <script src="/static/i18n.js?v=20260609-v215-canvas-migration-links1"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260609-v215-canvas-migration-links1">
+    <script src="/static/theme.js?v=20260609-v216-login-session-stability1"></script>
+    <script src="/static/i18n.js?v=20260609-v216-login-session-stability1"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260609-v216-login-session-stability1">
     <style>
         :root {
             --bg:#f7f8fa;
@@ -640,14 +640,14 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.1.5 画布迁移恢复版</div>
-                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是恢复旧版画布迁移后的节点和连线数据。</div>
+                        <div class="welcome-title">v2.1.6 登录状态稳定版</div>
+                        <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是让桌面端重启、升级和入口切换后更稳定地保持登录状态。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
                 </div>
                 <div class="welcome-list">
-                    <div class="welcome-item"><i data-lucide="refresh-cw" class="w-4 h-4"></i><span>旧版画布迁移会读取完整详情，节点、内容和连线会一起进入新画布库</span></div>
-                    <div class="welcome-item"><i data-lucide="shield-check" class="w-4 h-4"></i><span>已经导入为空壳的旧画布会自动补齐，不会重复生成同名副本</span></div>
+                    <div class="welcome-item"><i data-lucide="refresh-cw" class="w-4 h-4"></i><span>登录凭证增加 cookie 兜底，切换入口或刷新页面后更容易自动恢复账户</span></div>
+                    <div class="welcome-item"><i data-lucide="shield-check" class="w-4 h-4"></i><span>本地认证密钥会持久保存，桌面端重启和升级后不会主动让旧 token 失效</span></div>
                     <div class="welcome-item"><i data-lucide="file-check-2" class="w-4 h-4"></i><span>发布检查会拦截旧 build id 和静态脚本语法错误</span></div>
                     <div class="welcome-item"><i data-lucide="wand-sparkles" class="w-4 h-4"></i><span>修复智能画布内多处损坏中文字符串，防止页面脚本解析失败</span></div>
                 </div>
@@ -1262,13 +1262,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.1.5' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.1.6' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.1.5';
+            const version = appInfo?.version || '2.1.6';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }
@@ -2094,7 +2094,7 @@
                 const staticHealth = info.static_health || {};
                 const updateCapability = info.update_capability || {};
                 const checks = [
-                    {label:'当前版本', ok:info.version === '2.1.5', detail:info.version || '-'},
+                    {label:'当前版本', ok:info.version === '2.1.6', detail:info.version || '-'},
                     {label:'前端依赖', ok:!!staticHealth.ok, detail:staticHealth.ok ? `${Number(staticHealth.checked_count || 0)} 项完整` : `缺失 ${Number(staticHealth.missing_count || 0)} 项`},
                     {label:'素材文件', ok:Number(assets.missing_count || 0) === 0, detail:`缺失 ${Number(assets.missing_count || 0)} 个`},
                     {label:'缩略图', ok:Number(assets.thumb_missing_count || 0) === 0, detail:`待重建 ${Number(assets.thumb_missing_count || 0)} 个`, warnOnly:true},

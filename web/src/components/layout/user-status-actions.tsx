@@ -21,6 +21,7 @@ import {
     fetchCloudMediaStatus,
     fetchCloudProfile,
     fetchCloudStatus,
+    logoutCloud,
     requestEmailVerify,
     restoreCloudMedia,
     saveCloudProfile,
@@ -123,6 +124,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
                         open={accountDrawerOpen}
                         onClose={() => setAccountDrawerOpen(false)}
                         onLogout={() => {
+                            void logoutCloud().catch(() => undefined);
                             logout();
                             setAccountDrawerOpen(false);
                         }}

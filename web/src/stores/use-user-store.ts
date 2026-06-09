@@ -29,7 +29,16 @@ export const useUserStore = create<UserStore>()(
             hydrateUser: async () => {
                 const token = get().token;
                 if (!token) {
-                    set({ user: null, isReady: true });
+                    try {
+                        const user = await fetchCurrentUser();
+                        if (user.role === "guest") {
+                            set({ user: null, isReady: true, isLoading: false });
+                            return;
+                        }
+                        set({ user, isReady: true, isLoading: false });
+                    } catch {
+                        set({ user: null, isReady: true, isLoading: false });
+                    }
                     return;
                 }
                 set({ isLoading: true });

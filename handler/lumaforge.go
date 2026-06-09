@@ -14,6 +14,59 @@ import (
 	"github.com/basketikun/infinite-canvas/service"
 )
 
+const lumaAuthCookieName = "lumaforge_auth_token"
+
+func setLumaAuthCookie(w http.ResponseWriter, token string) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     lumaAuthCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   60 * 60 * 24 * 30,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func clearLumaAuthCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     lumaAuthCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+func lumaAuthTokenFromRequest(r *http.Request) string {
+	token := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	if token != "" {
+		return token
+	}
+	if cookie, err := r.Cookie(lumaAuthCookieName); err == nil {
+		return strings.TrimSpace(cookie.Value)
+	}
+	return ""
+}
+
+func lumaStringFromAny(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case fmt.Stringer:
+		return typed.String()
+	default:
+		if value == nil {
+			return ""
+		}
+		return fmt.Sprint(value)
+	}
+}
+
 func writeRawJSON(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	_ = json.NewEncoder(w).Encode(data)
@@ -119,6 +172,7 @@ func LumaAuthLogin(w http.ResponseWriter, r *http.Request) {
 		FailError(w, err)
 		return
 	}
+	setLumaAuthCookie(w, lumaStringFromAny(data["token"]))
 	OK(w, data)
 }
 
@@ -130,12 +184,17 @@ func LumaAuthRegister(w http.ResponseWriter, r *http.Request) {
 		FailError(w, err)
 		return
 	}
+	setLumaAuthCookie(w, lumaStringFromAny(data["token"]))
 	OK(w, data)
 }
 
 func LumaCurrentUser(w http.ResponseWriter, r *http.Request) {
-	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	token := lumaAuthTokenFromRequest(r)
+	if strings.TrimSpace(token) == "" {
+		token = service.LumaLoadCloudSession().Token
+	}
 	if user, ok := service.LumaCurrentAuthUser(token); ok {
+		setLumaAuthCookie(w, token)
 		OK(w, user)
 		return
 	}
@@ -147,11 +206,12 @@ func LumaMeRaw(w http.ResponseWriter, r *http.Request) {
 		LumaCloudRawProxy(w, r)
 		return
 	}
-	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	token := lumaAuthTokenFromRequest(r)
 	if strings.TrimSpace(token) == "" {
 		token = service.LumaLoadCloudSession().Token
 	}
 	if user, ok := service.LumaCurrentAuthUser(token); ok {
+		setLumaAuthCookie(w, token)
 		session := service.LumaLoadCloudSession()
 		writeRawJSON(w, map[string]any{
 			"email":          user.Username,
@@ -165,7 +225,7 @@ func LumaMeRaw(w http.ResponseWriter, r *http.Request) {
 }
 
 func refreshCloudSessionFromRequest(r *http.Request) {
-	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	token := lumaAuthTokenFromRequest(r)
 	if strings.TrimSpace(token) != "" {
 		_, _ = service.LumaCurrentAuthUser(token)
 	}
@@ -191,6 +251,7 @@ func lumaCloudAuthRaw(w http.ResponseWriter, r *http.Request, action string) {
 		writeRawError(w, http.StatusBadRequest, err)
 		return
 	}
+	setLumaAuthCookie(w, lumaStringFromAny(data["token"]))
 	session := service.LumaLoadCloudSession()
 	writeRawJSON(w, map[string]any{
 		"ok":                   true,
@@ -207,6 +268,7 @@ func lumaCloudAuthRaw(w http.ResponseWriter, r *http.Request, action string) {
 
 func LumaCloudLogout(w http.ResponseWriter, r *http.Request) {
 	_ = service.LumaSaveCloudSession(service.LumaCloudSession{BaseURL: service.LumaLoadCloudSession().BaseURL})
+	clearLumaAuthCookie(w)
 	writeRawJSON(w, map[string]any{"ok": true})
 }
 

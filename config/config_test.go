@@ -31,3 +31,22 @@ func TestNormalizeDockerSQLiteDSNLeavesLocalPathWithoutMountedDataDir(t *testing
 		t.Fatalf("DatabaseDSN = %q, want relative local path", Cfg.DatabaseDSN)
 	}
 }
+
+func TestPersistentOrRandomSecretReusesLumaDataDirSecret(t *testing.T) {
+	Cfg = Config{LumaForgeDataDir: t.TempDir()}
+
+	first, err := persistentOrRandomSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := persistentOrRandomSecret()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == "" || second == "" || first != second {
+		t.Fatalf("persistent secret mismatch: first=%q second=%q", first, second)
+	}
+	if _, err := os.Stat(filepath.Join(Cfg.LumaForgeDataDir, "auth_secret.key")); err != nil {
+		t.Fatalf("auth secret was not written: %v", err)
+	}
+}

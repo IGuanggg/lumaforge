@@ -38,13 +38,44 @@ func Load() error {
 	}
 	normalizeDockerSQLiteDSN("/app/data")
 	if strings.TrimSpace(Cfg.JWTSecret) == "" || Cfg.JWTSecret == "infinite-canvas" {
-		secret, err := randomSecret()
+		secret, err := persistentOrRandomSecret()
 		if err != nil {
 			return err
 		}
 		Cfg.JWTSecret = secret
 	}
 	return nil
+}
+
+func persistentOrRandomSecret() (string, error) {
+	path := persistentSecretPath()
+	if path != "" {
+		if data, err := os.ReadFile(path); err == nil {
+			if value := strings.TrimSpace(string(data)); len(value) >= 32 {
+				return value, nil
+			}
+		}
+	}
+	secret, err := randomSecret()
+	if err != nil {
+		return "", err
+	}
+	if path != "" {
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err == nil {
+			_ = os.WriteFile(path, []byte(secret+"\n"), 0600)
+		}
+	}
+	return secret, nil
+}
+
+func persistentSecretPath() string {
+	if dir := strings.TrimSpace(Cfg.LumaForgeDataDir); dir != "" {
+		return filepath.Join(dir, "auth_secret.key")
+	}
+	if runtimeDir := strings.TrimSpace(os.Getenv("APP_RUNTIME_DIR")); runtimeDir != "" {
+		return filepath.Join(runtimeDir, "data", "auth_secret.key")
+	}
+	return ""
 }
 
 func normalizeDockerSQLiteDSN(appDataDir string) {
