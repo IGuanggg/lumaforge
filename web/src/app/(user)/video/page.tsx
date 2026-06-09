@@ -246,6 +246,8 @@ export default function VideoPage() {
             setReferences((value) => [...value, { id: nanoid(), name: payload.title, type: stored.mimeType, dataUrl: stored.url, storageKey: stored.storageKey }].slice(0, SEEDANCE_REFERENCE_LIMITS.images));
         } else if (payload.kind === "video") {
             setVideoReferences((value) => [...value, { id: nanoid(), name: payload.title, type: "video/mp4", url: payload.url, storageKey: payload.storageKey, width: payload.width, height: payload.height }].slice(0, SEEDANCE_REFERENCE_LIMITS.videos));
+        } else if (payload.kind === "audio") {
+            setAudioReferences((value) => [...value, { id: nanoid(), name: payload.title, type: "audio/mpeg", url: payload.url, storageKey: payload.storageKey, durationMs: payload.durationMs }].slice(0, SEEDANCE_REFERENCE_LIMITS.audios));
         }
         setAssetPickerOpen(false);
     };

@@ -3,7 +3,7 @@ import { apiGet, compactApiParams } from "@/services/api/request";
 export type AssetLibraryItem = {
     id: string;
     title: string;
-    type: "text" | "image" | "video";
+    type: "text" | "image" | "video" | "audio";
     coverUrl: string;
     tags: string[];
     category: string;
@@ -67,7 +67,7 @@ function normalizeAssetLibraryItem(raw: unknown): AssetLibraryItem {
     const url = firstString(item.url, item.local_url, item.source_url, item.cloud_url);
     const coverUrl = firstString(item.coverUrl, item.cover_url, item.thumb_url, item.local_url, item.url, item.cloud_url);
     const typeValue = firstString(item.type, item.kind).toLowerCase();
-    const type: AssetLibraryItem["type"] = typeValue === "video" ? "video" : typeValue === "text" ? "text" : "image";
+    const type: AssetLibraryItem["type"] = typeValue === "video" ? "video" : typeValue === "audio" ? "audio" : typeValue === "text" ? "text" : "image";
     return {
         id: firstString(item.id, item.asset_id, item.sha256) || `asset-${Math.random().toString(36).slice(2)}`,
         title: firstString(item.title, item.name) || "未命名素材",

@@ -93,7 +93,7 @@ type ConfigStore = {
 };
 
 function resolveEffectiveConfig(config: AiConfig, modelChannel: AdminPublicSettings["modelChannel"] | null) {
-    const channelMode = "remote";
+    const channelMode: AiConfig["channelMode"] = "remote";
     if (!modelChannel) return { ...config, channelMode };
     const providerModels = normalizeProviderModelOptions(modelChannel.providerModels);
     const imageProviderModels = filterProviderModelsByCapability(providerModels, "image");

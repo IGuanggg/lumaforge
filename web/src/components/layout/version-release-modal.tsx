@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { Modal, Tag, Timeline } from "antd";
+import { App, Modal, Tag, Timeline } from "antd";
 import { useVersionCheck } from "@/hooks/use-version-check";
 import { APP_VERSION } from "@/constant/env";
 
@@ -24,6 +24,41 @@ type VersionReleaseModalProps = {
 
 export function VersionReleaseModal({ className, style }: VersionReleaseModalProps) {
     const { open, setOpen, openReleaseModal, latestVersion, releases, checking, hasNewVersion, checkLatestRelease } = useVersionCheck();
+    const { message } = App.useApp();
+
+    const handleCheckUpdate = async () => {
+        const data = await checkLatestRelease();
+        if (!data) {
+            message.error("获取最新版本信息失败");
+            return;
+        }
+        if (!data.configured) {
+            message.warning(data.auto_update_reason || data.message || "未配置更新检查地址");
+            return;
+        }
+        if (!data.is_newer) {
+            Modal.info({
+                title: "当前已是最新版本",
+                content: `当前版本：${data.current_version || APP_VERSION}`,
+                okText: "知道了",
+                centered: true,
+            });
+            return;
+        }
+        const latest = data.latest_version || "最新版本";
+        const modeText = data.auto_update_supported ? "可以在设置页直接自动升级。" : data.auto_update_reason || "当前环境不支持自动升级，可在设置页查看下载方式。";
+        Modal.confirm({
+            title: `发现新版本 ${latest}`,
+            content: `当前版本：${data.current_version || APP_VERSION}。${modeText} 是否现在前往更新？`,
+            okText: data.auto_update_supported ? "去升级" : "查看更新",
+            cancelText: "稍后",
+            centered: true,
+            onOk: () => {
+                setOpen(false);
+                window.location.href = "/app-settings#update";
+            },
+        });
+    };
 
     return (
         <>
@@ -51,7 +86,7 @@ export function VersionReleaseModal({ className, style }: VersionReleaseModalPro
                             <button
                                 type="button"
                                 className="cursor-pointer bg-transparent p-0 text-[11px] font-normal text-stone-400 underline-offset-2 transition hover:text-stone-700 hover:underline dark:text-stone-500 dark:hover:text-stone-300"
-                                onClick={() => void checkLatestRelease(true)}
+                                onClick={() => void handleCheckUpdate()}
                             >
                                 {checking ? "检查中..." : "检查更新"}
                             </button>

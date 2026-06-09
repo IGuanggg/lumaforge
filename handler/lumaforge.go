@@ -454,7 +454,28 @@ func LumaUpdateAuto(w http.ResponseWriter, r *http.Request) {
 	if proxyLegacy(w, r) {
 		return
 	}
-	LumaUpdateCheck(w, r)
+	check := service.LumaUpdateCheck()
+	capability := service.LumaUpdateCapability()
+	reason := firstNonEmpty(
+		firstMapString(capability, "reason"),
+		"当前环境没有连接桌面更新器，暂时不能自动升级。请使用桌面版启动后再试，或手动下载安装包。",
+	)
+	state := service.LumaSaveUpdateState(map[string]any{
+		"phase":          "failed",
+		"error":          reason,
+		"latest_version": check["latest_version"],
+		"asset":          check["selected_asset"],
+		"assets":         check["assets"],
+	})
+	writeRawJSON(w, map[string]any{
+		"ok":         false,
+		"updated":    false,
+		"message":    reason,
+		"detail":     reason,
+		"check":      check,
+		"state":      state,
+		"capability": capability,
+	})
 }
 
 func LumaLocalDataHealth(w http.ResponseWriter, r *http.Request) {

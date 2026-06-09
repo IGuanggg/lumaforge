@@ -23,10 +23,25 @@ function isNewerVersion(latestVersion: string, currentVersion: string) {
     return latest.some((value, index) => value > current[index] && latest.slice(0, index).every((part, prevIndex) => part === current[prevIndex]));
 }
 
+export type UpdateCheckResult = {
+    configured?: boolean;
+    ok?: boolean;
+    current_version?: string;
+    latest_version?: string;
+    is_newer?: boolean;
+    message?: string;
+    download_url?: string;
+    release_notes?: string;
+    notes?: string;
+    auto_update_supported?: boolean;
+    auto_update_reason?: string;
+    update_mode?: string;
+};
+
 async function fetchUpdateCheck() {
     const response = await fetch("/api/app/update-check", { cache: "no-store" });
     if (!response.ok) throw new Error("版本读取失败");
-    return (await response.json()) as { latest_version?: string; is_newer?: boolean; release_notes?: string };
+    return (await response.json()) as UpdateCheckResult;
 }
 
 export function useVersionCheck() {
@@ -59,12 +74,12 @@ export function useVersionCheck() {
                 setLatestVersion(version || currentVersion);
                 setReleases(localReleases);
                 if (showMessage) message.success("已获取最新版本信息");
-                return true;
+                return data;
             } catch {
                 setLatestVersion(currentVersion);
                 setReleases(localReleases);
                 if (showMessage) message.error("获取最新版本信息失败");
-                return false;
+                return null;
             } finally {
                 setChecking(false);
             }

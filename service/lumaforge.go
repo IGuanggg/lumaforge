@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	LumaForgeVersion = "2.1.1"
-	LumaForgeBuildID = "20260608-v211-account-assets1"
+	LumaForgeVersion = "2.1.2"
+	LumaForgeBuildID = "20260609-v212-canvas-assets-release1"
 )
 
 var (
@@ -950,20 +950,52 @@ func classifiedModelPayload(models []string, status int, message string) map[str
 
 func LumaAppInfo() map[string]any {
 	paths := LumaAppPaths()
+	updateCapability := LumaUpdateCapability()
 	return map[string]any{
 		"name":                    "LumaForge",
 		"display_name":            "光绘工坊",
 		"version":                 LumaForgeVersion,
 		"build_id":                LumaForgeBuildID,
+		"desktop":                 updateCapability["desktop"],
 		"runtime_dir":             filepath.Dir(LumaDataDir()),
 		"data_dir":                LumaDataDir(),
 		"assets_dir":              LumaAssetsDir(),
 		"output_dir":              LumaOutputDir(),
 		"paths":                   paths,
 		"update_capable":          true,
+		"update_capability":       updateCapability,
 		"update_check_configured": strings.TrimSpace(config.Cfg.UpdateCheckURL) != "",
 		"update_check_url":        config.Cfg.UpdateCheckURL,
 		"legacy_api_url":          strings.TrimRight(config.Cfg.LumaForgeLegacyAPI, "/"),
+		"update_state":            LumaUpdateState(),
+		"app_actions": map[string]any{
+			"restart_supported": false,
+			"exit_supported":    false,
+			"restart_mode":      "",
+			"exit_mode":         "",
+			"desktop":           updateCapability["desktop"],
+			"reason":            "Go + Next 主体暂未接入桌面生命周期控制。",
+		},
+	}
+}
+
+func LumaUpdateCapability() map[string]any {
+	legacyURL := strings.TrimSpace(config.Cfg.LumaForgeLegacyAPI)
+	desktop := os.Getenv("LUMAFORGE_DESKTOP") == "1" || os.Getenv("INFINITE_CANVAS_DESKTOP") == "1"
+	supported := legacyURL != ""
+	mode := "legacy-updater-missing"
+	reason := "当前 Go 主体未连接 legacy updater；请通过桌面版启动 LumaForge 后再执行自动升级。"
+	if supported {
+		mode = "desktop-updater"
+		reason = ""
+	}
+	return map[string]any{
+		"supported":      supported,
+		"mode":           mode,
+		"updater_path":   "",
+		"reason":         reason,
+		"desktop":        desktop,
+		"legacy_api_url": strings.TrimRight(legacyURL, "/"),
 	}
 }
 
@@ -1118,28 +1150,56 @@ func LumaSaveUpdateState(patch map[string]any) map[string]any {
 func LumaUpdateCheck() map[string]any {
 	checkURL := strings.TrimSpace(config.Cfg.UpdateCheckURL)
 	if checkURL == "" {
+		updateCapability := LumaUpdateCapability()
+		autoUpdateReason := stringFromAny(updateCapability["reason"])
 		return map[string]any{
-			"ok":              false,
-			"current_version": LumaForgeVersion,
-			"latest_version":  "",
-			"is_newer":        false,
-			"message":         "未配置更新检查地址",
+			"configured":            false,
+			"ok":                    false,
+			"current_version":       LumaForgeVersion,
+			"latest_version":        "",
+			"is_newer":              false,
+			"asset":                 nil,
+			"assets":                []map[string]any{},
+			"selected_asset":        nil,
+			"download_url":          "",
+			"release_notes":         "",
+			"notes":                 "",
+			"message":               "未配置更新检查地址",
+			"auto_update_supported": false,
+			"auto_update_reason":    firstNonEmpty(autoUpdateReason, "未配置更新检查地址，暂时不能自动升级。"),
+			"update_mode":           updateCapability["mode"],
+			"update_capability":     updateCapability,
 		}
 	}
 	LumaSaveUpdateState(map[string]any{"phase": "checking", "error": nil})
 	latest, asset, notes, err := fetchLatestGitHubRelease(checkURL)
 	if err != nil {
 		LumaSaveUpdateState(map[string]any{"phase": "failed", "error": err.Error()})
+		updateCapability := LumaUpdateCapability()
 		return map[string]any{
-			"ok":              false,
-			"current_version": LumaForgeVersion,
-			"latest_version":  "",
-			"is_newer":        false,
-			"message":         err.Error(),
-			"source_url":      checkURL,
+			"configured":            true,
+			"ok":                    false,
+			"current_version":       LumaForgeVersion,
+			"latest_version":        "",
+			"is_newer":              false,
+			"asset":                 nil,
+			"assets":                []map[string]any{},
+			"selected_asset":        nil,
+			"download_url":          "",
+			"release_notes":         "",
+			"notes":                 "",
+			"message":               err.Error(),
+			"source_url":            checkURL,
+			"auto_update_supported": false,
+			"auto_update_reason":    err.Error(),
+			"update_mode":           updateCapability["mode"],
+			"update_capability":     updateCapability,
 		}
 	}
 	isNewer := compareVersion(latest, LumaForgeVersion) > 0
+	updateCapability := LumaUpdateCapability()
+	autoUpdateSupported := boolFromAny(updateCapability["supported"])
+	autoUpdateReason := stringFromAny(updateCapability["reason"])
 	phase := "idle"
 	var stateAsset any
 	stateAssets := []map[string]any{}
@@ -1149,15 +1209,27 @@ func LumaUpdateCheck() map[string]any {
 		stateAssets = []map[string]any{asset}
 	}
 	LumaSaveUpdateState(map[string]any{"phase": phase, "latest_version": latest, "asset": stateAsset, "assets": stateAssets})
+	downloadURL := ""
+	if stateAsset != nil {
+		downloadURL = stringFromAny(asset["url"])
+	}
 	return map[string]any{
-		"ok":              true,
-		"current_version": LumaForgeVersion,
-		"latest_version":  latest,
-		"is_newer":        isNewer,
-		"asset":           stateAsset,
-		"assets":          stateAssets,
-		"release_notes":   notes,
-		"source_url":      checkURL,
+		"configured":            true,
+		"ok":                    true,
+		"current_version":       LumaForgeVersion,
+		"latest_version":        latest,
+		"is_newer":              isNewer,
+		"asset":                 stateAsset,
+		"assets":                stateAssets,
+		"selected_asset":        stateAsset,
+		"download_url":          downloadURL,
+		"release_notes":         notes,
+		"notes":                 notes,
+		"source_url":            checkURL,
+		"auto_update_supported": autoUpdateSupported,
+		"auto_update_reason":    autoUpdateReason,
+		"update_mode":           updateCapability["mode"],
+		"update_capability":     updateCapability,
 	}
 }
 

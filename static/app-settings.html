@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
@@ -56,9 +56,9 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260608-v211-account-assets1"></script>
-    <script src="/static/i18n.js?v=20260608-v211-account-assets1"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260608-v211-account-assets1">
+    <script src="/static/theme.js?v=20260609-v212-canvas-assets-release1"></script>
+    <script src="/static/i18n.js?v=20260609-v212-canvas-assets-release1"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260609-v212-canvas-assets-release1">
     <style>
         :root {
             --bg:#f7f8fa;
@@ -640,7 +640,7 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.1.1 源码主线重构版</div>
+                        <div class="welcome-title">v2.1.2 源码主线重构版</div>
                         <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是切换 Go + Next.js 画布主体，并保留云账户、API 设置和自动更新模块。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
@@ -729,7 +729,7 @@
                 </div>
 
                 <aside class="content">
-                    <section class="block">
+                    <section class="block" id="update-section">
                         <div class="block-head">
                             <div>
                                 <div class="block-title">版本与更新</div>
@@ -1262,15 +1262,22 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.1.1' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.1.2' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.1.1';
+            const version = appInfo?.version || '2.1.2';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
+        }
+
+        function scrollToRequestedSection() {
+            const section = new URLSearchParams(window.location.search).get('section');
+            if(section === 'update') {
+                setTimeout(() => document.getElementById('update-section')?.scrollIntoView({behavior:'smooth', block:'start'}), 120);
+            }
         }
 
         function renderLocalDataHealth(data) {
@@ -1995,7 +2002,8 @@
                     const actions = document.getElementById('update-actions');
                     if(actions) actions.style.display = '';
                 } else {
-                    setStatus('update-status', data.message || '当前已是最新版本。', 'ok');
+                    if(data.check) renderUpdateResult(data.check);
+                    setStatus('update-status', data.message || '当前已是最新版本。', data.ok === false ? 'warn' : 'ok');
                 }
             } catch(e) {
                 setStatus('update-status', e.message || String(e), 'error');
@@ -2036,6 +2044,7 @@
                 renderUpdateResult(data);
                 if(data.is_newer) {
                     setStatus('update-status', `发现新版本 ${data.latest_version}。`, 'ok');
+                    openUpdateNotice(data);
                 } else {
                     setStatus('update-status', `当前已是最新版本 ${data.current_version}。`, 'ok');
                 }
@@ -2085,7 +2094,7 @@
                 const staticHealth = info.static_health || {};
                 const updateCapability = info.update_capability || {};
                 const checks = [
-                    {label:'当前版本', ok:info.version === '2.1.1', detail:info.version || '-'},
+                    {label:'当前版本', ok:info.version === '2.1.2', detail:info.version || '-'},
                     {label:'前端依赖', ok:!!staticHealth.ok, detail:staticHealth.ok ? `${Number(staticHealth.checked_count || 0)} 项完整` : `缺失 ${Number(staticHealth.missing_count || 0)} 项`},
                     {label:'素材文件', ok:Number(assets.missing_count || 0) === 0, detail:`缺失 ${Number(assets.missing_count || 0)} 个`},
                     {label:'缩略图', ok:Number(assets.thumb_missing_count || 0) === 0, detail:`待重建 ${Number(assets.thumb_missing_count || 0)} 个`, warnOnly:true},
@@ -2187,6 +2196,7 @@
                 return;
             }
             loadInfo();
+            scrollToRequestedSection();
             loadLocalDataHealth();
             loadBackups().catch(() => {});
             checkAssetHealth().catch(() => {});

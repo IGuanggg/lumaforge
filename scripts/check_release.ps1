@@ -1,6 +1,6 @@
-﻿param(
-    [string]$Version = "2.1.1",
-    [string]$BuildId = "20260608-v211-account-assets1",
+param(
+    [string]$Version = "2.1.2",
+    [string]$BuildId = "20260609-v212-canvas-assets-release1",
     [string]$ToolRoot = $(Join-Path $env:LOCALAPPDATA "LumaForgeDevTools")
 )
 
@@ -204,18 +204,7 @@ if ($BunExe -and (Test-Path "web\bun.lock")) {
 
 Write-Host "[3/5] Checking key HTML script syntax when Node is available..."
 if (Get-Command node -ErrorAction SilentlyContinue) {
-    node -e @"
-const fs = require('fs');
-const files = ['static/index.html', 'static/canvas.html', 'static/smart-canvas.html', 'static/gpt-chat.html', 'static/assets.html', 'static/enhance.html'];
-for (const file of files) {
-  const html = fs.readFileSync(file, 'utf8');
-  const scripts = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)].map(m => m[1]);
-  scripts.forEach((code, i) => {
-    try { new Function(code); }
-    catch (err) { throw new Error(file + ' inline script #' + (i + 1) + ': ' + err.message); }
-  });
-}
-"@
+    node scripts/check_html_scripts.cjs
     if ($LASTEXITCODE -ne 0) {
         throw "Node HTML script syntax check failed."
     }

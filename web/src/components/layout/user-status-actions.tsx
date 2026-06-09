@@ -160,11 +160,12 @@ function AccountDrawer({ open, onClose, onLogout, onRefreshUser }: { open: boole
         async ({ force = false, includeMedia = true }: { force?: boolean; includeMedia?: boolean } = {}) => {
             const seq = requestSeqRef.current + 1;
             requestSeqRef.current = seq;
-            const cacheFresh = accountCache.status && Date.now() - accountCache.updatedAt < ACCOUNT_CACHE_TTL;
-            if (!force && cacheFresh) {
-                setStatus(accountCache.status);
+            const cachedStatus = accountCache.status;
+            const cacheFresh = Boolean(cachedStatus) && Date.now() - accountCache.updatedAt < ACCOUNT_CACHE_TTL;
+            if (!force && cachedStatus && cacheFresh) {
+                setStatus(cachedStatus);
                 if (accountCache.media) setMedia(accountCache.media);
-                profileForm.setFieldsValue({ email: accountCache.status.email, display_name: accountCache.status.display_name, avatar_url: accountCache.status.avatar_url });
+                profileForm.setFieldsValue({ email: cachedStatus.email, display_name: cachedStatus.display_name, avatar_url: cachedStatus.avatar_url });
                 return;
             }
 

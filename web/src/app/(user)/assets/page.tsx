@@ -32,6 +32,7 @@ const kindOptions = [
     { label: "文本", value: "text" },
     { label: "图片", value: "image" },
     { label: "视频", value: "video" },
+    { label: "音频", value: "audio" },
 ];
 
 export default function AssetsPage() {
@@ -64,7 +65,7 @@ export default function AssetsPage() {
     const tags = Form.useWatch("tags", form) || [];
     const content = Form.useWatch("content", form) || "";
 
-    const localAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video") as DisplayAsset[], [assets]);
+    const localAssets = useMemo(() => assets.filter((asset) => asset.kind === "text" || asset.kind === "image" || asset.kind === "video" || asset.kind === "audio") as DisplayAsset[], [assets]);
     const mergedAssets = useMemo(() => dedupeAssets([...backendAssets, ...localAssets]), [backendAssets, localAssets]);
 
     const filteredAssets = useMemo(() => {
@@ -187,9 +188,9 @@ export default function AssetsPage() {
     };
 
     const downloadAsset = (asset: DisplayAsset) => {
-        if (asset.kind !== "image" && asset.kind !== "video") return;
-        const url = asset.kind === "video" ? asset.data.url : asset.data.dataUrl;
-        const ext = asset.data.mimeType.split("/")[1] || (asset.kind === "video" ? "mp4" : "png");
+        if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio") return;
+        const url = asset.kind === "image" ? asset.data.dataUrl : asset.data.url;
+        const ext = asset.data.mimeType.split("/")[1] || (asset.kind === "video" ? "mp4" : asset.kind === "audio" ? "mp3" : "png");
         saveAs(url, `${asset.title || "asset"}.${ext}`);
     };
 
@@ -389,7 +390,7 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
     const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
     const summary = assetSummary(asset);
     return (
-        <Card hoverable className="overflow-hidden" styles={{ body: { padding: 0 } }} cover={<button type="button" className="block w-full text-left" onClick={onOpen}>{cover ? <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" /> : <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>}</button>}>
+        <Card hoverable className="overflow-hidden" styles={{ body: { padding: 0 } }} cover={<button type="button" className="block w-full text-left" onClick={onOpen}>{cover ? <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" /> : <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : asset.kind === "audio" ? "音频素材" : "暂无封面"}</div>}</button>}>
             <button type="button" className="block w-full text-left" onClick={onOpen}>
                 <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -397,7 +398,7 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
                             <h2 className="line-clamp-1 text-sm font-semibold text-stone-950 dark:text-stone-100">{asset.title}</h2>
                             <Typography.Text type="secondary" className="mt-1 block text-xs">{asset.source || "未标注来源"}</Typography.Text>
                         </div>
-                        <Tag className="m-0 shrink-0 text-[11px]">{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : "文本"}</Tag>
+                        <Tag className="m-0 shrink-0 text-[11px]">{assetKindLabel(asset.kind)}</Tag>
                     </div>
                     <Typography.Paragraph type="secondary" ellipsis={{ rows: 3 }} className="!mb-0 !mt-2 !text-xs !leading-5">{summary}</Typography.Paragraph>
                     <div className="mt-3 flex flex-wrap gap-1.5">{(asset.tags || []).slice(0, 3).map((tag) => <Tag key={tag} className="m-0 text-[11px]">{tag}</Tag>)}{!asset.tags?.length ? <Tag className="m-0 text-[11px]">无标签</Tag> : null}</div>
@@ -405,9 +406,9 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
             </button>
             <div className="flex flex-wrap items-center gap-2 px-4 pb-4">
                 <Button size="small" onClick={onOpen}>查看</Button>
-                {!asset.readonly && asset.kind !== "video" ? <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onEdit}>编辑</Button> : null}
+                {!asset.readonly && asset.kind !== "video" && asset.kind !== "audio" ? <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onEdit}>编辑</Button> : null}
                 {asset.kind === "text" ? <Button size="small" icon={<Copy className="size-3.5" />} onClick={() => void onCopy(asset)}>复制</Button> : null}
-                {asset.kind === "image" || asset.kind === "video" ? <Button size="small" icon={<Download className="size-3.5" />} onClick={() => onDownload(asset)}>下载</Button> : null}
+                {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? <Button size="small" icon={<Download className="size-3.5" />} onClick={() => onDownload(asset)}>下载</Button> : null}
                 <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={onDelete}>删除</Button>
             </div>
         </Card>
@@ -420,17 +421,17 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: DisplayAss
         <Drawer title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
             {asset ? (
                 <div className="space-y-5">
-                    {cover ? <Image src={cover} alt={asset.title} className="rounded-lg" /> : <div className="rounded-lg border border-stone-200 bg-stone-50 p-5 text-sm leading-6 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : "暂无封面"}</div>}
+                    {cover ? <Image src={cover} alt={asset.title} className="rounded-lg" /> : <div className="rounded-lg border border-stone-200 bg-stone-50 p-5 text-sm leading-6 text-stone-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : asset.kind === "audio" ? "音频素材" : "暂无封面"}</div>}
                     <div>
                         <Typography.Title level={4} className="!mb-2">{asset.title}</Typography.Title>
-                        <Space size={[4, 4]} wrap><Tag>{asset.kind === "image" ? "图片" : asset.kind === "video" ? "视频" : "文本"}</Tag>{asset.readonly ? <Tag color="blue">后端素材库</Tag> : <Tag>本地收藏</Tag>}{(asset.tags || []).map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space>
+                        <Space size={[4, 4]} wrap><Tag>{assetKindLabel(asset.kind)}</Tag>{asset.readonly ? <Tag color="blue">后端素材库</Tag> : <Tag>本地收藏</Tag>}{(asset.tags || []).map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space>
                     </div>
                     <div className="rounded-lg border border-stone-200 p-4 dark:border-stone-800">
                         <Typography.Text type="secondary" className="block text-xs">内容</Typography.Text>
-                        {asset.kind === "text" ? <Typography.Paragraph className="mt-2 whitespace-pre-wrap">{asset.data.content}</Typography.Paragraph> : asset.kind === "video" ? <video src={asset.data.url} controls className="mt-2 aspect-video w-full rounded-lg bg-black" /> : <Typography.Text className="mt-2 block">{asset.data.width}x{asset.data.height} · {formatBytes(asset.data.bytes)} · {asset.data.mimeType}</Typography.Text>}
+                        {asset.kind === "text" ? <Typography.Paragraph className="mt-2 whitespace-pre-wrap">{asset.data.content}</Typography.Paragraph> : asset.kind === "video" ? <video src={asset.data.url} controls className="mt-2 aspect-video w-full rounded-lg bg-black" /> : asset.kind === "audio" ? <audio src={asset.data.url} controls className="mt-3 w-full" /> : <Typography.Text className="mt-2 block">{asset.data.width}x{asset.data.height} · {formatBytes(asset.data.bytes)} · {asset.data.mimeType}</Typography.Text>}
                     </div>
                     {asset.note ? <div><Typography.Text type="secondary">备注</Typography.Text><Typography.Paragraph className="mt-1">{asset.note}</Typography.Paragraph></div> : null}
-                    <Space>{asset.kind === "text" ? <Button type="primary" icon={<Copy className="size-4" />} onClick={() => onCopy(asset)}>复制文本</Button> : null}{asset.kind === "image" || asset.kind === "video" ? <Button type="primary" icon={<Download className="size-4" />} onClick={() => onDownload(asset)}>{asset.kind === "video" ? "下载视频" : "下载图片"}</Button> : null}</Space>
+                    <Space>{asset.kind === "text" ? <Button type="primary" icon={<Copy className="size-4" />} onClick={() => onCopy(asset)}>复制文本</Button> : null}{asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? <Button type="primary" icon={<Download className="size-4" />} onClick={() => onDownload(asset)}>{asset.kind === "video" ? "下载视频" : asset.kind === "audio" ? "下载音频" : "下载图片"}</Button> : null}</Space>
                 </div>
             ) : null}
         </Drawer>
@@ -455,6 +456,7 @@ function libraryItemToAsset(item: AssetLibraryItem): DisplayAsset {
     };
     if (kind === "text") return { ...base, kind: "text", data: { content: item.content || item.description || item.title } };
     if (kind === "video") return { ...base, kind: "video", data: { url: item.url, storageKey: undefined, width: 0, height: 0, bytes: 0, mimeType: "video/mp4" } };
+    if (kind === "audio") return { ...base, kind: "audio", data: { url: item.url, storageKey: undefined, bytes: 0, mimeType: "audio/mpeg" } };
     return { ...base, kind: "image", data: { dataUrl: item.url || item.coverUrl, storageKey: undefined, width: 0, height: 0, bytes: 0, mimeType: "image/png" } };
 }
 
@@ -470,9 +472,14 @@ function dedupeAssets(items: DisplayAsset[]) {
 
 function assetSummary(asset: DisplayAsset) {
     if (asset.kind === "text") return asset.data.content;
+    if (asset.kind === "audio") return asset.note || `${asset.data.mimeType} · ${formatBytes(asset.data.bytes)}`;
     return asset.note || `${asset.data.width || "-"}x${asset.data.height || "-"} · ${asset.data.mimeType}`;
 }
 
 function assetSearchText(asset: DisplayAsset) {
     return [asset.title, asset.source || "", asset.note || "", (asset.tags || []).join(" "), asset.kind === "text" ? asset.data.content : asset.data.mimeType].join(" ").toLowerCase();
+}
+
+function assetKindLabel(kind: AssetKind) {
+    return kind === "image" ? "图片" : kind === "video" ? "视频" : kind === "audio" ? "音频" : "文本";
 }

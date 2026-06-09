@@ -57,7 +57,7 @@ export function CanvasNodeMaskEditDialog({ dataUrl, open, onClose, onConfirm }: 
         } else {
             drawMaskStroke(context, drawingRef.current.last, point, brushSize);
         }
-        renderMaskPreview(maskCanvas, previewCanvasRef.current);
+        if (maskCanvas) renderMaskPreview(maskCanvas, previewCanvasRef.current);
         drawingRef.current.last = point;
         if (mode === "paint") {
             setError("");

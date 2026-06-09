@@ -1,4 +1,4 @@
-﻿import json
+import json
 import uuid
 import base64
 import urllib.parse
@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.1.1")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260608-v211-account-assets1")
+APP_VERSION = os.getenv("APP_VERSION", "2.1.2")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260609-v212-canvas-assets-release1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 
@@ -4065,7 +4065,7 @@ def update_payload_version(data: Dict[str, Any]):
 
 def is_supported_release_version(value: str):
     text = normalize_lumaforge_version(value)
-    return bool(re.match(r"^2\.0\.\d+(?:\D.*)?$", text))
+    return bool(re.match(r"^2\.\d+\.\d+(?:\D.*)?$", text))
 
 def normalize_update_payload(data: Any):
     if isinstance(data, list):
@@ -4165,7 +4165,7 @@ async def fetch_update_source_payload(client: httpx.AsyncClient):
         raw_latest = str(data.get("version") or data.get("latest_version") or data.get("tag_name") or "").strip().lstrip("vV")
     normalized = normalize_update_payload(data)
     # If a configured /latest endpoint points at the accidental v20.0.x line,
-    # recover by querying the releases list and selecting the highest valid v2.0.x.
+    # recover by querying the releases list and selecting the highest valid v2.x.x.
     if (re.match(r"^20\.0\.\d+", raw_latest) or not normalized.get("latest_version") or not is_supported_release_version(normalized.get("latest_version"))) and "api.github.com/repos/IGuanggg/lumaforge/releases" in APP_UPDATE_CHECK_URL:
         list_url = APP_UPDATE_CHECK_URL.rstrip("/")
         if list_url.endswith("/latest"):
