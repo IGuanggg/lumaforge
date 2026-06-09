@@ -1082,6 +1082,18 @@ function InfiniteCanvasPage() {
         [cancelPendingConnectionCreate, screenToCanvas],
     );
 
+    const handleCanvasDoubleClick = useCallback(
+        (event: ReactMouseEvent<HTMLDivElement>) => {
+            setContextMenu(null);
+            cancelPendingConnectionCreate();
+            selectionBoxRef.current = null;
+            setSelectionBox(null);
+            const world = screenToCanvas(event.clientX, event.clientY);
+            createNode(CanvasNodeType.Image, world);
+        },
+        [cancelPendingConnectionCreate, createNode, screenToCanvas],
+    );
+
     const handleNodeMouseDown = useCallback((event: ReactMouseEvent, nodeId: string) => {
         event.stopPropagation();
         if (event.button !== 0) return;
@@ -2525,6 +2537,7 @@ function InfiniteCanvasPage() {
                         setContextMenu(null);
                     }}
                     onCanvasMouseDown={handleCanvasMouseDown}
+                    onCanvasDoubleClick={handleCanvasDoubleClick}
                     onCanvasDeselect={deselectCanvas}
                     onContextMenu={preventCanvasContextMenu}
                     onDrop={handleDrop}

@@ -12,13 +12,14 @@ type InfiniteCanvasProps = {
     backgroundMode?: CanvasBackgroundMode;
     onViewportChange: (viewport: ViewportTransform) => void;
     onCanvasMouseDown?: (event: React.PointerEvent<HTMLDivElement>) => void;
+    onCanvasDoubleClick?: (event: React.MouseEvent<HTMLDivElement>) => void;
     onCanvasDeselect?: () => void;
     onContextMenu?: (event: React.MouseEvent) => void;
     onDrop?: (event: React.DragEvent<HTMLDivElement>) => void;
     children: React.ReactNode;
 };
 
-export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
+export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines", onViewportChange, onCanvasMouseDown, onCanvasDoubleClick, onContextMenu, onDrop, children }: InfiniteCanvasProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const panState = useRef({
         isPanning: false,
@@ -135,6 +136,15 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         }
     };
 
+    const handleDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest("[data-canvas-no-zoom],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown")) return;
+        if (target?.closest("[data-node-id],[data-connection-id],[data-connection-create-menu]")) return;
+        if (panState.current.hasMoved) return;
+        event.preventDefault();
+        onCanvasDoubleClick?.(event);
+    };
+
     useEffect(() => {
         const handlePointerMove = (event: PointerEvent) => {
             if (!panState.current.isPanning) return;
@@ -178,6 +188,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             className={`relative h-full w-full select-none overflow-hidden ${isSpacePressed ? "cursor-grab" : "cursor-default"}`}
             style={{ background: theme.canvas.background }}
             onPointerDown={handlePointerDown}
+            onDoubleClick={handleDoubleClick}
             onWheel={handleWheel}
             onContextMenu={onContextMenu}
             onDragOver={(event) => event.preventDefault()}

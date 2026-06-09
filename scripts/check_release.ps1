@@ -1,6 +1,6 @@
 param(
-    [string]$Version = "2.1.3",
-    [string]$BuildId = "20260609-v213-update-restart-hotfix1",
+    [string]$Version = "2.1.4",
+    [string]$BuildId = "20260609-v214-canvas-dblclick-node1",
     [string]$ToolRoot = $(Join-Path $env:LOCALAPPDATA "LumaForgeDevTools")
 )
 
