@@ -480,6 +480,10 @@ func LumaAppInfo(w http.ResponseWriter, r *http.Request) {
 	writeRawJSON(w, service.LumaAppInfo())
 }
 
+func LumaReleaseHealth(w http.ResponseWriter, r *http.Request) {
+	writeRawJSON(w, service.LumaReleaseHealth())
+}
+
 func LumaUpdateState(w http.ResponseWriter, r *http.Request) {
 	writeRawJSON(w, service.LumaUpdateState())
 }

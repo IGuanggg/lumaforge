@@ -967,6 +967,7 @@ func LumaAppInfo() map[string]any {
 		"update_check_configured": strings.TrimSpace(config.Cfg.UpdateCheckURL) != "",
 		"update_check_url":        config.Cfg.UpdateCheckURL,
 		"legacy_api_url":          strings.TrimRight(config.Cfg.LumaForgeLegacyAPI, "/"),
+		"entry":                   LumaEntryInfo(),
 		"update_state":            LumaUpdateState(),
 		"app_actions": map[string]any{
 			"restart_supported": false,
@@ -977,6 +978,157 @@ func LumaAppInfo() map[string]any {
 			"reason":            "Go + Next 主体暂未接入桌面生命周期控制。",
 		},
 	}
+}
+
+func LumaEntryInfo() map[string]any {
+	apiURL := strings.TrimRight(strings.TrimSpace(os.Getenv("LUMAFORGE_API_URL")), "/")
+	if apiURL == "" {
+		apiURL = "http://127.0.0.1:" + strings.TrimSpace(config.Cfg.Port)
+	}
+	appURL := strings.TrimSpace(os.Getenv("LUMAFORGE_APP_URL"))
+	if appURL == "" {
+		appURL = strings.TrimSpace(config.Cfg.PublicBaseURL)
+	}
+	return map[string]any{
+		"canonical_host": "127.0.0.1",
+		"app_url":        appURL,
+		"api_url":        apiURL,
+		"api_port":       strings.TrimSpace(config.Cfg.Port),
+		"legacy_api_url": strings.TrimRight(strings.TrimSpace(config.Cfg.LumaForgeLegacyAPI), "/"),
+	}
+}
+
+func LumaReleaseHealth() map[string]any {
+	checks := []map[string]any{}
+	add := func(id string, label string, status string, detail string, action string) {
+		check := map[string]any{
+			"id":     id,
+			"label":  label,
+			"status": status,
+			"detail": detail,
+		}
+		if strings.TrimSpace(action) != "" {
+			check["action"] = action
+		}
+		checks = append(checks, check)
+	}
+
+	if strings.TrimSpace(LumaForgeVersion) != "" && strings.TrimSpace(LumaForgeBuildID) != "" {
+		add("version", "版本与构建", "ok", LumaForgeVersion+" / "+LumaForgeBuildID, "")
+	} else {
+		add("version", "版本与构建", "error", "版本或构建号缺失", "重新执行发布构建")
+	}
+
+	entry := LumaEntryInfo()
+	entryDetail := fmt.Sprintf("入口 %s，API %s", stringFromAny(entry["app_url"]), stringFromAny(entry["api_url"]))
+	if strings.Contains(stringFromAny(entry["api_url"]), "127.0.0.1") {
+		add("entry", "桌面入口", "ok", entryDetail, "")
+	} else {
+		add("entry", "桌面入口", "warn", entryDetail, "建议统一使用 127.0.0.1")
+	}
+
+	updateCapability := LumaUpdateCapability()
+	if strings.TrimSpace(config.Cfg.UpdateCheckURL) == "" {
+		add("update_source", "更新源", "error", "未配置更新检查地址", "配置 APP_UPDATE_CHECK_URL")
+	} else {
+		add("update_source", "更新源", "ok", config.Cfg.UpdateCheckURL, "")
+	}
+	if boolFromAny(updateCapability["supported"]) {
+		add("auto_update", "自动更新器", "ok", "桌面更新器已连接", "")
+	} else {
+		add("auto_update", "自动更新器", "error", stringFromAny(updateCapability["reason"]), "通过桌面启动器启动应用")
+	}
+	updateState := LumaUpdateState()
+	phase := stringFromAny(updateState["phase"])
+	if phase == "failed" {
+		add("update_state", "更新状态", "warn", stringFromAny(updateState["error"]), "清理失败任务后重试")
+	} else {
+		add("update_state", "更新状态", "ok", firstNonEmptyString(phase, "idle"), "")
+	}
+
+	session := LumaLoadCloudSession()
+	if strings.TrimSpace(session.Token) != "" {
+		add("login_recovery", "登录恢复", "ok", "已保存云端会话，可静默恢复", "")
+	} else {
+		add("login_recovery", "登录恢复", "warn", "当前没有保存登录会话", "登录一次后再检查")
+	}
+
+	keyDiagnostics := LumaProviderKeyDiagnostics()
+	providerCount := intFromAny(keyDiagnostics["provider_count"])
+	storedKeyCount := intFromAny(keyDiagnostics["stored_key_count"])
+	if providerCount <= 0 {
+		add("api_config", "API 配置", "error", "没有可用 API 平台", "在 API 设置中添加本地平台")
+	} else if storedKeyCount <= 0 && !boolFromAny(keyDiagnostics["has_environment_keys"]) && !boolFromAny(keyDiagnostics["recoverable_from_cloud"]) {
+		add("api_config", "API 配置", "warn", fmt.Sprintf("已配置 %d 个平台，但没有本地密钥", providerCount), "在本地 API 中保存密钥或从云端恢复")
+	} else {
+		add("api_config", "API 配置", "ok", fmt.Sprintf("已配置 %d 个平台，%d 个本地密钥", providerCount, storedKeyCount), "")
+	}
+
+	paths := LumaAppPaths()
+	if err := os.MkdirAll(paths["save"], 0755); err != nil {
+		add("assets", "素材库", "error", err.Error(), "检查素材目录权限")
+	} else {
+		add("assets", "素材库", "ok", paths["save"], "")
+	}
+	if err := os.MkdirAll(paths["output"], 0755); err != nil {
+		add("canvas_save", "画布保存与输出", "error", err.Error(), "检查输出目录权限")
+	} else {
+		add("canvas_save", "画布保存与输出", "ok", paths["output"], "")
+	}
+	if lumaCanvasStaticExists() {
+		add("canvas_static", "画布静态资源", "ok", "画布页面可用", "")
+	} else {
+		add("canvas_static", "画布静态资源", "warn", "未在当前工作目录发现画布静态文件", "确认桌面包包含 web/static 资源")
+	}
+	if strings.TrimSpace(config.Cfg.LumaForgeLegacyAPI) != "" {
+		add("canvas_assets", "画布生成素材入库", "ok", "素材上传桥已连接", "")
+	} else {
+		add("canvas_assets", "画布生成素材入库", "warn", "未连接 legacy 素材上传桥", "通过桌面启动器启动完整服务")
+	}
+
+	status := "ok"
+	for _, check := range checks {
+		switch check["status"] {
+		case "error":
+			status = "error"
+		case "warn":
+			if status == "ok" {
+				status = "warn"
+			}
+		}
+	}
+	return map[string]any{
+		"ok":         status != "error",
+		"status":     status,
+		"version":    LumaForgeVersion,
+		"build_id":   LumaForgeBuildID,
+		"entry":      entry,
+		"checked_at": time.Now().Format(time.RFC3339),
+		"checks":     checks,
+	}
+}
+
+func lumaCanvasStaticExists() bool {
+	candidates := []string{
+		filepath.Join("static", "smart-canvas.html"),
+		filepath.Join("_internal", "static", "smart-canvas.html"),
+	}
+	if exe, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exe)
+		exeParent := filepath.Dir(exeDir)
+		candidates = append(candidates,
+			filepath.Join(exeDir, "static", "smart-canvas.html"),
+			filepath.Join(exeDir, "_internal", "static", "smart-canvas.html"),
+			filepath.Join(exeParent, "static", "smart-canvas.html"),
+			filepath.Join(exeParent, "_internal", "static", "smart-canvas.html"),
+		)
+	}
+	for _, candidate := range candidates {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 func LumaUpdateCapability() map[string]any {
@@ -1405,5 +1557,26 @@ func boolFromAny(value any) bool {
 		return typed == "1" || strings.EqualFold(typed, "true") || strings.EqualFold(typed, "yes")
 	default:
 		return false
+	}
+}
+
+func intFromAny(value any) int {
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	case json.Number:
+		if parsed, err := typed.Int64(); err == nil {
+			return int(parsed)
+		}
+		return 0
+	case string:
+		parsed, _ := strconv.Atoi(strings.TrimSpace(typed))
+		return parsed
+	default:
+		return 0
 	}
 }

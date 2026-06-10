@@ -75,6 +75,7 @@ func New() *gin.Engine {
 	api.POST("/media/upload", gin.WrapF(handler.LumaCloudRawProxy))
 	api.POST("/media/prune", gin.WrapF(handler.LumaCloudRawProxy))
 	api.GET("/app/info", gin.WrapF(handler.LumaAppInfo))
+	api.GET("/app/release-health", gin.WrapF(handler.LumaReleaseHealth))
 	api.GET("/app/update-state", gin.WrapF(handler.LumaUpdateState))
 	api.GET("/app/update-check", gin.WrapF(handler.LumaUpdateCheck))
 	api.POST("/app/update-settings", gin.WrapF(handler.LumaUpdateSettings))
