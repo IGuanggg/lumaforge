@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowUp, LoaderCircle, Maximize2, Minimize2 } from "lucide-react";
 import { Button } from "antd";
 
@@ -42,6 +42,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
     const [promptExpanded, setPromptExpanded] = useState(false);
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, count: mode === "image" ? config.count : 1 });
+    const connectedImageReferences = useMemo(() => mentionReferences.filter((reference) => reference.active && reference.kind === "image" && reference.previewUrl), [mentionReferences]);
 
     useEffect(() => {
         setPrompt(isEditingExistingContent ? "" : node.metadata?.prompt || "");
@@ -50,6 +51,11 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const updatePrompt = (value: string) => {
         setPrompt(value);
         if (!isEditingExistingContent) onPromptChange(node.id, value);
+    };
+
+    const appendReference = (reference: CanvasResourceReference) => {
+        const token = `@${reference.label} `;
+        updatePrompt(prompt ? `${prompt}${/\s$/.test(prompt) ? "" : " "}${token}` : token);
     };
 
     const submit = () => {
@@ -67,6 +73,25 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             onPointerDown={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
         >
+            {connectedImageReferences.length ? (
+                <div className="mb-2 flex max-w-full gap-1.5 overflow-x-auto pb-1">
+                    {connectedImageReferences.map((reference) => (
+                        <button
+                            key={reference.id}
+                            type="button"
+                            className="inline-flex h-9 max-w-[160px] shrink-0 items-center gap-1.5 rounded-lg border px-1.5 pr-2 text-xs font-medium transition hover:scale-[1.02]"
+                            style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
+                            title={reference.title}
+                            onMouseDown={(event) => event.stopPropagation()}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={() => appendReference(reference)}
+                        >
+                            <img src={reference.previewUrl} alt="" className="size-6 shrink-0 rounded-md object-cover" />
+                            <span className="truncate">{reference.label}</span>
+                        </button>
+                    ))}
+                </div>
+            ) : null}
             <div className="relative">
                 <CanvasResourceMentionTextarea
                     value={prompt}

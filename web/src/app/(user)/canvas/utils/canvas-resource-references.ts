@@ -44,10 +44,33 @@ export function getGenerationResourceNodes(nodeId: string, nodes: CanvasNodeData
 }
 
 function getContextResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {
-    return connections
-        .filter((connection) => connection.toNodeId === nodeId)
-        .map((connection) => nodes.find((node) => node.id === connection.fromNodeId))
-        .filter((node): node is CanvasNodeData => Boolean(node && isResourceNode(node)));
+    const nodeById = new Map(nodes.map((node) => [node.id, node]));
+    const incomingByNodeId = new Map<string, CanvasConnection[]>();
+    connections.forEach((connection) => {
+        const incoming = incomingByNodeId.get(connection.toNodeId) || [];
+        incoming.push(connection);
+        incomingByNodeId.set(connection.toNodeId, incoming);
+    });
+
+    const result: CanvasNodeData[] = [];
+    const queued = [...(incomingByNodeId.get(nodeId) || []).map((connection) => connection.fromNodeId)];
+    const visited = new Set<string>([nodeId]);
+    const added = new Set<string>();
+
+    while (queued.length) {
+        const currentId = queued.shift();
+        if (!currentId || visited.has(currentId)) continue;
+        visited.add(currentId);
+        const node = nodeById.get(currentId);
+        if (!node) continue;
+        if (isResourceNode(node) && !added.has(node.id)) {
+            result.push(node);
+            added.add(node.id);
+        }
+        queued.push(...(incomingByNodeId.get(currentId) || []).map((connection) => connection.fromNodeId));
+    }
+
+    return result;
 }
 
 function getConnectedConfigResourceNodes(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]) {

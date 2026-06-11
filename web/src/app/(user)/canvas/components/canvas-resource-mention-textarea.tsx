@@ -35,7 +35,17 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         if (!query) return activeReferences;
         return activeReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.text || ""}`.toLowerCase().includes(query));
     }, [mention, references]);
-    const activeLabels = useMemo(() => Array.from(new Set(references.filter((item) => item.active).map((item) => item.label))).sort((a, b) => b.length - a.length), [references]);
+    const activeReferences = useMemo(() => {
+        const seen = new Set<string>();
+        return references
+            .filter((item) => item.active)
+            .filter((item) => {
+                if (seen.has(item.label)) return false;
+                seen.add(item.label);
+                return true;
+            })
+            .sort((a, b) => b.label.length - a.label.length);
+    }, [references]);
 
     const updateValue = (next: string, selectionStart?: number) => {
         onChange(next);
@@ -66,7 +76,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         if (!mention) return;
         const textarea = textareaRef.current;
         const end = textarea?.selectionStart ?? value.length;
-        const insertText = `${reference.label} `;
+        const insertText = `@${reference.label} `;
         const next = `${value.slice(0, mention.start)}${insertText}${value.slice(end)}`;
         closeMention();
         updateValue(next, mention.start + insertText.length);
@@ -80,17 +90,17 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
 
     const mergedStyle = {
         ...(style || {}),
-        color: activeLabels.length ? "transparent" : style?.color,
+        color: activeReferences.length ? "transparent" : style?.color,
         caretColor: style?.color || theme.node.text,
-        ...(activeLabels.length ? { background: "transparent", backgroundColor: "transparent" } : {}),
+        ...(activeReferences.length ? { background: "transparent", backgroundColor: "transparent" } : {}),
     } as CSSProperties;
     const menu = mention && candidates.length && textareaRef.current ? <MentionMenu textarea={textareaRef.current} references={candidates} activeIndex={Math.min(activeIndex, candidates.length - 1)} theme={theme} onSelect={insertReference} /> : null;
 
     return (
         <div className={`relative h-full w-full ${containerClassName || ""}`}>
-            {activeLabels.length ? (
+            {activeReferences.length ? (
                 <div ref={overlayRef} className={`${className || ""} pointer-events-none absolute inset-0 overflow-hidden whitespace-pre-wrap break-words`} style={{ ...style, color: theme.node.text }}>
-                    <MentionHighlightText value={value || props.placeholder?.toString() || ""} labels={activeLabels} placeholder={!value} />
+                    <MentionHighlightText value={value || props.placeholder?.toString() || ""} references={activeReferences} placeholder={!value} />
                 </div>
             ) : null}
             <textarea
@@ -170,23 +180,36 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     );
 });
 
-function MentionHighlightText({ value, labels, placeholder }: { value: string; labels: string[]; placeholder: boolean }) {
+function MentionHighlightText({ value, references, placeholder }: { value: string; references: CanvasResourceReference[]; placeholder: boolean }) {
     if (placeholder) return <span className="opacity-45">{value}</span>;
-    if (!labels.length) return <>{value}</>;
-    const pattern = new RegExp(`(${labels.map(escapeRegExp).join("|")})`, "g");
+    if (!references.length) return <>{value}</>;
+    const tokenMap = new Map<string, CanvasResourceReference>();
+    references.forEach((reference) => {
+        tokenMap.set(reference.label, reference);
+        tokenMap.set(`@${reference.label}`, reference);
+    });
+    const tokens = Array.from(tokenMap.keys()).sort((a, b) => b.length - a.length);
+    const pattern = new RegExp(`(${tokens.map(escapeRegExp).join("|")})`, "g");
     return (
         <>
-            {value.split(pattern).map((part, index) =>
-                labels.includes(part) ? (
-                    <span key={`${part}-${index}`} className="rounded-md bg-[#2f80ff]/16 px-1 py-0.5 font-medium text-[#2f80ff] ring-1 ring-[#2f80ff]/24">
-                        {part}
-                    </span>
-                ) : (
-                    <span key={`${part}-${index}`}>{part}</span>
-                ),
-            )}
+            {value.split(pattern).map((part, index) => {
+                const reference = tokenMap.get(part);
+                return reference ? <MentionToken key={`${part}-${index}`} reference={reference} /> : <span key={`${part}-${index}`}>{part}</span>;
+            })}
         </>
     );
+}
+
+function MentionToken({ reference }: { reference: CanvasResourceReference }) {
+    if (reference.kind === "image" && reference.previewUrl) {
+        return (
+            <span className="inline-flex h-6 max-w-[160px] translate-y-[3px] items-center gap-1 rounded-md bg-[#2f80ff]/14 px-1 pr-1.5 align-baseline font-medium text-[#2f80ff] ring-1 ring-[#2f80ff]/24">
+                <img src={reference.previewUrl} alt="" className="size-4 shrink-0 rounded object-cover" />
+                <span className="truncate">{reference.label}</span>
+            </span>
+        );
+    }
+    return <span className="rounded-md bg-[#2f80ff]/16 px-1 py-0.5 font-medium text-[#2f80ff] ring-1 ring-[#2f80ff]/24">{reference.label}</span>;
 }
 
 function MentionMenu({ textarea, references, activeIndex, theme, onSelect }: { textarea: HTMLTextAreaElement; references: CanvasResourceReference[]; activeIndex: number; theme: (typeof canvasThemes)[keyof typeof canvasThemes]; onSelect: (reference: CanvasResourceReference) => void }) {

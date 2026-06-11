@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.1.7")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260609-v217-feature-integration1")
+APP_VERSION = os.getenv("APP_VERSION", "2.1.8")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260611-v218-image-wait-mentions1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 UPDATE_DOWNLOAD_STALL_SECONDS = max(10.0, float(os.getenv("UPDATE_DOWNLOAD_STALL_SECONDS", "45") or 45))
@@ -529,7 +529,7 @@ SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "You are a helpful assistant.")
 MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "30"))
 AI_REQUEST_TIMEOUT = float(os.getenv("REQUEST_TIMEOUT", "120"))
 IMAGE_POLL_INTERVAL = float(os.getenv("IMAGE_POLL_INTERVAL", "2"))
-IMAGE_TASK_TIMEOUT = float(os.getenv("IMAGE_TASK_TIMEOUT", str(AI_REQUEST_TIMEOUT)))
+IMAGE_TASK_TIMEOUT = float(os.getenv("IMAGE_TASK_TIMEOUT", "900"))
 COMFYUI_HISTORY_TIMEOUT = int(float(os.getenv("COMFYUI_HISTORY_TIMEOUT", "1800")))
 APIMART_IMAGE_TASK_TIMEOUT = float(os.getenv("APIMART_IMAGE_TASK_TIMEOUT", "1800"))
 APIMART_IMAGE_POLL_INTERVAL = float(os.getenv("APIMART_IMAGE_POLL_INTERVAL", "5"))
@@ -3101,7 +3101,9 @@ async def generate_modelscope_provider_image(prompt, size, model, reference_imag
 
     base_root = ((provider or {}).get("base_url") or MODELSCOPE_CHAT_BASE_URL).rstrip("/")
     api_root = base_root if base_root.endswith("/v1") else f"{base_root}/v1"
-    async with make_async_client(timeout=AI_REQUEST_TIMEOUT) as client:
+    task_timeout = max(IMAGE_TASK_TIMEOUT, AI_REQUEST_TIMEOUT)
+    image_timeout = httpx.Timeout(connect=20.0, read=task_timeout, write=120.0, pool=20.0)
+    async with make_async_client(timeout=image_timeout) as client:
         submit_res = await client.post(f"{api_root}/images/generations", headers=headers, json=payload)
         submit_res.raise_for_status()
         raw = submit_res.json()
@@ -3112,7 +3114,7 @@ async def generate_modelscope_provider_image(prompt, size, model, reference_imag
             except HTTPException:
                 raise HTTPException(status_code=502, detail=f"ModelScope 未返回 task_id：{raw}")
 
-        deadline = time.monotonic() + AI_REQUEST_TIMEOUT
+        deadline = time.monotonic() + task_timeout
         last_payload = raw
         while time.monotonic() < deadline:
             await asyncio.sleep(IMAGE_POLL_INTERVAL)
@@ -3132,7 +3134,7 @@ async def generate_modelscope_provider_image(prompt, size, model, reference_imag
             if status in {"FAILED", "FAIL", "ERROR", "CANCELED", "CANCELLED", "TIMEOUT", "REVOKED"}:
                 detail = data.get("error_info") or data.get("message") or data.get("detail") or str(data)
                 raise HTTPException(status_code=502, detail=f"ModelScope 任务失败：{detail}")
-        raise HTTPException(status_code=504, detail=f"ModelScope 生图任务超时：{last_payload}")
+        raise HTTPException(status_code=504, detail=f"ModelScope 生图任务超时（已等待 {int(task_timeout)} 秒）：{last_payload}")
 
 async def generate_ai_image(prompt, size, quality, model, reference_images=None, provider_id="comfly"):
     provider = get_api_provider(provider_id)
@@ -3150,7 +3152,7 @@ async def generate_ai_image(prompt, size, quality, model, reference_images=None,
     refs = [ref for ref in (reference_images or []) if ref.get("url")]
     mask_refs = [ref for ref in refs if str(ref.get("role") or "").strip().lower() == "mask" or str(ref.get("name") or "").lower().endswith("_mask.png")]
     image_refs = [ref for ref in refs if ref not in mask_refs]
-    request_timeout = httpx.Timeout(connect=20.0, read=600.0, write=120.0, pool=20.0) if (is_gpt2 or is_apimart) else AI_REQUEST_TIMEOUT
+    request_timeout = httpx.Timeout(connect=20.0, read=max(600.0, IMAGE_TASK_TIMEOUT), write=120.0, pool=20.0) if (is_gpt2 or is_apimart) else httpx.Timeout(connect=20.0, read=max(300.0, IMAGE_TASK_TIMEOUT), write=120.0, pool=20.0)
     async with make_async_client(timeout=request_timeout) as client:
         response = None
         if is_apimart:
