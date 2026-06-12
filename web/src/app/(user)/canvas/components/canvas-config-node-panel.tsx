@@ -5,14 +5,14 @@ import { Image as ImageIcon, LoaderCircle, MessageSquare, Music2, Play, Settings
 import { Button, Segmented } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
-import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { CreditSymbol, requestCreditCost } from "@/constant/credits";
 import { canvasThemes } from "@/lib/canvas-theme";
+import { defaultConfig, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
-import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
-import { CanvasAudioSettingsPopover, type CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
-import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import type { CanvasGenerationMode, CanvasNodeData, CanvasNodeMetadata } from "../types";
+import { CanvasAudioSettingsPopover, type CanvasAudioSettingKey } from "./canvas-audio-settings-popover";
+import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
+import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 
 type CanvasConfigNodePanelProps = {
     node: CanvasNodeData;
@@ -24,7 +24,26 @@ type CanvasConfigNodePanelProps = {
     onComposerToggle: () => void;
 };
 
-export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, onConfigChange, onGenerate, onComposerToggle }: CanvasConfigNodePanelProps) {
+const TEXT = {
+    title: "\u751f\u6210\u914d\u7f6e",
+    image: "\u751f\u56fe",
+    text: "\u6587\u672c",
+    video: "\u89c6\u9891",
+    audio: "\u97f3\u9891",
+    prompt: "\u63d0\u793a\u8bcd",
+    referenceImage: "\u53c2\u8003\u56fe",
+    referenceVideo: "\u53c2\u8003\u89c6\u9891",
+    referenceAudio: "\u53c2\u8003\u97f3\u9891",
+    items: "\u4e2a",
+    images: "\u5f20",
+    editPrompt: "\u7ec4\u88c5\u63d0\u793a\u8bcd",
+    start: "\u5f00\u59cb\u751f\u6210",
+    running: "\u751f\u6210\u4e2d",
+    modelSummary: "\u5f53\u524d\u914d\u7f6e",
+    seconds: "\u79d2",
+};
+
+export function CanvasConfigNodePanel({ node, isRunning, inputSummary, onConfigChange, onGenerate, onComposerToggle }: CanvasConfigNodePanelProps) {
     const globalConfig = useEffectiveConfig();
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
@@ -37,6 +56,7 @@ export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, on
     const hasAnyInput = Boolean(inputSummary.textCount || inputSummary.imageCount || inputSummary.videoCount || inputSummary.audioCount);
     const hasComposerContent = Boolean((node.metadata?.composerContent ?? node.metadata?.prompt ?? "").trim());
     const canGenerate = hasComposerContent || (mode === "audio" ? inputSummary.textCount > 0 : hasAnyInput);
+    const summary = buildConfigSummary(config, mode, count);
 
     return (
         <div
@@ -51,7 +71,7 @@ export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, on
             onWheel={(event) => event.stopPropagation()}
         >
             <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="shrink-0 text-sm font-semibold">生成配置</div>
+                <div className="shrink-0 text-sm font-semibold">{TEXT.title}</div>
                 <div className="cursor-default" onMouseDown={(event) => event.stopPropagation()}>
                     <Segmented
                         size="small"
@@ -64,7 +84,7 @@ export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, on
                                 label: (
                                     <span className="inline-flex items-center gap-1">
                                         <ImageIcon className="size-3.5" />
-                                        生图
+                                        {TEXT.image}
                                     </span>
                                 ),
                             },
@@ -73,7 +93,7 @@ export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, on
                                 label: (
                                     <span className="inline-flex items-center gap-1">
                                         <MessageSquare className="size-3.5" />
-                                        文本
+                                        {TEXT.text}
                                     </span>
                                 ),
                             },
@@ -82,7 +102,7 @@ export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, on
                                 label: (
                                     <span className="inline-flex items-center gap-1">
                                         <Video className="size-3.5" />
-                                        视频
+                                        {TEXT.video}
                                     </span>
                                 ),
                             },
@@ -91,7 +111,7 @@ export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, on
                                 label: (
                                     <span className="inline-flex items-center gap-1">
                                         <Music2 className="size-3.5" />
-                                        音频
+                                        {TEXT.audio}
                                     </span>
                                 ),
                             },
@@ -101,14 +121,19 @@ export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, on
             </div>
 
             <div className="mb-2 flex flex-wrap gap-1.5">
-                <InputChip label="提示词" value={`${inputSummary.textCount} 个`} style={chipStyle} />
-                <InputChip label="参考图" value={`${inputSummary.imageCount} 张`} style={chipStyle} />
-                <InputChip label="参考视频" value={`${inputSummary.videoCount} 个`} style={chipStyle} />
-                <InputChip label="参考音频" value={`${inputSummary.audioCount} 个`} style={chipStyle} />
+                <InputChip label={TEXT.prompt} value={`${inputSummary.textCount} ${TEXT.items}`} style={chipStyle} />
+                <InputChip label={TEXT.referenceImage} value={`${inputSummary.imageCount} ${TEXT.images}`} style={chipStyle} />
+                <InputChip label={TEXT.referenceVideo} value={`${inputSummary.videoCount} ${TEXT.items}`} style={chipStyle} />
+                <InputChip label={TEXT.referenceAudio} value={`${inputSummary.audioCount} ${TEXT.items}`} style={chipStyle} />
                 <button type="button" className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md border px-2 text-[11px]" style={chipStyle} onMouseDown={(event) => event.stopPropagation()} onClick={onComposerToggle}>
                     <Settings2 className="size-3.5" />
-                    组装提示词
+                    {TEXT.editPrompt}
                 </button>
+            </div>
+
+            <div className="mb-2 min-w-0 truncate rounded-md border px-2 py-1 text-[11px]" style={chipStyle} title={summary}>
+                <span className="opacity-60">{TEXT.modelSummary}</span>
+                <span className="ml-1 font-medium">{summary}</span>
             </div>
 
             <div className={`mb-2 grid min-w-0 cursor-default items-center gap-2 ${mode === "image" || mode === "video" || mode === "audio" ? "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(176px,210px)]" : "grid-cols-1"}`} onMouseDown={(event) => event.stopPropagation()}>
@@ -135,7 +160,7 @@ export function CanvasConfigNodePanel({ node, scale, isRunning, inputSummary, on
                         {credits.toLocaleString()}
                     </span>
                     {isRunning ? <LoaderCircle className="size-4 animate-spin" /> : <Play className="size-4" />}
-                    <span>开始生成</span>
+                    <span>{isRunning ? TEXT.running : TEXT.start}</span>
                 </span>
             </Button>
         </div>
@@ -149,6 +174,13 @@ function InputChip({ label, value, style }: { label: string; value: string; styl
             <span className="font-medium">{value}</span>
         </div>
     );
+}
+
+function buildConfigSummary(config: AiConfig, mode: CanvasGenerationMode, count: number) {
+    if (mode === "image") return [config.model, config.quality, config.size, `${count}${TEXT.images}`].filter(Boolean).join(" · ");
+    if (mode === "video") return [config.model, `${config.videoSeconds || defaultConfig.videoSeconds}${TEXT.seconds}`, config.vquality, config.videoGenerateAudio === "true" ? TEXT.audio : ""].filter(Boolean).join(" · ");
+    if (mode === "audio") return [config.model, config.audioVoice, config.audioFormat, config.audioSpeed].filter(Boolean).join(" · ");
+    return config.model || defaultConfig.model;
 }
 
 function buildNodeConfig(globalConfig: AiConfig, node: CanvasNodeData, mode: CanvasGenerationMode): AiConfig {

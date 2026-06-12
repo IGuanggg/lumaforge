@@ -35,6 +35,11 @@ type gptImage2Data struct {
 	} `json:"records"`
 }
 
+type gptImage2Case struct {
+	Prompt string
+	Images []string
+}
+
 type davidWuGptImage2Prompt struct {
 	ID         int    `json:"id"`
 	TitleEN    string `json:"title_en"`
@@ -100,7 +105,7 @@ func fetchText(baseURL, file string) (string, error) {
 }
 
 func buildGptImage2Prompts() ([]model.Prompt, error) {
-	cases := map[string]string{}
+	cases := map[string]gptImage2Case{}
 	raw, err := fetchText(gptImage2RawBase, "data/ingested_tweets.json")
 	if err != nil {
 		return nil, err
@@ -118,20 +123,30 @@ func buildGptImage2Prompts() ([]model.Prompt, error) {
 	}
 	items := []model.Prompt{}
 	for _, item := range data.Records {
-		prompt := cases[item.TweetURL]
-		if prompt == "" {
+		caseItem := cases[item.TweetURL]
+		if caseItem.Prompt == "" {
 			continue
 		}
-		image := gptImage2RawBase + "/" + item.ImageDir + "/output.jpg"
-		items = append(items, model.Prompt{ID: "gpt-image-2-prompts-" + leftPad(len(items)+1), Title: item.Title, CoverURL: image, Prompt: prompt, Tags: tagsFromCategory(item.Category), CreatedAt: item.AddedAt, UpdatedAt: item.AddedAt, Preview: markdownPreview([]string{image})})
+		images := caseItem.Images
+		image := ""
+		imageDir := strings.Trim(strings.TrimSpace(item.ImageDir), "/")
+		if imageDir != "" {
+			image = gptImage2RawBase + "/" + imageDir + "/output.jpg"
+		} else if len(images) > 0 {
+			image = images[0]
+		}
+		if image != "" && !containsString(images, image) {
+			images = append([]string{image}, images...)
+		}
+		items = append(items, model.Prompt{ID: "gpt-image-2-prompts-" + leftPad(len(items)+1), Title: item.Title, CoverURL: image, Prompt: caseItem.Prompt, Tags: tagsFromCategory(item.Category), CreatedAt: item.AddedAt, UpdatedAt: item.AddedAt, Preview: markdownPreview(images)})
 	}
 	return items, nil
 }
 
-func collectGptImage2Cases(cases map[string]string, markdown string) {
-	re := regexp.MustCompile("(?s)### Case \\d+: \\[[^\\]]+\\]\\(([^)]+)\\).*?\\*\\*Prompt:\\*\\*\\s*\\r?\\n\\s*```[\\w-]*\\r?\\n(.*?)\\r?\\n```")
+func collectGptImage2Cases(cases map[string]gptImage2Case, markdown string) {
+	re := regexp.MustCompile("(?s)### Case \\d+: \\[[^\\]]+\\]\\(([^)]+)\\)(.*?\\*\\*Prompt:\\*\\*\\s*\\r?\\n\\s*```[\\w-]*\\r?\\n(.*?)\\r?\\n```)")
 	for _, match := range re.FindAllStringSubmatch(markdown, -1) {
-		cases[match[1]] = strings.TrimSpace(match[2])
+		cases[match[1]] = gptImage2Case{Prompt: strings.TrimSpace(match[3]), Images: extractMarkdownImages(gptImage2RawBase, match[2])}
 	}
 }
 
@@ -337,7 +352,20 @@ func absoluteImage(baseURL, image string) string {
 	if image == "" || strings.HasPrefix(image, "http://") || strings.HasPrefix(image, "https://") {
 		return image
 	}
-	return baseURL + "/" + strings.TrimLeft(strings.TrimPrefix(image, "."), "/")
+	path := strings.TrimSpace(image)
+	for strings.HasPrefix(path, "./") || strings.HasPrefix(path, "../") {
+		path = strings.TrimPrefix(strings.TrimPrefix(path, "./"), "../")
+	}
+	return baseURL + "/" + strings.TrimLeft(path, "/")
+}
+
+func containsString(items []string, value string) bool {
+	for _, item := range items {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 func leftPad(value int) string {

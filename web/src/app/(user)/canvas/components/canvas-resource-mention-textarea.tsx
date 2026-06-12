@@ -18,11 +18,12 @@ type Props = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "onChange" | "val
     value: string;
     references: CanvasResourceReference[];
     onChange: (value: string) => void;
+    onReferenceSelect?: (reference: CanvasResourceReference) => void;
     onSubmit?: () => void;
     containerClassName?: string;
 };
 
-export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea({ value, references, onChange, onSubmit, onKeyDown, className, containerClassName, style, ...props }, forwardedRef) {
+export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Props>(function CanvasResourceMentionTextarea({ value, references, onChange, onReferenceSelect, onSubmit, onKeyDown, className, containerClassName, style, ...props }, forwardedRef) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -31,9 +32,9 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
     const candidates = useMemo(() => {
         if (!mention) return [];
         const query = mention.query.trim().toLowerCase();
-        const activeReferences = references.filter((item) => item.active);
-        if (!query) return activeReferences;
-        return activeReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.text || ""}`.toLowerCase().includes(query));
+        const selectableReferences = uniqueReferences(references).sort((a, b) => Number(b.active) - Number(a.active));
+        if (!query) return selectableReferences;
+        return selectableReferences.filter((item) => `${item.label} ${item.title} ${item.kind} ${item.sourceType} ${item.text || ""}`.toLowerCase().includes(query));
     }, [mention, references]);
     const activeReferences = useMemo(() => {
         const seen = new Set<string>();
@@ -63,12 +64,12 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
 
     const syncMention = (nextValue: string, cursor: number) => {
         const prefix = nextValue.slice(0, cursor);
-        const match = /(^|\s)@([^\s@]*)$/.exec(prefix);
-        if (!match || !references.some((item) => item.active)) {
+        const match = /@([^\s@]*)$/.exec(prefix);
+        if (!match || !references.length) {
             closeMention();
             return;
         }
-        setMention({ start: cursor - match[2].length - 1, query: match[2] });
+        setMention({ start: cursor - match[1].length - 1, query: match[1] });
         setActiveIndex(0);
     };
 
@@ -79,6 +80,7 @@ export const CanvasResourceMentionTextarea = forwardRef<HTMLTextAreaElement, Pro
         const insertText = `@${reference.label} `;
         const next = `${value.slice(0, mention.start)}${insertText}${value.slice(end)}`;
         closeMention();
+        onReferenceSelect?.(reference);
         updateValue(next, mention.start + insertText.length);
     };
 
@@ -231,6 +233,7 @@ function MentionMenu({ textarea, references, activeIndex, theme, onSelect }: { t
         selectedRef.current = true;
         onSelect(reference);
     };
+    const rows = groupedReferenceRows(references);
 
     return createPortal(
         <div
@@ -241,30 +244,39 @@ function MentionMenu({ textarea, references, activeIndex, theme, onSelect }: { t
             onMouseDown={stopCanvasInteraction}
             onClick={(event) => event.stopPropagation()}
         >
-            {references.map((reference, index) => (
-                <button
-                    key={reference.id}
-                    type="button"
-                    className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition"
-                    style={{ background: index === activeIndex ? theme.toolbar.activeBg : "transparent", color: index === activeIndex ? theme.toolbar.activeText : theme.node.text }}
-                    onPointerDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        selectReference(reference);
-                    }}
-                    onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        selectReference(reference);
-                    }}
-                >
-                    <ReferencePreview reference={reference} />
-                    <span className="min-w-0 flex-1">
-                        <span className="block font-medium">{reference.label}</span>
-                        <span className="block truncate opacity-65">{reference.text || reference.title}</span>
-                    </span>
-                </button>
-            ))}
+            {rows.map((row) =>
+                row.type === "header" ? (
+                    <div key={row.key} className="px-2 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide opacity-45">
+                        {row.label}
+                    </div>
+                ) : (
+                    <button
+                        key={row.reference.id}
+                        type="button"
+                        className="flex w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition"
+                        style={{ background: row.index === activeIndex ? theme.toolbar.activeBg : "transparent", color: row.index === activeIndex ? theme.toolbar.activeText : theme.node.text }}
+                        onPointerDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            selectReference(row.reference);
+                        }}
+                        onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            selectReference(row.reference);
+                        }}
+                    >
+                        <ReferencePreview reference={row.reference} />
+                        <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-1.5">
+                                <span className="font-medium">{row.reference.label}</span>
+                                <SourceBadge sourceType={row.reference.sourceType} active={row.reference.active} />
+                            </span>
+                            <span className="block truncate opacity-65">{row.reference.text || row.reference.title}</span>
+                        </span>
+                    </button>
+                ),
+            )}
         </div>,
         document.body,
     );
@@ -279,6 +291,39 @@ function ReferencePreview({ reference }: { reference: CanvasResourceReference })
             <Icon className="size-4" />
         </span>
     );
+}
+
+function SourceBadge({ sourceType, active }: { sourceType: CanvasResourceReference["sourceType"]; active: boolean }) {
+    const label = active ? "已输入" : sourceType === "upstream" ? "上游" : sourceType === "asset" ? "素材" : sourceType === "connected" ? "连线" : "手动";
+    return <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] leading-none opacity-70">{label}</span>;
+}
+
+function groupedReferenceRows(references: CanvasResourceReference[]) {
+    const groups = [
+        { key: "active", label: "已输入", test: (reference: CanvasResourceReference) => reference.active },
+        { key: "connected", label: "连线输入", test: (reference: CanvasResourceReference) => !reference.active && reference.sourceType === "connected" },
+        { key: "upstream", label: "上游可用", test: (reference: CanvasResourceReference) => !reference.active && reference.sourceType === "upstream" },
+        { key: "asset", label: "我的素材", test: (reference: CanvasResourceReference) => !reference.active && reference.sourceType === "asset" },
+        { key: "manual", label: "手动引用", test: (reference: CanvasResourceReference) => !reference.active && reference.sourceType === "manual" },
+    ];
+    const rows: Array<{ type: "header"; key: string; label: string } | { type: "reference"; reference: CanvasResourceReference; index: number }> = [];
+    groups.forEach((group) => {
+        const items = references.map((reference, index) => ({ reference, index })).filter((item) => group.test(item.reference));
+        if (!items.length) return;
+        rows.push({ type: "header", key: group.key, label: group.label });
+        items.forEach((item) => rows.push({ type: "reference", ...item }));
+    });
+    return rows;
+}
+
+function uniqueReferences(references: CanvasResourceReference[]) {
+    const seen = new Set<string>();
+    return references.filter((reference) => {
+        const key = [reference.kind, reference.nodeId || reference.assetId || reference.storageKey || reference.url || reference.label].join("|");
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
 }
 
 function clamp(value: number, min: number, max: number) {

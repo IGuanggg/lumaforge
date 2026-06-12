@@ -20,12 +20,45 @@ export enum CanvasNodeType {
 export type CanvasNodeStatus = "idle" | "success" | "loading" | "error";
 export type CanvasGenerationMode = "text" | "image" | "video" | "audio";
 export type CanvasImageGenerationType = "generation" | "edit";
+export type CanvasGenerationPhase = "queued" | "submitting" | "generating" | "saving" | "failed";
+export type CanvasPromptReferenceKind = "image" | "video" | "audio" | "text";
+export type CanvasPromptReferenceSource = "connected" | "upstream" | "asset" | "manual";
+
+export type CanvasPromptReference = {
+    id: string;
+    kind: CanvasPromptReferenceKind;
+    label: string;
+    title: string;
+    sourceType: CanvasPromptReferenceSource;
+    nodeId?: string;
+    assetId?: string;
+    imageIndex?: number;
+    url?: string;
+    storageKey?: string;
+    mimeType?: string;
+    text?: string;
+    missing?: boolean;
+    ignoredMissing?: boolean;
+};
+
+export type CanvasGroupBounds = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
 
 export type CanvasNodeMetadata = {
     content?: string;
     composerContent?: string;
     prompt?: string;
+    promptText?: string;
+    promptRefs?: CanvasPromptReference[];
+    inputReferenceOrder?: string[];
+    runPromptRefs?: CanvasPromptReference[];
+    runSettings?: Record<string, unknown>;
     status?: CanvasNodeStatus;
+    generationPhase?: CanvasGenerationPhase;
     errorDetails?: string;
     fontSize?: number;
     generationMode?: CanvasGenerationMode;
@@ -50,6 +83,10 @@ export type CanvasNodeMetadata = {
     batchRootId?: string;
     batchChildIds?: string[];
     batchUsesReferenceImages?: boolean;
+    groupId?: string;
+    groupMemberIds?: string[];
+    groupName?: string;
+    groupBounds?: CanvasGroupBounds;
     primaryImageId?: string;
     imageBatchExpanded?: boolean;
     storageKey?: string;
@@ -60,6 +97,8 @@ export type CanvasNodeMetadata = {
     splitGrid?: {
         columns: number;
         rows: number;
+        columnStops?: number[];
+        rowStops?: number[];
         index: number;
         column: number;
         row: number;

@@ -38,7 +38,7 @@ export function ConnectionPath({
                 data-connection-id={connection.id}
                 d={pathD}
                 stroke="transparent"
-                strokeWidth="16"
+                strokeWidth="24"
                 fill="none"
                 style={{ cursor: "pointer", pointerEvents: "stroke" }}
                 onClick={(event) => {

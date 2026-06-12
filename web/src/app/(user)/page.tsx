@@ -1,12 +1,13 @@
 "use client";
 
 import { ArrowRight } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { App, Button, Image, Tag } from "antd";
 
 import { fetchPrompts, type Prompt } from "@/services/api/prompts";
 import { navigationTools } from "@/constant/navigation-tools";
 import { cn } from "@/lib/utils";
+import { isUsablePromptCover, PromptCover } from "@/components/prompts/prompt-cover";
 
 function Highlighter({ action, color, children }: { action: "highlight" | "underline"; color: string; children: ReactNode }) {
     return (
@@ -21,16 +22,55 @@ function Highlighter({ action, color, children }: { action: "highlight" | "under
     );
 }
 
+const SHOWCASE_SIZE = 12;
+const SHOWCASE_POOL_SIZE = 80;
+const SHOWCASE_RANDOM_PAGE_COUNT = 4;
+
+function shuffleArray<T>(items: T[]) {
+    const result = [...items];
+    for (let index = result.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+    }
+    return result;
+}
+
+function uniqueUsablePrompts(items: Prompt[]) {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+        if (seen.has(item.id) || !isUsablePromptCover(item.coverUrl)) return false;
+        seen.add(item.id);
+        return true;
+    });
+}
+
+async function fetchRandomShowcasePrompts() {
+    const summary = await fetchPrompts({ pageSize: 1 });
+    const total = Math.max(summary.total, summary.items.length);
+    const maxPage = Math.max(1, Math.ceil(total / SHOWCASE_POOL_SIZE));
+    const pages = shuffleArray(Array.from({ length: maxPage }, (_, index) => index + 1)).slice(0, Math.min(maxPage, SHOWCASE_RANDOM_PAGE_COUNT));
+    const batches = await Promise.all(pages.map((page) => fetchPrompts({ page, pageSize: SHOWCASE_POOL_SIZE }).catch(() => null)));
+    const pool = uniqueUsablePrompts(batches.flatMap((batch) => batch?.items || []));
+    const selected = shuffleArray(pool).slice(0, SHOWCASE_SIZE);
+    if (selected.length >= Math.min(SHOWCASE_SIZE, total)) return selected;
+    return uniqueUsablePrompts([...selected, ...summary.items]).slice(0, SHOWCASE_SIZE);
+}
+
 export default function IndexPage() {
     const { message } = App.useApp();
     const [primaryTool] = navigationTools;
     const [promptShowcase, setPromptShowcase] = useState<Prompt[]>([]);
+    const [failedCoverIds, setFailedCoverIds] = useState<Set<string>>(() => new Set());
     const [previewIndex, setPreviewIndex] = useState(0);
     const [previewOpen, setPreviewOpen] = useState(false);
+    const previewImages = useMemo(() => promptShowcase.filter((item) => isUsablePromptCover(item.coverUrl) && !failedCoverIds.has(item.id)), [failedCoverIds, promptShowcase]);
 
     useEffect(() => {
-        void fetchPrompts({ pageSize: 12 })
-            .then((data) => setPromptShowcase(data.items))
+        void fetchRandomShowcasePrompts()
+            .then((data) => {
+                setPromptShowcase(data);
+                setFailedCoverIds(new Set());
+            })
             .catch((error) => message.error(error instanceof Error ? error.message : "获取提示词失败"));
     }, [message]);
 
@@ -80,7 +120,12 @@ export default function IndexPage() {
                                 key={item.id}
                                 type="button"
                                 onClick={() => {
-                                    setPreviewIndex(index);
+                                    const nextIndex = previewImages.findIndex((image) => image.id === item.id);
+                                    if (nextIndex < 0) {
+                                        message.warning("封面暂时不可预览，提示词内容仍可查看");
+                                        return;
+                                    }
+                                    setPreviewIndex(nextIndex);
                                     setPreviewOpen(true);
                                 }}
                                 className={cn(
@@ -89,7 +134,13 @@ export default function IndexPage() {
                                     index === 3 && "md:col-span-2",
                                 )}
                             >
-                                <img src={item.coverUrl} alt={item.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]" />
+                                <PromptCover
+                                    item={item}
+                                    className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                                    onUnavailable={(id) => {
+                                        setFailedCoverIds((current) => new Set(current).add(id));
+                                    }}
+                                />
                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/35 to-transparent p-4 text-white">
                                     <div className="mb-2 flex flex-wrap gap-1.5">
                                         {item.tags.slice(0, 2).map((tag) => (
@@ -115,7 +166,7 @@ export default function IndexPage() {
                 }}
             >
                 <div className="hidden">
-                    {promptShowcase.map((item) => (
+                    {previewImages.map((item) => (
                         <Image key={item.id} src={item.coverUrl} alt={item.title} />
                     ))}
                 </div>

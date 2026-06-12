@@ -34,17 +34,19 @@ export async function cropDataUrl(dataUrl: string, crop?: ImageCropRect) {
     return drawCrop(image, sx, sy, size, size);
 }
 
-export async function splitGridDataUrl(dataUrl: string, columns = 3, rows = columns) {
+export async function splitGridDataUrl(dataUrl: string, columns = 3, rows = columns, columnStops?: number[], rowStops?: number[]) {
     const image = await loadImage(dataUrl);
     const safeColumns = Math.max(1, Math.min(6, Math.floor(columns)));
     const safeRows = Math.max(1, Math.min(6, Math.floor(rows)));
+    const xStops = normalizeStops(columnStops, safeColumns);
+    const yStops = normalizeStops(rowStops, safeRows);
     const pieces: Array<{ dataUrl: string; column: number; row: number; index: number; width: number; height: number }> = [];
     for (let row = 0; row < safeRows; row += 1) {
         for (let column = 0; column < safeColumns; column += 1) {
-            const sx = Math.floor((image.width * column) / safeColumns);
-            const sy = Math.floor((image.height * row) / safeRows);
-            const nextX = Math.floor((image.width * (column + 1)) / safeColumns);
-            const nextY = Math.floor((image.height * (row + 1)) / safeRows);
+            const sx = Math.floor(image.width * xStops[column]);
+            const sy = Math.floor(image.height * yStops[row]);
+            const nextX = Math.floor(image.width * xStops[column + 1]);
+            const nextY = Math.floor(image.height * yStops[row + 1]);
             const width = Math.max(1, nextX - sx);
             const height = Math.max(1, nextY - sy);
             pieces.push({
@@ -58,6 +60,20 @@ export async function splitGridDataUrl(dataUrl: string, columns = 3, rows = colu
         }
     }
     return pieces;
+}
+
+function normalizeStops(stops: number[] | undefined, count: number) {
+    const fallback = Array.from({ length: count + 1 }, (_, index) => index / count);
+    if (!stops || stops.length !== count + 1) return fallback;
+    const normalized = stops.map((stop) => Math.max(0, Math.min(1, Number(stop) || 0)));
+    normalized[0] = 0;
+    normalized[normalized.length - 1] = 1;
+    for (let index = 1; index < normalized.length - 1; index += 1) {
+        const min = normalized[index - 1] + 0.01;
+        const max = 1 - (normalized.length - 1 - index) * 0.01;
+        normalized[index] = Math.max(min, Math.min(max, normalized[index]));
+    }
+    return normalized;
 }
 
 export async function transformAngleDataUrl(dataUrl: string, params: ImageAngleTransform) {

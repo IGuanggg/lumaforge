@@ -3,8 +3,9 @@ import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import { seedanceReferenceLabel } from "@/lib/seedance-video";
 import type { ReferenceImage } from "@/types/image";
 import type { ReferenceAudio, ReferenceVideo } from "@/types/media";
-import { CanvasNodeType, type CanvasConnection, type CanvasNodeData } from "../types";
-import { getGenerationResourceNodes } from "../utils/canvas-resource-references";
+import { CanvasNodeType, type CanvasConnection, type CanvasNodeData, type CanvasPromptReference } from "../types";
+import { buildNodeMentionReferences, getGenerationResourceNodes } from "../utils/canvas-resource-references";
+import { collectPromptReferencesFromText, orderPromptReferences } from "../utils/canvas-prompt-references";
 
 export type NodeGenerationContext = {
     prompt: string;
@@ -15,6 +16,7 @@ export type NodeGenerationContext = {
     imageCount: number;
     videoCount: number;
     audioCount: number;
+    promptReferences: CanvasPromptReference[];
 };
 
 export type NodeGenerationInput = {
@@ -28,10 +30,13 @@ export type NodeGenerationInput = {
 };
 
 export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[], prompt: string): NodeGenerationContext {
-    const inputs = buildNodeGenerationInputs(nodeId, nodes, connections);
     const sourceNode = nodes.find((node) => node.id === nodeId);
+    const promptReferences = sourceNode ? orderPromptReferences(collectPromptReferencesFromText(prompt, sourceNode.metadata?.promptRefs, buildNodeMentionReferences(sourceNode, nodes, connections)), sourceNode.metadata?.inputReferenceOrder) : [];
+    const promptInputs = promptReferencesToInputs(promptReferences);
+    const inputs = mergeGenerationInputs(promptInputs, buildNodeGenerationInputs(nodeId, nodes, connections));
+    const promptText = stripMentionAtSigns(prompt, promptReferences);
     if (sourceNode?.type === CanvasNodeType.Config && Boolean(sourceNode.metadata?.composerContent?.trim())) {
-        return buildComposerGenerationContext(inputs, prompt);
+        return { ...buildComposerGenerationContext(inputs, promptText), promptReferences };
     }
 
     const upstreamText = inputs
@@ -43,7 +48,7 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
     const referenceAudios = inputs.map((input) => input.audio).filter((audio): audio is ReferenceAudio => Boolean(audio));
 
     return {
-        prompt: upstreamText ? `${prompt}\n\n${upstreamText}` : prompt,
+        prompt: upstreamText ? `${promptText}\n\n${upstreamText}` : promptText,
         referenceImages,
         referenceVideos,
         referenceAudios,
@@ -51,6 +56,7 @@ export function buildNodeGenerationContext(nodeId: string, nodes: CanvasNodeData
         imageCount: referenceImages.length,
         videoCount: referenceVideos.length,
         audioCount: referenceAudios.length,
+        promptReferences,
     };
 }
 
@@ -98,6 +104,7 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
             imageCount: 0,
             videoCount: 0,
             audioCount: 0,
+            promptReferences: [],
         };
     }
 
@@ -110,7 +117,87 @@ function buildComposerGenerationContext(inputs: NodeGenerationInput[], prompt: s
         imageCount: referenceImages.length,
         videoCount: referenceVideos.length,
         audioCount: referenceAudios.length,
+        promptReferences: [],
     };
+}
+
+function promptReferencesToInputs(references: CanvasPromptReference[]): NodeGenerationInput[] {
+    return references.flatMap((reference): NodeGenerationInput[] => {
+        if (reference.kind === "image" && (reference.url || reference.storageKey)) {
+            return [
+                {
+                    nodeId: reference.nodeId || reference.assetId || reference.id,
+                    type: "image",
+                    title: reference.title || reference.label,
+                    image: {
+                        id: reference.nodeId || reference.assetId || reference.id,
+                        name: `${reference.title || reference.label}.png`,
+                        type: reference.mimeType || "image/png",
+                        dataUrl: reference.url || reference.storageKey || "",
+                        storageKey: reference.storageKey,
+                    },
+                },
+            ];
+        }
+        if (reference.kind === "video" && (reference.url || reference.storageKey)) {
+            return [
+                {
+                    nodeId: reference.nodeId || reference.assetId || reference.id,
+                    type: "video",
+                    title: reference.title || reference.label,
+                    video: {
+                        id: reference.nodeId || reference.assetId || reference.id,
+                        name: `${reference.title || reference.label}.mp4`,
+                        type: reference.mimeType || "video/mp4",
+                        url: reference.url || reference.storageKey || "",
+                        storageKey: reference.storageKey,
+                    },
+                },
+            ];
+        }
+        if (reference.kind === "audio" && (reference.url || reference.storageKey)) {
+            return [
+                {
+                    nodeId: reference.nodeId || reference.assetId || reference.id,
+                    type: "audio",
+                    title: reference.title || reference.label,
+                    audio: {
+                        id: reference.nodeId || reference.assetId || reference.id,
+                        name: `${reference.title || reference.label}.mp3`,
+                        type: reference.mimeType || "audio/mpeg",
+                        url: reference.url || reference.storageKey || "",
+                        storageKey: reference.storageKey,
+                    },
+                },
+            ];
+        }
+        if (reference.kind === "text" && reference.text) return [{ nodeId: reference.nodeId || reference.assetId || reference.id, type: "text", title: reference.title || reference.label, text: reference.text }];
+        return [];
+    });
+}
+
+function mergeGenerationInputs(...groups: NodeGenerationInput[][]) {
+    const result: NodeGenerationInput[] = [];
+    const seen = new Set<string>();
+    groups.flat().forEach((input) => {
+        const key = input.image ? `image:${input.image.storageKey || input.image.dataUrl || input.nodeId}` : input.video ? `video:${input.video.storageKey || input.video.url || input.nodeId}` : input.audio ? `audio:${input.audio.storageKey || input.audio.url || input.nodeId}` : `${input.type}:${input.nodeId}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        result.push(input);
+    });
+    return result;
+}
+
+function stripMentionAtSigns(prompt: string, references: CanvasPromptReference[]) {
+    let next = prompt;
+    references.forEach((reference) => {
+        next = next.replace(new RegExp(`@${escapeRegExp(reference.label)}(?=\\s|$)`, "g"), reference.label);
+    });
+    return next;
+}
+
+function escapeRegExp(value: string) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export function buildNodeGenerationInputs(nodeId: string, nodes: CanvasNodeData[], connections: CanvasConnection[]): NodeGenerationInput[] {

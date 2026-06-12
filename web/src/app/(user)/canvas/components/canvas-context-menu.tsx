@@ -2,13 +2,32 @@
 
 import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Group, Plus, Trash2, Ungroup } from "lucide-react";
 
 import { canvasThemes } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { ContextMenuState } from "../types";
 
-export function CanvasNodeContextMenu({ menu, onClose, onDuplicate, onDelete }: { menu: ContextMenuState; onClose: () => void; onDuplicate: () => void; onDelete: () => void }) {
+const TEXT = {
+    duplicateNode: "\u590d\u5236\u8282\u70b9",
+    group: "\u6253\u7ec4",
+    ungroup: "\u53d6\u6d88\u6253\u7ec4",
+    disconnect: "\u65ad\u5f00\u8fde\u7ebf",
+    deleteNode: "\u5220\u9664\u8282\u70b9",
+};
+
+type CanvasNodeContextMenuProps = {
+    menu: ContextMenuState;
+    canGroup?: boolean;
+    canUngroup?: boolean;
+    onClose: () => void;
+    onDuplicate: () => void;
+    onGroup?: () => void;
+    onUngroup?: () => void;
+    onDelete: () => void;
+};
+
+export function CanvasNodeContextMenu({ menu, canGroup = false, canUngroup = false, onClose, onDuplicate, onGroup, onUngroup, onDelete }: CanvasNodeContextMenuProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
     useEffect(() => {
@@ -27,8 +46,10 @@ export function CanvasNodeContextMenu({ menu, onClose, onDuplicate, onDelete }: 
             style={{ left: menu.x, top: menu.y, background: theme.toolbar.panel, borderColor: theme.toolbar.border, color: theme.node.text }}
             onPointerDown={(event) => event.stopPropagation()}
         >
-            {menu.type === "node" ? <MenuButton icon={<Plus className="size-4" />} label="Duplicate" onClick={onDuplicate} /> : null}
-            <MenuButton icon={<Trash2 className="size-4" />} label="Delete" onClick={onDelete} danger />
+            {menu.type === "node" ? <MenuButton icon={<Plus className="size-4" />} label={TEXT.duplicateNode} onClick={onDuplicate} /> : null}
+            {menu.type === "node" && canGroup ? <MenuButton icon={<Group className="size-4" />} label={TEXT.group} onClick={onGroup} /> : null}
+            {menu.type === "node" && canUngroup ? <MenuButton icon={<Ungroup className="size-4" />} label={TEXT.ungroup} onClick={onUngroup} /> : null}
+            <MenuButton icon={<Trash2 className="size-4" />} label={menu.type === "connection" ? TEXT.disconnect : TEXT.deleteNode} onClick={onDelete} danger />
         </div>
     );
 }

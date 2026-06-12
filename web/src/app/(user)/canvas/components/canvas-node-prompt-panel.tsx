@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUp, LoaderCircle, Maximize2, Minimize2 } from "lucide-react";
+import { ArrowUp, ImageIcon, LoaderCircle, Maximize2, Minimize2, X } from "lucide-react";
 import { Button } from "antd";
 
 import { ModelPicker } from "@/components/model-picker";
@@ -16,6 +16,7 @@ import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textare
 import { CanvasVideoSettingsPopover } from "./canvas-video-settings-popover";
 import { CanvasNodeType, type CanvasGenerationMode, type CanvasNodeData } from "../types";
 import type { CanvasResourceReference } from "../utils/canvas-resource-references";
+import { collectPromptReferencesFromText, orderPromptReferences, promptReferenceKey, referenceOrder, removePromptReference, removePromptReferenceToken, toPromptReference, upsertPromptReference } from "../utils/canvas-prompt-references";
 
 export type CanvasNodeGenerationMode = CanvasGenerationMode;
 
@@ -26,10 +27,13 @@ type CanvasNodePromptPanelProps = {
     onConfigChange: (nodeId: string, patch: Partial<CanvasNodeData["metadata"]>) => void;
     onGenerate: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => void;
     mentionReferences?: CanvasResourceReference[];
+    onRemoveReference?: (nodeId: string, reference: CanvasResourceReference) => void;
+    onReplaceReference?: (nodeId: string, reference: CanvasResourceReference) => void;
+    onIgnoreReference?: (nodeId: string, reference: CanvasResourceReference) => void;
     onImageSettingsOpenChange?: (open: boolean) => void;
 };
 
-export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onImageSettingsOpenChange }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onRemoveReference, onReplaceReference, onIgnoreReference, onImageSettingsOpenChange }: CanvasNodePromptPanelProps) {
     const globalConfig = useEffectiveConfig();
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
@@ -42,20 +46,59 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
     const [prompt, setPrompt] = useState(isEditingExistingContent ? "" : node.metadata?.prompt || "");
     const [promptExpanded, setPromptExpanded] = useState(false);
     const credits = requestCreditCost({ channelMode: config.channelMode, modelCosts, model: config.model, count: mode === "image" ? config.count : 1 });
-    const connectedImageReferences = useMemo(() => mentionReferences.filter((reference) => reference.active && reference.kind === "image" && reference.previewUrl), [mentionReferences]);
+    const inputImageReferences = useMemo(() => {
+        const promptRefs = collectPromptReferencesFromText(prompt, node.metadata?.promptRefs, mentionReferences).filter((reference) => reference.kind === "image");
+        const connectedRefs = mentionReferences.filter((reference) => reference.active && reference.kind === "image").map(toPromptReference);
+        const merged = [...connectedRefs, ...promptRefs].filter((reference, index, list) => list.findIndex((item) => promptReferenceKey(item) === promptReferenceKey(reference)) === index);
+        const ordered = orderPromptReferences(merged, node.metadata?.inputReferenceOrder);
+        const referenceByKey = new Map(mentionReferences.map((reference) => [promptReferenceKey(toPromptReference(reference)), reference]));
+        return ordered
+            .map((reference): CanvasResourceReference => referenceByKey.get(promptReferenceKey(reference)) || { ...reference, previewUrl: reference.url, active: true })
+            .filter((reference) => Boolean(reference.previewUrl || reference.url || reference.missing));
+    }, [mentionReferences, node.metadata?.inputReferenceOrder, node.metadata?.promptRefs, prompt]);
 
     useEffect(() => {
         setPrompt(isEditingExistingContent ? "" : node.metadata?.prompt || "");
     }, [isEditingExistingContent, node.id]);
 
-    const updatePrompt = (value: string) => {
+    const updatePrompt = (value: string, nextRefs = collectPromptReferencesFromText(value, node.metadata?.promptRefs, mentionReferences)) => {
         setPrompt(value);
         if (!isEditingExistingContent) onPromptChange(node.id, value);
+        const orderedRefs = orderPromptReferences(nextRefs, node.metadata?.inputReferenceOrder);
+        onConfigChange(node.id, { promptText: value, promptRefs: orderedRefs, inputReferenceOrder: referenceOrder(orderedRefs) });
     };
 
     const appendReference = (reference: CanvasResourceReference) => {
         const token = `@${reference.label} `;
-        updatePrompt(prompt ? `${prompt}${/\s$/.test(prompt) ? "" : " "}${token}` : token);
+        const nextPrompt = prompt ? `${prompt}${/\s$/.test(prompt) ? "" : " "}${token}` : token;
+        updatePrompt(nextPrompt, upsertPromptReference(node.metadata?.promptRefs, reference));
+    };
+
+    const rememberReference = (reference: CanvasResourceReference) => {
+        const nextRefs = upsertPromptReference(node.metadata?.promptRefs, reference);
+        onConfigChange(node.id, { promptRefs: nextRefs, inputReferenceOrder: referenceOrder(orderPromptReferences(nextRefs, node.metadata?.inputReferenceOrder)) });
+    };
+
+    const removeReference = (reference: CanvasResourceReference) => {
+        const nextPrompt = removePromptReferenceToken(prompt, reference.label);
+        updatePrompt(nextPrompt, removePromptReference(node.metadata?.promptRefs, reference));
+        onRemoveReference?.(node.id, reference);
+    };
+
+    const ignoreReference = (reference: CanvasResourceReference) => {
+        onIgnoreReference?.(node.id, reference);
+    };
+
+    const reorderReference = (fromKey: string, toReference: CanvasResourceReference) => {
+        const toKey = promptReferenceKey(toPromptReference(toReference));
+        const current = inputImageReferences.map((reference) => promptReferenceKey(toPromptReference(reference)));
+        const fromIndex = current.indexOf(fromKey);
+        const toIndex = current.indexOf(toKey);
+        if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+        const next = [...current];
+        const [item] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, item);
+        onConfigChange(node.id, { inputReferenceOrder: next });
     };
 
     const submit = () => {
@@ -73,22 +116,71 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
             onPointerDown={(event) => event.stopPropagation()}
             onWheel={(event) => event.stopPropagation()}
         >
-            {connectedImageReferences.length ? (
+            {inputImageReferences.length ? (
                 <div className="mb-2 flex max-w-full gap-1.5 overflow-x-auto pb-1">
-                    {connectedImageReferences.map((reference) => (
-                        <button
+                    {inputImageReferences.map((reference) => (
+                        <span
                             key={reference.id}
-                            type="button"
-                            className="inline-flex h-9 max-w-[160px] shrink-0 items-center gap-1.5 rounded-lg border px-1.5 pr-2 text-xs font-medium transition hover:scale-[1.02]"
+                            className="inline-flex h-9 max-w-[180px] shrink-0 items-center gap-1.5 rounded-lg border px-1.5 pr-1 text-xs font-medium"
                             style={{ background: theme.node.fill, borderColor: theme.node.stroke, color: theme.node.text }}
-                            title={reference.title}
+                            title={reference.missing ? "引用缺失，点击缩略图可用素材替换，点 X 可移除" : reference.title}
+                            draggable
+                            onDragStart={(event) => {
+                                event.dataTransfer.setData("text/canvas-reference-key", promptReferenceKey(toPromptReference(reference)));
+                                event.dataTransfer.effectAllowed = "move";
+                            }}
+                            onDragOver={(event) => {
+                                event.preventDefault();
+                                event.dataTransfer.dropEffect = "move";
+                            }}
+                            onDrop={(event) => {
+                                event.preventDefault();
+                                reorderReference(event.dataTransfer.getData("text/canvas-reference-key"), reference);
+                            }}
                             onMouseDown={(event) => event.stopPropagation()}
                             onPointerDown={(event) => event.stopPropagation()}
-                            onClick={() => appendReference(reference)}
                         >
-                            <img src={reference.previewUrl} alt="" className="size-6 shrink-0 rounded-md object-cover" />
-                            <span className="truncate">{reference.label}</span>
-                        </button>
+                            <button
+                                type="button"
+                                className="inline-flex min-w-0 items-center gap-1.5 rounded-md pr-1 transition hover:opacity-80"
+                                onMouseDown={(event) => event.stopPropagation()}
+                                onPointerDown={(event) => event.stopPropagation()}
+                                onClick={() => (reference.missing ? onReplaceReference?.(node.id, reference) : appendReference(reference))}
+                            >
+                                {reference.previewUrl || reference.url ? <img src={reference.previewUrl || reference.url} alt="" className="size-6 shrink-0 rounded-md object-cover" /> : <span className="grid size-6 shrink-0 place-items-center rounded-md bg-red-500/15 text-red-300"><ImageIcon className="size-3.5" /></span>}
+                                <span className="truncate">{reference.label}</span>
+                                {reference.missing ? <span className="rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-300">缺失</span> : null}
+                            </button>
+                            {reference.missing ? (
+                                <button
+                                    type="button"
+                                    className="h-5 shrink-0 rounded-md px-1 text-[10px] opacity-70 transition hover:bg-white/10 hover:opacity-100"
+                                    title="忽略这条缺失引用，保留记录但不再标红"
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onPointerDown={(event) => event.stopPropagation()}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        ignoreReference(reference);
+                                    }}
+                                >
+                                    忽略
+                                </button>
+                            ) : null}
+                            <button
+                                type="button"
+                                className="grid size-5 shrink-0 place-items-center rounded-md opacity-60 transition hover:bg-white/10 hover:opacity-100"
+                                aria-label={`移除 ${reference.label}`}
+                                title="移除引用并断开连线"
+                                onMouseDown={(event) => event.stopPropagation()}
+                                onPointerDown={(event) => event.stopPropagation()}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    removeReference(reference);
+                                }}
+                            >
+                                <X className="size-3.5" />
+                            </button>
+                        </span>
                     ))}
                 </div>
             ) : null}
@@ -96,6 +188,7 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
                 <CanvasResourceMentionTextarea
                     value={prompt}
                     references={mentionReferences}
+                    onReferenceSelect={rememberReference}
                     onChange={updatePrompt}
                     onSubmit={submit}
                     className={`thin-scrollbar w-full resize-none rounded-xl border px-3 py-2 pr-11 text-sm leading-5 outline-none transition-[height] duration-150 ${promptExpanded ? "h-60" : "h-24"}`}
