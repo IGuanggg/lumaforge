@@ -485,6 +485,9 @@ func LumaReleaseHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func LumaUpdateState(w http.ResponseWriter, r *http.Request) {
+	if proxyLegacy(w, r) {
+		return
+	}
 	writeRawJSON(w, service.LumaUpdateState())
 }
 
@@ -497,6 +500,9 @@ func LumaUpdateSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func LumaUpdatePreflight(w http.ResponseWriter, r *http.Request) {
+	if proxyLegacy(w, r) {
+		return
+	}
 	writeRawJSON(w, map[string]any{"ok": true, "checks": []map[string]any{{"id": "go_next", "label": "Go + Next 主体", "ok": true, "detail": "2.1.0 runtime"}}})
 }
 
@@ -544,6 +550,18 @@ func LumaUpdateAuto(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func LumaUpdateCleanup(w http.ResponseWriter, r *http.Request) {
+	if proxyLegacy(w, r) {
+		return
+	}
+	state := service.LumaCleanupUpdatePackage()
+	writeRawJSON(w, map[string]any{
+		"ok":           true,
+		"removed":      state["cleaned_files"],
+		"update_state": state,
+	})
+}
+
 func LumaLocalDataHealth(w http.ResponseWriter, r *http.Request) {
 	writeRawJSON(w, map[string]any{
 		"ok":    true,
@@ -567,6 +585,20 @@ func LumaBackupNoop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeRawJSON(w, map[string]any{"ok": true, "message": "2.1.0 Go 主体保留备份接口；深度备份由 legacy API 或后续迁移器执行。"})
+}
+
+func LumaAppRestart(w http.ResponseWriter, r *http.Request) {
+	if proxyLegacy(w, r) {
+		return
+	}
+	writeRawError(w, http.StatusBadRequest, fmt.Errorf("当前 Go + Next 主体未连接桌面生命周期桥；请通过桌面版 LumaForge.exe 启动后再使用重启。"))
+}
+
+func LumaAppExit(w http.ResponseWriter, r *http.Request) {
+	if proxyLegacy(w, r) {
+		return
+	}
+	writeRawError(w, http.StatusBadRequest, fmt.Errorf("当前 Go + Next 主体未连接桌面生命周期桥；请通过桌面版 LumaForge.exe 启动后再使用退出。"))
 }
 
 func LumaAppOpenPath(w http.ResponseWriter, r *http.Request) {

@@ -21,10 +21,9 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 )
 
-const (
-	LumaForgeVersion = "2.1.9"
-	LumaForgeBuildID = "20260612-v219-canvas-home-polish1"
-)
+const LumaForgeVersion = "2.1.10"
+const LumaForgeBuildID = "20260612-v2110-desktop-lifecycle-download1"
+const lumaUpdateDownloadStallSeconds = 45
 
 var (
 	lumaHTTPClient = &http.Client{Timeout: 45 * time.Second}
@@ -969,14 +968,31 @@ func LumaAppInfo() map[string]any {
 		"legacy_api_url":          strings.TrimRight(config.Cfg.LumaForgeLegacyAPI, "/"),
 		"entry":                   LumaEntryInfo(),
 		"update_state":            LumaUpdateState(),
-		"app_actions": map[string]any{
-			"restart_supported": false,
-			"exit_supported":    false,
-			"restart_mode":      "",
-			"exit_mode":         "",
-			"desktop":           updateCapability["desktop"],
-			"reason":            "Go + Next 主体暂未接入桌面生命周期控制。",
-		},
+		"app_actions":             LumaAppActionCapability(),
+	}
+}
+
+func LumaAppActionCapability() map[string]any {
+	legacyURL := strings.TrimRight(strings.TrimSpace(config.Cfg.LumaForgeLegacyAPI), "/")
+	desktop := os.Getenv("LUMAFORGE_DESKTOP") == "1" || os.Getenv("INFINITE_CANVAS_DESKTOP") == "1"
+	supported := legacyURL != ""
+	reason := ""
+	restartMode := ""
+	exitMode := ""
+	if supported {
+		restartMode = "desktop-bridge"
+		exitMode = "desktop-bridge"
+	} else {
+		reason = "?? Go + Next ??????????????????? LumaForge.exe ????????????"
+	}
+	return map[string]any{
+		"restart_supported": supported,
+		"exit_supported":    supported,
+		"restart_mode":      restartMode,
+		"exit_mode":         exitMode,
+		"desktop":           desktop,
+		"legacy_api_url":    legacyURL,
+		"reason":            reason,
 	}
 }
 
@@ -1286,6 +1302,36 @@ func LumaUpdateState() map[string]any {
 	}
 	state["current_version"] = LumaForgeVersion
 	state["build_id"] = LumaForgeBuildID
+	downloaded := intFromAny(state["downloaded_bytes"])
+	total := intFromAny(firstNonNil(state["total_bytes"], state["package_size"], state["size"]))
+	progress := 0.0
+	if total > 0 {
+		progress = float64(downloaded) / float64(total) * 100
+		if progress < 0 {
+			progress = 0
+		}
+		if progress > 100 {
+			progress = 100
+		}
+	}
+	lastProgressAt := intFromAny(firstNonNil(state["last_progress_at"], state["saved_at"], state["updated_at"]))
+	stalledSeconds := 0
+	if lastProgressAt > 0 {
+		stalledSeconds = int((time.Now().UnixMilli() - int64(lastProgressAt)) / 1000)
+		if stalledSeconds < 0 {
+			stalledSeconds = 0
+		}
+	}
+	phase := stringFromAny(state["phase"])
+	stalled := phase == "downloading" && stalledSeconds >= lumaUpdateDownloadStallSeconds
+	tempPath := stringFromAny(state["temp_path"])
+	canCleanup := (phase == "failed" || phase == "downloading" || phase == "downloaded" || phase == "verifying" || phase == "idle") &&
+		(tempPath != "" || stringFromAny(state["path"]) != "" || stringFromAny(state["filename"]) != "")
+	state["download_progress"] = float64(int(progress*10)) / 10
+	state["stalled_seconds"] = stalledSeconds
+	state["stalled"] = stalled
+	state["can_cleanup"] = canCleanup
+	state["update_capability"] = LumaUpdateCapability()
 	return state
 }
 
@@ -1296,7 +1342,56 @@ func LumaSaveUpdateState(patch map[string]any) map[string]any {
 	}
 	state["updated_at"] = time.Now().UnixMilli()
 	_ = writeJSONFile(lumaPath("update_state.json"), state)
-	return state
+	return LumaUpdateState()
+}
+
+func LumaCleanupUpdatePackage() map[string]any {
+	state := LumaUpdateState()
+	removed := []string{}
+	downloadsDir := filepath.Join(lumaPath("updates"), "downloads")
+	candidates := []string{
+		stringFromAny(state["temp_path"]),
+		stringFromAny(state["path"]),
+	}
+	if filename := strings.TrimSpace(stringFromAny(state["filename"])); filename != "" {
+		candidates = append(candidates, filepath.Join(downloadsDir, filename+".part"))
+	}
+	for _, candidate := range candidates {
+		path := strings.TrimSpace(candidate)
+		if path == "" {
+			continue
+		}
+		abs, err := filepath.Abs(path)
+		if err != nil || !lumaIsSafeChildPath(abs, downloadsDir) {
+			continue
+		}
+		if info, err := os.Stat(abs); err == nil && !info.IsDir() {
+			_ = os.Remove(abs)
+			removed = append(removed, abs)
+		}
+	}
+	return LumaSaveUpdateState(map[string]any{
+		"phase":         "idle",
+		"error":         nil,
+		"temp_path":     "",
+		"cleaned_files": removed,
+	})
+}
+
+func lumaIsSafeChildPath(path string, root string) bool {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absRoot, absPath)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != "" && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel))
 }
 
 func LumaUpdateCheck() map[string]any {
