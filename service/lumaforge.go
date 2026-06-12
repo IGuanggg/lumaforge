@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	LumaForgeVersion = "2.1.8"
-	LumaForgeBuildID = "20260611-v218-image-wait-mentions1"
+	LumaForgeVersion = "2.1.9"
+	LumaForgeBuildID = "20260612-v219-canvas-home-polish1"
 )
 
 var (

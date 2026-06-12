@@ -1,6 +1,6 @@
 ﻿param(
-    [string]$Version = "2.1.8",
-    [string]$BuildId = "20260611-v218-image-wait-mentions1",
+    [string]$Version = "2.1.9",
+    [string]$BuildId = "20260612-v219-canvas-home-polish1",
     [string]$ToolRoot = $(Join-Path $env:LOCALAPPDATA "LumaForgeDevTools")
 )
 
