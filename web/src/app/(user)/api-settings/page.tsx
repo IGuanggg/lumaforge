@@ -236,10 +236,11 @@ export default function ApiSettingsPage() {
                 base_url: selected.base_url,
                 api_key: selected.api_key?.trim() || undefined,
             });
-            const protocol = data.ok ? "apimart" : "openai";
+            const protocol = data.protocol === "apimart" ? "apimart" : "openai";
             updateSelected({ protocol });
             setCheckResult(data);
-            message.success(`协议已设置为 ${protocol === "apimart" ? "APIMart 异步" : "OpenAI 兼容"}`);
+            const suffix = data.confidence === "low" ? "，建议手动确认" : "";
+            message.success(`协议已设置为 ${protocol === "apimart" ? "APIMart 异步" : "OpenAI 兼容"}${suffix}`);
         } catch (error) {
             updateSelected({ protocol: "openai" });
             message.error(error instanceof Error ? error.message : "协议检测失败，已回退 OpenAI 兼容");

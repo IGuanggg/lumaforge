@@ -21,8 +21,8 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 )
 
-const LumaForgeVersion = "2.1.10"
-const LumaForgeBuildID = "20260612-v2110-desktop-lifecycle-download1"
+const LumaForgeVersion = "2.1.11"
+const LumaForgeBuildID = "20260614-v2111-api-update-health1"
 const lumaUpdateDownloadStallSeconds = 45
 
 var (
@@ -875,6 +875,68 @@ func LumaFetchProviderModels(provider LumaAPIProvider, apiKey string) (map[strin
 	return classifiedModelPayload(models, status, message), nil
 }
 
+func LumaProbeProviderProtocol(provider LumaAPIProvider, apiKey string) map[string]any {
+	baseURL := strings.TrimRight(strings.TrimSpace(provider.BaseURL), "/")
+	if baseURL == "" {
+		return map[string]any{
+			"ok":         false,
+			"protocol":   "manual",
+			"confidence": "low",
+			"message":    "请先填写 Base URL",
+			"reason":     "missing_base_url",
+		}
+	}
+	lowerURL := strings.ToLower(baseURL)
+	if strings.Contains(lowerURL, "/contents/generations/tasks") || strings.Contains(lowerURL, "apimart") || strings.Contains(lowerURL, "volces") {
+		return map[string]any{
+			"ok":         true,
+			"protocol":   "apimart",
+			"confidence": "medium",
+			"message":    "检测到异步任务式接口特征，建议使用 APIMart 异步协议",
+			"endpoint":   baseURL,
+			"reason":     "url_async_task_hint",
+		}
+	}
+	models, status, message, err := fetchOpenAIModels(baseURL, firstNonEmptyString(apiKey, provider.APIKey))
+	if err == nil {
+		confidence := "high"
+		if len(models) == 0 {
+			confidence = "medium"
+		}
+		return map[string]any{
+			"ok":          true,
+			"protocol":    "openai",
+			"confidence":  confidence,
+			"status_code": status,
+			"message":     fmt.Sprintf("OpenAI 兼容模型列表可访问，识别到 %d 个模型", len(models)),
+			"model_count": len(models),
+			"endpoint":    "models",
+			"reason":      "models_endpoint_ok",
+		}
+	}
+	if len(provider.ImageModels)+len(provider.ChatModels)+len(provider.VideoModels) > 0 {
+		return map[string]any{
+			"ok":          true,
+			"protocol":    "openai",
+			"confidence":  "low",
+			"status_code": status,
+			"message":     "模型列表接口不可用，但已存在手动模型，按 OpenAI 兼容处理",
+			"model_count": len(provider.ImageModels) + len(provider.ChatModels) + len(provider.VideoModels),
+			"reason":      "manual_models_fallback",
+			"raw":         message,
+		}
+	}
+	return map[string]any{
+		"ok":          false,
+		"protocol":    "manual",
+		"confidence":  "low",
+		"status_code": status,
+		"message":     "未识别到可用协议，请手动选择",
+		"reason":      err.Error(),
+		"raw":         message,
+	}
+}
+
 func fetchOpenAIModels(baseURL string, apiKey string) ([]string, int, string, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
@@ -983,7 +1045,7 @@ func LumaAppActionCapability() map[string]any {
 		restartMode = "desktop-bridge"
 		exitMode = "desktop-bridge"
 	} else {
-		reason = "?? Go + Next ??????????????????? LumaForge.exe ????????????"
+		reason = "当前 Go + Next 主体未连接桌面生命周期桥；请通过 LumaForge.exe 启动后再重启或退出。"
 	}
 	return map[string]any{
 		"restart_supported": supported,
@@ -1058,6 +1120,8 @@ func LumaReleaseHealth() map[string]any {
 	phase := stringFromAny(updateState["phase"])
 	if phase == "failed" {
 		add("update_state", "更新状态", "warn", stringFromAny(updateState["error"]), "清理失败任务后重试")
+	} else if boolFromAny(updateState["stalled"]) {
+		add("update_state", "更新状态", "warn", fmt.Sprintf("%s，下载进度疑似停滞 %d 秒", firstNonEmptyString(phase, "idle"), intFromAny(updateState["stalled_seconds"])), "清理临时更新文件后重试")
 	} else {
 		add("update_state", "更新状态", "ok", firstNonEmptyString(phase, "idle"), "")
 	}
@@ -1072,12 +1136,25 @@ func LumaReleaseHealth() map[string]any {
 	keyDiagnostics := LumaProviderKeyDiagnostics()
 	providerCount := intFromAny(keyDiagnostics["provider_count"])
 	storedKeyCount := intFromAny(keyDiagnostics["stored_key_count"])
+	orphanKeyCount := intFromAny(keyDiagnostics["orphan_count"])
 	if providerCount <= 0 {
 		add("api_config", "API 配置", "error", "没有可用 API 平台", "在 API 设置中添加本地平台")
 	} else if storedKeyCount <= 0 && !boolFromAny(keyDiagnostics["has_environment_keys"]) && !boolFromAny(keyDiagnostics["recoverable_from_cloud"]) {
 		add("api_config", "API 配置", "warn", fmt.Sprintf("已配置 %d 个平台，但没有本地密钥", providerCount), "在本地 API 中保存密钥或从云端恢复")
 	} else {
 		add("api_config", "API 配置", "ok", fmt.Sprintf("已配置 %d 个平台，%d 个本地密钥", providerCount, storedKeyCount), "")
+	}
+	if orphanKeyCount > 0 {
+		add("api_orphan_keys", "API 孤立密钥", "warn", fmt.Sprintf("%d 个密钥没有对应平台", orphanKeyCount), "在 API 设置里清理孤立 Key")
+	} else {
+		add("api_orphan_keys", "API 孤立密钥", "ok", "没有孤立 Key", "")
+	}
+	if boolFromAny(keyDiagnostics["cloud_config_available"]) {
+		add("api_cloud_boundary", "API 云端边界", "ok", "云端配置可用于恢复 Key，本地平台仍由本机保存", "")
+	} else if boolFromAny(keyDiagnostics["recoverable_from_cloud"]) {
+		add("api_cloud_boundary", "API 云端边界", "warn", "云端有可恢复 Key", "进入 API 设置执行恢复")
+	} else {
+		add("api_cloud_boundary", "API 云端边界", "ok", "本地 API 平台独立保存", "")
 	}
 
 	paths := LumaAppPaths()
@@ -1100,6 +1177,27 @@ func LumaReleaseHealth() map[string]any {
 		add("canvas_assets", "画布生成素材入库", "ok", "素材上传桥已连接", "")
 	} else {
 		add("canvas_assets", "画布生成素材入库", "warn", "未连接 legacy 素材上传桥", "通过桌面启动器启动完整服务")
+	}
+	canvasCaps := lumaCanvasSourceCapabilities()
+	if boolFromAny(canvasCaps["prompt_refs"]) {
+		add("canvas_prompt_refs", "画布引用链路", "ok", "支持 promptRefs、inputReferenceOrder、runPromptRefs", "")
+	} else {
+		add("canvas_prompt_refs", "画布引用链路", "warn", "未检测到完整 prompt 引用字段", "确认 React 画布源码已包含结构化引用")
+	}
+	if boolFromAny(canvasCaps["history"]) {
+		add("canvas_history", "画布撤销重做", "ok", "画布结构历史栈可用", "")
+	} else {
+		add("canvas_history", "画布撤销重做", "warn", "未检测到画布级 undo/redo", "补齐画布历史栈")
+	}
+	if boolFromAny(canvasCaps["asset_sync"]) {
+		add("canvas_asset_sync", "画布素材同步桥", "ok", "生成素材会写前端素材库并同步 /api/assets/upload", "")
+	} else {
+		add("canvas_asset_sync", "画布素材同步桥", "warn", "未检测到画布生成素材同步入口", "确认 saveCanvasGeneratedAsset 或同步桥存在")
+	}
+	if boolFromAny(canvasCaps["connections"]) {
+		add("canvas_connections", "画布连线操作", "ok", "连线选择与删除入口可用", "")
+	} else {
+		add("canvas_connections", "画布连线操作", "warn", "未检测到连线删除/选择入口", "检查连接交互实现")
 	}
 
 	status := "ok"
@@ -1145,6 +1243,27 @@ func lumaCanvasStaticExists() bool {
 		}
 	}
 	return false
+}
+
+func lumaCanvasSourceCapabilities() map[string]any {
+	files := []string{
+		filepath.Join("web", "src", "app", "(user)", "canvas", "[id]", "canvas-client-page.tsx"),
+		filepath.Join("web", "src", "app", "(user)", "canvas", "components", "canvas-node-generation.ts"),
+		filepath.Join("web", "src", "app", "(user)", "canvas", "components", "canvas-node-prompt-panel.tsx"),
+		filepath.Join("web", "src", "services", "api", "assets.ts"),
+	}
+	combined := ""
+	for _, file := range files {
+		if data, err := os.ReadFile(file); err == nil {
+			combined += "\n" + string(data)
+		}
+	}
+	return map[string]any{
+		"prompt_refs": strings.Contains(combined, "promptRefs") && strings.Contains(combined, "inputReferenceOrder") && strings.Contains(combined, "runPromptRefs"),
+		"history":     strings.Contains(combined, "historyRef") && strings.Contains(combined, "undoCanvas") && strings.Contains(combined, "redoCanvas"),
+		"asset_sync":  strings.Contains(combined, "syncCanvasGeneratedAssetToBackend") && strings.Contains(combined, "/api/assets/upload"),
+		"connections": strings.Contains(combined, "selectedConnectionId") && strings.Contains(combined, "deleteConnection"),
+	}
 }
 
 func LumaUpdateCapability() map[string]any {

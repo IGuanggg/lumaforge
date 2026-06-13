@@ -17,8 +17,8 @@
         })();
     </script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260612-v2110-desktop-lifecycle-download1"></script>
-    <script src="/static/i18n.js?v=20260612-v2110-desktop-lifecycle-download1"></script>
+    <script src="/static/theme.js?v=20260614-v2111-api-update-health1"></script>
+    <script src="/static/i18n.js?v=20260614-v2111-api-update-health1"></script>
     <style>
 :root {
             --page:#f8fafc; --grid:#d9e1ea; --panel:rgba(255,255,255,.9); --card:#fff;
@@ -1435,7 +1435,7 @@
         }
         function backToCanvasList(){
             savePromptDraftForCurrent();
-            const target = `/static/canvas.html?list=smart&v=20260612-v2110-desktop-lifecycle-download1`;
+            const target = `/static/canvas.html?list=smart&v=20260614-v2111-api-update-health1`;
             try {
                 if(window.parent && window.parent !== window){
                     window.parent.localStorage?.setItem('studio_active_page', 'smart-canvas');
@@ -3755,7 +3755,7 @@
             try { localStorage.setItem(SMART_CANVAS_ID_KEY, id); } catch(e) {}
             const url = new URL(window.location.href);
             url.searchParams.set('id', id);
-            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260612-v2110-desktop-lifecycle-download1');
+            if(!url.searchParams.get('v')) url.searchParams.set('v', '20260614-v2111-api-update-health1');
             history.replaceState(null, '', url.toString());
         }
         async function ensureSmartCanvasId(){

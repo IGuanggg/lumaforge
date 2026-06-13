@@ -24,6 +24,11 @@ export type ProviderModelsResponse = {
     status?: number;
     status_code?: number;
     message?: string;
+    protocol?: LumaProviderProtocol | "manual";
+    confidence?: "high" | "medium" | "low";
+    checked_url?: string;
+    endpoint?: string;
+    reason?: string;
     all?: string[];
     total?: number;
     model_count?: number;

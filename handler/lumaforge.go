@@ -445,7 +445,26 @@ func LumaProviderTestConnection(w http.ResponseWriter, r *http.Request) {
 }
 
 func LumaProviderProbeAsync(w http.ResponseWriter, r *http.Request) {
-	writeRawJSON(w, map[string]any{"ok": false, "status_code": 200, "message": "按 OpenAI 兼容协议处理", "raw": map[string]any{}})
+	var payload service.LumaAPIProvider
+	var raw map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&raw)
+	payload.ID = firstNonEmpty(firstMapString(raw, "provider_id"), "custom")
+	payload.Name = payload.ID
+	payload.BaseURL = firstMapString(raw, "base_url")
+	payload.APIKey = firstMapString(raw, "api_key")
+	if strings.TrimSpace(payload.APIKey) == "" {
+		if saved, key, ok := service.LumaProviderByID(payload.ID); ok {
+			payload.APIKey = key
+			if strings.TrimSpace(payload.BaseURL) == "" {
+				payload.BaseURL = saved.BaseURL
+			}
+			payload.Protocol = saved.Protocol
+			payload.ImageModels = saved.ImageModels
+			payload.ChatModels = saved.ChatModels
+			payload.VideoModels = saved.VideoModels
+		}
+	}
+	writeRawJSON(w, service.LumaProbeProviderProtocol(payload, payload.APIKey))
 }
 
 func LumaConfig(w http.ResponseWriter, r *http.Request) {

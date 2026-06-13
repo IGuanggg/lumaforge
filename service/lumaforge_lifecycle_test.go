@@ -1,8 +1,12 @@
 package service
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -49,6 +53,9 @@ func TestLumaAppActionCapabilityExplainsMissingBridge(t *testing.T) {
 	}
 	if capability["reason"] == "" {
 		t.Fatalf("expected a visible reason when bridge is missing: %#v", capability)
+	}
+	if strings.Contains(stringFromAny(capability["reason"]), "??") {
+		t.Fatalf("expected readable missing bridge reason, got %#v", capability["reason"])
 	}
 }
 
@@ -111,5 +118,49 @@ func TestLumaCleanupUpdatePackageOnlyRemovesDownloadArtifacts(t *testing.T) {
 	}
 	if cleaned["phase"] != "idle" {
 		t.Fatalf("expected idle phase after cleanup: %#v", cleaned)
+	}
+}
+
+func TestLumaProbeProviderProtocolDetectsOpenAIModels(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"id": "gpt-image-2"}},
+		})
+	}))
+	defer server.Close()
+
+	result := LumaProbeProviderProtocol(LumaAPIProvider{BaseURL: server.URL + "/v1"}, "test-key")
+	if result["protocol"] != "openai" || result["confidence"] != "high" {
+		t.Fatalf("expected high-confidence OpenAI protocol, got %#v", result)
+	}
+	if result["model_count"] != 1 {
+		t.Fatalf("expected one model, got %#v", result)
+	}
+}
+
+func TestLumaProbeProviderProtocolKeepsManualModelsAsOpenAIFallback(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+
+	result := LumaProbeProviderProtocol(LumaAPIProvider{
+		BaseURL:     server.URL + "/v1",
+		ImageModels: []string{"manual-image-model"},
+	}, "test-key")
+	if result["protocol"] != "openai" || result["confidence"] != "low" {
+		t.Fatalf("expected low-confidence OpenAI fallback for manual models, got %#v", result)
+	}
+	if result["reason"] != "manual_models_fallback" {
+		t.Fatalf("expected manual model fallback reason, got %#v", result["reason"])
+	}
+}
+
+func TestLumaProbeProviderProtocolDetectsAsyncTaskEndpoint(t *testing.T) {
+	result := LumaProbeProviderProtocol(LumaAPIProvider{BaseURL: "https://example.com/contents/generations/tasks"}, "")
+	if result["protocol"] != "apimart" || result["confidence"] != "medium" {
+		t.Fatalf("expected APIMart async protocol hint, got %#v", result)
 	}
 }

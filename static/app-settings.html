@@ -56,9 +56,9 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260612-v2110-desktop-lifecycle-download1"></script>
-    <script src="/static/i18n.js?v=20260612-v2110-desktop-lifecycle-download1"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260612-v2110-desktop-lifecycle-download1">
+    <script src="/static/theme.js?v=20260614-v2111-api-update-health1"></script>
+    <script src="/static/i18n.js?v=20260614-v2111-api-update-health1"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260614-v2111-api-update-health1">
     <style>
         :root {
             --bg:#f7f8fa;
@@ -640,7 +640,7 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.1.10 桌面更新热修版</div>
+                        <div class="welcome-title">v2.1.11 API 与发布检查稳定版</div>
                         <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是让首页图片、顶部导航、画布编辑和智能增强入口更稳定。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
@@ -1081,6 +1081,9 @@
                 const data = await fetch('/api/app/update-state').then(jsonOrThrow);
                 renderUpdateState(data);
                 const phase = data.phase || data.state?.phase || '';
+                if(data.stalled || data.state?.stalled) {
+                    setStatus('update-status', '下载进度长时间未变化，可以先点“清理临时包”后重试。', 'warn');
+                }
                 if(['done','failed','downloaded','restart_failed'].includes(phase)) {
                     if(phase === 'done') await loadInfo();
                     stopUpdatePolling();
@@ -1269,13 +1272,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.1.10' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.1.11' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.1.10';
+            const version = appInfo?.version || '2.1.11';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }
@@ -1918,16 +1921,21 @@
         async function downloadUpdate() {
             const dlBtn = document.getElementById('download-update-btn');
             if(dlBtn) dlBtn.disabled = true;
-            setStatus('update-status', '正在下载更新包...');
+            setStatus('update-status', '下载请求已发出，正在等待更新器响应...');
             beginUpdatePolling();
+            const pendingHint = setTimeout(() => {
+                setStatus('update-status', '更新器仍在响应中，我会继续刷新进度；如果长期不动，可清理临时包后重试。', 'warn');
+            }, 8000);
             try {
                 const data = await fetch('/api/app/update-download', { method:'POST' }).then(jsonOrThrow);
+                clearTimeout(pendingHint);
                 renderUpdateState(data.update_state || data);
                 setStatus('update-status', `下载完成：${data.filename} (${(data.size/1024/1024).toFixed(1)} MB)`, 'ok');
                 const instBtn = document.getElementById('install-update-btn');
                 if(instBtn) instBtn.style.display = '';
                 if(dlBtn) dlBtn.style.display = 'none';
             } catch(e) {
+                clearTimeout(pendingHint);
                 setStatus('update-status', e.message || String(e), 'error');
                 await refreshUpdateState();
             } finally {
@@ -1993,7 +2001,7 @@
                     setStatus('update-status', `安装前检查未通过：${preflight.blocking_count} 个阻塞项。`, 'error');
                     return;
                 }
-                setStatus('update-status', '已开始自动升级，正在后台下载并安装...');
+                setStatus('update-status', '自动升级请求已发出，正在等待后台任务返回状态...');
                 beginUpdatePolling();
                 const data = await fetch('/api/app/update-auto', { method:'POST' }).then(jsonOrThrow);
                 if(data.updated) {

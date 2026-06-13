@@ -1,6 +1,6 @@
 ﻿param(
-    [string]$Version = "2.1.10",
-    [string]$BuildId = "20260612-v2110-desktop-lifecycle-download1",
+    [string]$Version = "2.1.11",
+    [string]$BuildId = "20260614-v2111-api-update-health1",
     [string]$ToolRoot = $(Join-Path $env:LOCALAPPDATA "LumaForgeDevTools")
 )
 
