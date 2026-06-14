@@ -121,6 +121,143 @@ func TestLumaCleanupUpdatePackageOnlyRemovesDownloadArtifacts(t *testing.T) {
 	}
 }
 
+func TestLumaUpdateCheckSelectsNewerDesktopRelease(t *testing.T) {
+	previousConfig := config.Cfg
+	t.Cleanup(func() { config.Cfg = previousConfig })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/releases" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{
+				"tag_name":   "v2.1.12",
+				"name":       "LumaForge 2.1.12",
+				"draft":      false,
+				"prerelease": false,
+				"body":       "quality release",
+				"assets": []map[string]any{
+					{"name": "LumaForge-2.1.12-web.zip", "browser_download_url": "https://cdn.example.com/web.zip", "size": 10},
+					{"name": "LumaForge-2.1.12-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
+				},
+			},
+			{
+				"tag_name":   "v2.1.13-beta",
+				"draft":      false,
+				"prerelease": true,
+			},
+		})
+	}))
+	defer server.Close()
+
+	config.Cfg = config.Config{
+		LumaForgeDataDir: t.TempDir(),
+		UpdateCheckURL:   server.URL + "/releases",
+	}
+
+	result := LumaUpdateCheck()
+	if result["ok"] != true || result["configured"] != true || result["latest_version"] != "2.1.12" || result["is_newer"] != true {
+		t.Fatalf("unexpected update result: %#v", result)
+	}
+	asset, ok := result["selected_asset"].(map[string]any)
+	if !ok {
+		t.Fatalf("selected asset missing: %#v", result)
+	}
+	if asset["name"] != "LumaForge-2.1.12-desktop.zip" || asset["url"] != "https://cdn.example.com/desktop.zip" {
+		t.Fatalf("selected asset = %#v, want desktop zip", asset)
+	}
+	state := LumaUpdateState()
+	if state["phase"] != "found" || state["latest_version"] != "2.1.12" {
+		t.Fatalf("update state = %#v, want found 2.1.12", state)
+	}
+}
+
+func TestLumaUpdateCheckTreatsLatest211AsCurrent(t *testing.T) {
+	previousConfig := config.Cfg
+	t.Cleanup(func() { config.Cfg = previousConfig })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"tag_name":   "v2.1.11",
+			"draft":      false,
+			"prerelease": false,
+			"assets": []map[string]any{
+				{"name": "LumaForge-2.1.11-desktop.zip", "browser_download_url": "https://cdn.example.com/current.zip"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	config.Cfg = config.Config{
+		LumaForgeDataDir: t.TempDir(),
+		UpdateCheckURL:   server.URL + "/latest",
+	}
+
+	result := LumaUpdateCheck()
+	if result["current_version"] != "2.1.11" {
+		t.Fatalf("current version = %#v, want 2.1.11", result["current_version"])
+	}
+	if result["latest_version"] != "2.1.11" || result["is_newer"] != false || result["selected_asset"] != nil {
+		t.Fatalf("2.1.11 should be treated as current, got %#v", result)
+	}
+	state := LumaUpdateState()
+	if state["phase"] != "idle" {
+		t.Fatalf("state = %#v, want idle for current release", state)
+	}
+}
+
+func TestReleaseVersionAndVersionComparisonHelpers(t *testing.T) {
+	cases := []struct {
+		release map[string]any
+		want    string
+	}{
+		{map[string]any{"tag_name": "v2.1.11"}, "2.1.11"},
+		{map[string]any{"tag_name": "", "name": "V2.1.12"}, "2.1.12"},
+		{map[string]any{"tag_name": "20.0.29"}, "2.0.29"},
+	}
+	for _, tc := range cases {
+		if got := releaseVersion(tc.release); got != tc.want {
+			t.Fatalf("releaseVersion(%#v) = %q, want %q", tc.release, got, tc.want)
+		}
+	}
+
+	comparisons := []struct {
+		a, b string
+		want int
+	}{
+		{"v2.1.12", "2.1.11", 1},
+		{"2.1.11", "2.1.11", 0},
+		{"2.1.10", "2.1.11", -1},
+		{"2.1.11-beta", "2.1.10", 1},
+	}
+	for _, tc := range comparisons {
+		if got := compareVersion(tc.a, tc.b); got != tc.want {
+			t.Fatalf("compareVersion(%q, %q) = %d, want %d", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
+func TestSelectDesktopZipAssetFallsBackToFirstAsset(t *testing.T) {
+	release := map[string]any{
+		"assets": []any{
+			map[string]any{"name": "notes.txt", "browser_download_url": "https://cdn.example.com/notes.txt", "size": 1},
+			map[string]any{"name": "LumaForge-2.1.12-desktop.zip", "url": "https://api.example.com/asset/1", "size": 20},
+		},
+	}
+	asset := selectDesktopZipAsset(release)
+	if asset["name"] != "LumaForge-2.1.12-desktop.zip" || asset["url"] != "https://api.example.com/asset/1" {
+		t.Fatalf("desktop asset = %#v", asset)
+	}
+
+	fallback := selectDesktopZipAsset(map[string]any{"assets": []any{
+		map[string]any{"name": "only-installer.exe", "browser_download_url": "https://cdn.example.com/installer.exe"},
+	}})
+	if fallback["name"] != "only-installer.exe" {
+		t.Fatalf("fallback asset = %#v", fallback)
+	}
+}
+
 func TestLumaProbeProviderProtocolDetectsOpenAIModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/models" {
@@ -162,5 +299,71 @@ func TestLumaProbeProviderProtocolDetectsAsyncTaskEndpoint(t *testing.T) {
 	result := LumaProbeProviderProtocol(LumaAPIProvider{BaseURL: "https://example.com/contents/generations/tasks"}, "")
 	if result["protocol"] != "apimart" || result["confidence"] != "medium" {
 		t.Fatalf("expected APIMart async protocol hint, got %#v", result)
+	}
+}
+
+func TestLumaProbeProviderProtocolHonorsManualOverride(t *testing.T) {
+	result := LumaProbeProviderProtocol(LumaAPIProvider{
+		BaseURL:          "https://example.com/apimart-looking-path",
+		ProtocolOverride: "force-openai",
+	}, "")
+	if result["protocol"] != "openai" || result["confidence"] != "manual" || result["reason"] != "user_override" {
+		t.Fatalf("expected manual OpenAI override to win over URL hints, got %#v", result)
+	}
+
+	result = LumaProbeProviderProtocol(LumaAPIProvider{
+		BaseURL:          "https://example.com/v1",
+		ProtocolOverride: "force-apimart",
+	}, "")
+	if result["protocol"] != "apimart" || result["confidence"] != "manual" || result["reason"] != "user_override" {
+		t.Fatalf("expected manual APIMart override, got %#v", result)
+	}
+}
+
+func TestLumaCanvasSourceCapabilitiesReadsFrontendEndpoint(t *testing.T) {
+	previousAppURL := os.Getenv("LUMAFORGE_APP_URL")
+	previousPublicBaseURL := config.Cfg.PublicBaseURL
+	t.Cleanup(func() {
+		_ = os.Setenv("LUMAFORGE_APP_URL", previousAppURL)
+		config.Cfg.PublicBaseURL = previousPublicBaseURL
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/canvas/capabilities" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ok":          true,
+			"prompt_refs": true,
+			"history":     true,
+			"asset_sync":  true,
+			"connections": true,
+			"version":     "test",
+		})
+	}))
+	defer server.Close()
+	_ = os.Setenv("LUMAFORGE_APP_URL", server.URL)
+	config.Cfg.PublicBaseURL = ""
+
+	caps := lumaCanvasSourceCapabilities()
+	if caps["source"] != "frontend" || caps["prompt_refs"] != true || caps["history"] != true || caps["asset_sync"] != true || caps["connections"] != true {
+		t.Fatalf("expected capabilities from frontend endpoint, got %#v", caps)
+	}
+}
+
+func TestLumaCanvasSourceCapabilitiesFailsClosedWhenFrontendUnavailable(t *testing.T) {
+	previousAppURL := os.Getenv("LUMAFORGE_APP_URL")
+	previousPublicBaseURL := config.Cfg.PublicBaseURL
+	t.Cleanup(func() {
+		_ = os.Setenv("LUMAFORGE_APP_URL", previousAppURL)
+		config.Cfg.PublicBaseURL = previousPublicBaseURL
+	})
+	_ = os.Unsetenv("LUMAFORGE_APP_URL")
+	config.Cfg.PublicBaseURL = ""
+
+	caps := lumaCanvasSourceCapabilities()
+	if caps["source"] != "frontend_unreachable" || caps["prompt_refs"] != false || caps["history"] != false {
+		t.Fatalf("expected conservative fallback when frontend is unavailable, got %#v", caps)
 	}
 }

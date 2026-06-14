@@ -48,6 +48,7 @@ type LumaAPIProvider struct {
 	Name              string           `json:"name"`
 	BaseURL           string           `json:"base_url"`
 	Protocol          string           `json:"protocol"`
+	ProtocolOverride  string           `json:"protocol_override,omitempty"`
 	Enabled           bool             `json:"enabled"`
 	Primary           bool             `json:"primary"`
 	ImageModels       []string         `json:"image_models"`
@@ -578,11 +579,21 @@ func normalizeLumaProvider(provider LumaAPIProvider) (LumaAPIProvider, error) {
 	if provider.Protocol != "apimart" {
 		provider.Protocol = "openai"
 	}
+	provider.ProtocolOverride = normalizeProtocolOverride(provider.ProtocolOverride)
 	provider = mergeBuiltInProviderDefaults(provider)
 	provider.ImageModels = uniqueStrings(provider.ImageModels)
 	provider.ChatModels = uniqueStrings(provider.ChatModels)
 	provider.VideoModels = uniqueStrings(provider.VideoModels)
 	return provider, nil
+}
+
+func normalizeProtocolOverride(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "force-openai", "force-apimart":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return "auto"
+	}
 }
 
 func mergeBuiltInProviderDefaults(provider LumaAPIProvider) LumaAPIProvider {
@@ -884,6 +895,26 @@ func LumaProbeProviderProtocol(provider LumaAPIProvider, apiKey string) map[stri
 			"confidence": "low",
 			"message":    "请先填写 Base URL",
 			"reason":     "missing_base_url",
+		}
+	}
+	switch normalizeProtocolOverride(provider.ProtocolOverride) {
+	case "force-openai":
+		return map[string]any{
+			"ok":         true,
+			"protocol":   "openai",
+			"confidence": "manual",
+			"message":    "已按手动覆盖使用 OpenAI 兼容协议",
+			"endpoint":   baseURL,
+			"reason":     "user_override",
+		}
+	case "force-apimart":
+		return map[string]any{
+			"ok":         true,
+			"protocol":   "apimart",
+			"confidence": "manual",
+			"message":    "已按手动覆盖使用 APIMart 异步协议",
+			"endpoint":   baseURL,
+			"reason":     "user_override",
 		}
 	}
 	lowerURL := strings.ToLower(baseURL)
@@ -1246,24 +1277,42 @@ func lumaCanvasStaticExists() bool {
 }
 
 func lumaCanvasSourceCapabilities() map[string]any {
-	files := []string{
-		filepath.Join("web", "src", "app", "(user)", "canvas", "[id]", "canvas-client-page.tsx"),
-		filepath.Join("web", "src", "app", "(user)", "canvas", "components", "canvas-node-generation.ts"),
-		filepath.Join("web", "src", "app", "(user)", "canvas", "components", "canvas-node-prompt-panel.tsx"),
-		filepath.Join("web", "src", "services", "api", "assets.ts"),
-	}
-	combined := ""
-	for _, file := range files {
-		if data, err := os.ReadFile(file); err == nil {
-			combined += "\n" + string(data)
-		}
+	if caps, err := lumaFetchCanvasCapabilities(); err == nil {
+		caps["source"] = "frontend"
+		return caps
 	}
 	return map[string]any{
-		"prompt_refs": strings.Contains(combined, "promptRefs") && strings.Contains(combined, "inputReferenceOrder") && strings.Contains(combined, "runPromptRefs"),
-		"history":     strings.Contains(combined, "historyRef") && strings.Contains(combined, "undoCanvas") && strings.Contains(combined, "redoCanvas"),
-		"asset_sync":  strings.Contains(combined, "syncCanvasGeneratedAssetToBackend") && strings.Contains(combined, "/api/assets/upload"),
-		"connections": strings.Contains(combined, "selectedConnectionId") && strings.Contains(combined, "deleteConnection"),
+		"prompt_refs": false,
+		"history":     false,
+		"asset_sync":  false,
+		"connections": false,
+		"source":      "frontend_unreachable",
 	}
+}
+
+func lumaFetchCanvasCapabilities() (map[string]any, error) {
+	appURL := strings.TrimSpace(os.Getenv("LUMAFORGE_APP_URL"))
+	if appURL == "" {
+		appURL = strings.TrimSpace(config.Cfg.PublicBaseURL)
+	}
+	if appURL == "" {
+		return nil, errors.New("frontend app url missing")
+	}
+	endpoint := strings.TrimRight(appURL, "/") + "/api/canvas/capabilities"
+	client := &http.Client{Timeout: 2 * time.Second}
+	response, err := client.Get(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, fmt.Errorf("frontend capabilities returned HTTP %d", response.StatusCode)
+	}
+	var caps map[string]any
+	if err := json.NewDecoder(response.Body).Decode(&caps); err != nil {
+		return nil, err
+	}
+	return caps, nil
 }
 
 func LumaUpdateCapability() map[string]any {

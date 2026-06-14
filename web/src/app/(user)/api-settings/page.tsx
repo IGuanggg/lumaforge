@@ -155,6 +155,7 @@ export default function ApiSettingsPage() {
             name: "新 API 平台",
             base_url: "https://",
             protocol: "openai",
+            protocol_override: "auto",
             enabled: true,
             primary: providers.length === 0,
             image_models: [],
@@ -212,6 +213,7 @@ export default function ApiSettingsPage() {
                 provider_id: selected.id,
                 base_url: selected.base_url,
                 api_key: selected.api_key?.trim() || undefined,
+                protocol_override: selected.protocol_override || "auto",
             });
             setCheckResult(data);
             if (data.ok) message.success(`连接通过，识别到 ${data.model_count ?? data.total ?? 0} 个模型`);
@@ -235,6 +237,7 @@ export default function ApiSettingsPage() {
                 provider_id: selected.id,
                 base_url: selected.base_url,
                 api_key: selected.api_key?.trim() || undefined,
+                protocol_override: selected.protocol_override || "auto",
             });
             const protocol = data.protocol === "apimart" ? "apimart" : "openai";
             updateSelected({ protocol });
@@ -409,6 +412,18 @@ export default function ApiSettingsPage() {
                                                     onChange={(value) => updateSelected({ protocol: value })}
                                                 />
                                             </Field>
+                                            <Field label="协议检测模式">
+                                                <Select
+                                                    className="w-full"
+                                                    value={selected.protocol_override || "auto"}
+                                                    options={[
+                                                        { label: "自动检测", value: "auto" },
+                                                        { label: "强制 OpenAI 兼容", value: "force-openai" },
+                                                        { label: "强制 APIMart 异步", value: "force-apimart" },
+                                                    ]}
+                                                    onChange={(value) => updateSelected({ protocol_override: value })}
+                                                />
+                                            </Field>
                                             <Field label="启用状态">
                                                 <div className="flex h-8 items-center gap-3">
                                                     <Switch checked={selected.enabled} onChange={(checked) => updateSelected({ enabled: checked })} />
@@ -475,6 +490,7 @@ export default function ApiSettingsPage() {
                                     <div className="grid gap-2 text-sm">
                                         <SummaryItem label="平台 ID" value={selected.id || "-"} />
                                         <SummaryItem label="协议" value={selected.protocol === "apimart" ? "APIMart 异步" : "OpenAI 兼容"} />
+                                        <SummaryItem label="检测模式" value={protocolOverrideLabel(selected.protocol_override)} />
                                         <SummaryItem label="模型总数" value={String(modelCount)} />
                                         <SummaryItem label="默认生图优先" value={providerModelLabel(selected, defaultImagePreview)} />
                                     </div>
@@ -644,6 +660,7 @@ function normalizeDraft(provider: Partial<ProviderDraft>): ProviderDraft {
         name: String(provider.name || provider.id || "").trim(),
         base_url: String(provider.base_url || "").trim(),
         protocol: provider.protocol === "apimart" ? "apimart" : "openai",
+        protocol_override: normalizeProtocolOverride(provider.protocol_override),
         enabled: provider.enabled !== false,
         primary: provider.primary === true,
         image_models: normalizeModels(provider.image_models),
@@ -658,6 +675,17 @@ function normalizeDraft(provider: Partial<ProviderDraft>): ProviderDraft {
         key_env: provider.key_env || "",
         draft_new: provider.draft_new === true,
     };
+}
+
+function normalizeProtocolOverride(value?: string) {
+    if (value === "force-openai" || value === "force-apimart") return value;
+    return "auto";
+}
+
+function protocolOverrideLabel(value?: string) {
+    if (value === "force-openai") return "强制 OpenAI 兼容";
+    if (value === "force-apimart") return "强制 APIMart 异步";
+    return "自动检测";
 }
 
 function normalizeProviderList(providers: ProviderDraft[]) {

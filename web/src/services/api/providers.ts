@@ -1,10 +1,12 @@
 export type LumaProviderProtocol = "openai" | "apimart";
+export type LumaProviderProtocolOverride = "auto" | "force-openai" | "force-apimart";
 
 export type LumaProvider = {
     id: string;
     name: string;
     base_url: string;
     protocol: LumaProviderProtocol;
+    protocol_override?: LumaProviderProtocolOverride;
     enabled: boolean;
     primary: boolean;
     image_models: string[];
@@ -25,7 +27,7 @@ export type ProviderModelsResponse = {
     status_code?: number;
     message?: string;
     protocol?: LumaProviderProtocol | "manual";
-    confidence?: "high" | "medium" | "low";
+    confidence?: "high" | "medium" | "low" | "manual";
     checked_url?: string;
     endpoint?: string;
     reason?: string;
@@ -84,14 +86,21 @@ export async function fetchProviderModels(providerId: string) {
     return rawRequest<ProviderModelsResponse>(`/api/providers/${encodeURIComponent(providerId)}/fetch-models`);
 }
 
-export async function testProviderConnection(payload: { provider_id: string; base_url: string; api_key?: string }) {
+export type ProviderConnectionPayload = {
+    provider_id: string;
+    base_url: string;
+    api_key?: string;
+    protocol_override?: LumaProviderProtocolOverride;
+};
+
+export async function testProviderConnection(payload: ProviderConnectionPayload) {
     return rawRequest<ProviderModelsResponse>("/api/providers/test-connection", {
         method: "POST",
         body: JSON.stringify(payload),
     });
 }
 
-export async function probeProviderAsync(payload: { provider_id: string; base_url: string; api_key?: string }) {
+export async function probeProviderAsync(payload: ProviderConnectionPayload) {
     return rawRequest<ProviderModelsResponse>("/api/providers/probe-async", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -148,6 +157,7 @@ function normalizeProvider(provider: Partial<LumaProvider>): LumaProvider {
         name: String(provider.name || provider.id || "").trim(),
         base_url: String(provider.base_url || "").trim(),
         protocol: provider.protocol === "apimart" ? "apimart" : "openai",
+        protocol_override: normalizeProtocolOverride(provider.protocol_override),
         enabled: provider.enabled !== false,
         primary: provider.primary === true,
         image_models: normalizeModels(provider.image_models),
@@ -161,6 +171,11 @@ function normalizeProvider(provider: Partial<LumaProvider>): LumaProvider {
         key_preview: provider.key_preview || "",
         key_env: provider.key_env || "",
     };
+}
+
+function normalizeProtocolOverride(value?: string): LumaProviderProtocolOverride {
+    if (value === "force-openai" || value === "force-apimart") return value;
+    return "auto";
 }
 
 function cleanProviderForSave(provider: LumaProvider): LumaProvider {

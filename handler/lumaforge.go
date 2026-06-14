@@ -428,6 +428,7 @@ func LumaProviderTestConnection(w http.ResponseWriter, r *http.Request) {
 	payload.Name = payload.ID
 	payload.BaseURL = firstMapString(raw, "base_url")
 	payload.APIKey = firstMapString(raw, "api_key")
+	payload.ProtocolOverride = firstMapString(raw, "protocol_override")
 	if strings.TrimSpace(payload.APIKey) == "" {
 		if saved, key, ok := service.LumaProviderByID(payload.ID); ok {
 			payload.APIKey = key
@@ -452,6 +453,7 @@ func LumaProviderProbeAsync(w http.ResponseWriter, r *http.Request) {
 	payload.Name = payload.ID
 	payload.BaseURL = firstMapString(raw, "base_url")
 	payload.APIKey = firstMapString(raw, "api_key")
+	payload.ProtocolOverride = firstMapString(raw, "protocol_override")
 	if strings.TrimSpace(payload.APIKey) == "" {
 		if saved, key, ok := service.LumaProviderByID(payload.ID); ok {
 			payload.APIKey = key
@@ -459,6 +461,9 @@ func LumaProviderProbeAsync(w http.ResponseWriter, r *http.Request) {
 				payload.BaseURL = saved.BaseURL
 			}
 			payload.Protocol = saved.Protocol
+			if strings.TrimSpace(payload.ProtocolOverride) == "" {
+				payload.ProtocolOverride = saved.ProtocolOverride
+			}
 			payload.ImageModels = saved.ImageModels
 			payload.ChatModels = saved.ChatModels
 			payload.VideoModels = saved.VideoModels
