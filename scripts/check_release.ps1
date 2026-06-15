@@ -1,6 +1,6 @@
-﻿param(
-    [string]$Version = "2.1.11",
-    [string]$BuildId = "20260614-v2111-api-update-health1",
+param(
+    [string]$Version = "2.1.12",
+    [string]$BuildId = "20260615-v2112-api-settings-quality1",
     [string]$ToolRoot = $(Join-Path $env:LOCALAPPDATA "LumaForgeDevTools")
 )
 
@@ -123,7 +123,7 @@ Assert-Contains "service/migration.go" "migration-2.1.0.json"
 Assert-Contains "web/src/components/layout/client-root-init.tsx" "lumaforge:v21_migration_done"
 Assert-Contains "middleware/admin.go" "service.LumaCurrentAuthUser(token)"
 Assert-Contains "config/config.go" "LumaForgeCloudURL"
-Assert-Contains "RELEASE_NOTES_v$Version.md" "旧版本用户升级"
+Assert-Contains "RELEASE_NOTES_v$Version.md" "LumaForge v$Version"
 Assert-Contains "docs/HANDOFF.md" "Old-version compatibility requirements"
 Assert-Contains "desktop_updater.py" "PROTECT_NAMES"
 Assert-Contains "desktop_updater.py" "`"data`""
@@ -137,8 +137,8 @@ Assert-Contains "web/src/services/api/providers.ts" "fetchProviders"
 Assert-Contains "web/src/app/(user)/api-settings/page.tsx" "fetchProviders"
 Assert-NotContains "web/src/app/(user)/api-settings/page.tsx" "<iframe"
 Assert-Contains "service/settings.go" "enabledProviderModelGroups"
-Assert-Contains "web/src/app/(admin)/admin/settings/page.tsx" "API 平台和模型请到 API 设置维护"
-Assert-NotContains "web/src/app/(admin)/admin/settings/page.tsx" 'label: "私有配置'
+Assert-Contains "web/src/app/(admin)/admin/settings/page.tsx" "modelChannel"
+Assert-NotContains "web/src/app/(admin)/admin/settings/page.tsx" 'key: "private"'
 Assert-NotContains "web/src/app/(admin)/admin/settings/page.tsx" "availableModels = collectChannelModels"
 
 $staleBuildIds = @(
