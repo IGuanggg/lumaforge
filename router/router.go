@@ -50,6 +50,7 @@ func New() *gin.Engine {
 	api.POST("/providers/key-diagnostics/clear", gin.WrapF(handler.LumaProviderKeyDiagnosticsClear))
 	api.POST("/providers/test-connection", gin.WrapF(handler.LumaProviderTestConnection))
 	api.POST("/providers/probe-async", gin.WrapF(handler.LumaProviderProbeAsync))
+	api.POST("/providers/fetch-models", gin.WrapF(handler.LumaProviderFetchModelsDraft))
 	api.GET("/providers/:id/fetch-models", func(c *gin.Context) {
 		handler.LumaProviderFetchModels(c.Writer, c.Request, c.Param("id"))
 	})

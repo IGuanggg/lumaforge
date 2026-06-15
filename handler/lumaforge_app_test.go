@@ -113,6 +113,67 @@ func TestLumaConfigAndTokenExposePrimaryProvider(t *testing.T) {
 	}
 }
 
+func TestLumaProviderFetchModelsDraftUsesCurrentForm(t *testing.T) {
+	withTempHandlerLumaConfig(t, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer sk-draft" {
+			t.Fatalf("authorization = %q, want draft key", r.Header.Get("Authorization"))
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"id": "gpt-image-2"},
+				{"id": "gpt-5"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	body := fmt.Sprintf(`{"id":"draft-provider","base_url":%q,"api_key":"sk-draft"}`, server.URL+"/v1")
+	recorder := httptest.NewRecorder()
+	LumaProviderFetchModelsDraft(recorder, httptest.NewRequest(http.MethodPost, "/api/providers/fetch-models", strings.NewReader(body)))
+	payload := decodeHandlerPayload(t, recorder)
+	if payload["ok"] != true || payload["total"] != float64(2) {
+		t.Fatalf("draft fetch payload = %#v", payload)
+	}
+	imageModels, _ := payload["image_models"].([]any)
+	if len(imageModels) != 1 || imageModels[0] != "gpt-image-2" {
+		t.Fatalf("image models = %#v", payload["image_models"])
+	}
+}
+
+func TestLumaProviderFetchModelsDraftReusesSavedKey(t *testing.T) {
+	withTempHandlerLumaConfig(t, nil)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer sk-saved" {
+			t.Fatalf("authorization = %q, want saved key", r.Header.Get("Authorization"))
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"id": "gpt-5"}}})
+	}))
+	defer server.Close()
+
+	put := httptest.NewRequest(http.MethodPut, "/api/lumaforge/providers", strings.NewReader(fmt.Sprintf(`[
+		{"id":"saved-provider","name":"Saved","base_url":%q,"api_key":"sk-saved","enabled":true,"primary":true,"chat_models":["manual-chat"]}
+	]`, server.URL+"/v1")))
+	LumaProviders(httptest.NewRecorder(), put)
+
+	recorder := httptest.NewRecorder()
+	LumaProviderFetchModelsDraft(recorder, httptest.NewRequest(http.MethodPost, "/api/providers/fetch-models", strings.NewReader(`{"id":"saved-provider"}`)))
+	payload := decodeHandlerPayload(t, recorder)
+	if payload["ok"] != true || payload["total"] != float64(1) {
+		t.Fatalf("saved-key draft fetch payload = %#v", payload)
+	}
+}
+
 func TestLumaUpdateSettingsReflectsConfiguredSource(t *testing.T) {
 	withTempHandlerLumaConfig(t, func(cfg *config.Config) {
 		cfg.UpdateCheckURL = "https://updates.example.com/releases"

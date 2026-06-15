@@ -58,19 +58,95 @@ function Copy-TreeReadOnly {
     return $true
 }
 
+function Test-VolatileSourcePath {
+    param([string]$RelativePath)
+    $normalized = ($RelativePath -replace "\\", "/").TrimStart("/")
+    if ([string]::IsNullOrWhiteSpace($normalized)) {
+        return $false
+    }
+    foreach ($prefix in @("logs/", "cache/", "updates/", "tmp/", "temp/")) {
+        if ($normalized.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+            return $true
+        }
+    }
+    $leaf = [System.IO.Path]::GetFileName($normalized)
+    if ($leaf -in @("update_state.json")) {
+        return $true
+    }
+    return $false
+}
+
+function Convert-ToRelativePath {
+    param(
+        [string]$Root,
+        [string]$Path
+    )
+    $rootAbs = [System.IO.Path]::GetFullPath($Root).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $pathAbs = [System.IO.Path]::GetFullPath($Path)
+    $uriRoot = [System.Uri]($rootAbs + [System.IO.Path]::DirectorySeparatorChar)
+    $uriPath = [System.Uri]$pathAbs
+    return [System.Uri]::UnescapeDataString($uriRoot.MakeRelativeUri($uriPath).ToString()).Replace("/", [System.IO.Path]::DirectorySeparatorChar)
+}
+
 function Get-SourceSnapshot {
     param([string]$Path)
     if (-not (Test-Path -LiteralPath $Path)) {
-        return [ordered]@{ exists = $false; files = 0; latest_write_utc = "" }
+        return [ordered]@{ exists = $false; files = 0; ignored_files = 0; latest_write_utc = ""; entries = @(); ignored_entries = @() }
     }
-    $files = @(Get-ChildItem -LiteralPath $Path -Recurse -File -Force -ErrorAction SilentlyContinue)
+    $allFiles = @(Get-ChildItem -LiteralPath $Path -Recurse -File -Force -ErrorAction SilentlyContinue)
+    $entries = @()
+    $ignored = @()
+    foreach ($file in $allFiles) {
+        $relative = Convert-ToRelativePath $Path $file.FullName
+        $entry = [ordered]@{
+            path = $relative
+            length = $file.Length
+            latest_write_utc = $file.LastWriteTimeUtc.ToString("o")
+        }
+        if (Test-VolatileSourcePath $relative) {
+            $ignored += $entry
+        } else {
+            $entries += $entry
+        }
+    }
+    $entries = @($entries | Sort-Object path)
+    $ignored = @($ignored | Sort-Object path)
     $latest = ""
-    if ($files.Count -gt 0) {
-        $latest = ($files | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1).LastWriteTimeUtc.ToString("o")
+    if ($entries.Count -gt 0) {
+        $latest = ($entries | Sort-Object latest_write_utc -Descending | Select-Object -First 1).latest_write_utc
     } else {
         $latest = (Get-Item -LiteralPath $Path).LastWriteTimeUtc.ToString("o")
     }
-    return [ordered]@{ exists = $true; files = $files.Count; latest_write_utc = $latest }
+    return [ordered]@{
+        exists = $true
+        files = $entries.Count
+        ignored_files = $ignored.Count
+        latest_write_utc = $latest
+        entries = $entries
+        ignored_entries = $ignored
+    }
+}
+
+function Compare-SourceSnapshots {
+    param(
+        [object]$Before,
+        [object]$After
+    )
+    $labels = @("runtime", "assets", "local")
+    $changed = @()
+    foreach ($label in $labels) {
+        $beforeItem = if ($Before -is [System.Collections.IDictionary]) { $Before[$label] } else { $Before.$label }
+        $afterItem = if ($After -is [System.Collections.IDictionary]) { $After[$label] } else { $After.$label }
+        $beforeJson = ($beforeItem.entries | ConvertTo-Json -Compress -Depth 6)
+        $afterJson = ($afterItem.entries | ConvertTo-Json -Compress -Depth 6)
+        if ($beforeJson -ne $afterJson) {
+            $changed += $label
+        }
+    }
+    return [ordered]@{
+        ok = ($changed.Count -eq 0)
+        changed = $changed
+    }
 }
 
 function Wait-Http {
@@ -372,9 +448,10 @@ async function canvasStoreSnapshot(page) {
         assets = Get-SourceSnapshot $sourceAssets
         local = Get-SourceSnapshot $sourceLocal
     }
-    $sourceUnchanged = (($before | ConvertTo-Json -Compress) -eq ($after | ConvertTo-Json -Compress))
+    $sourceCompare = Compare-SourceSnapshots $before $after
+    $sourceUnchanged = [bool]$sourceCompare.ok
     if (-not $sourceUnchanged) {
-        throw "Source data snapshot changed during verification."
+        throw "Source data snapshot changed during verification: $($sourceCompare.changed -join ', ')."
     }
 
     $summary = [ordered]@{
@@ -382,6 +459,11 @@ async function canvasStoreSnapshot(page) {
         run_root = $RunRoot
         copied = $copied
         source_unchanged = $sourceUnchanged
+        source_snapshot = [ordered]@{
+            before = $before
+            after = $after
+            compare = $sourceCompare
+        }
         legacy_url = "http://127.0.0.1:$LegacyPort"
         api_url = "http://127.0.0.1:$ApiPort"
         web_url = if ($SkipWeb) { "" } else { "http://127.0.0.1:$WebPort" }

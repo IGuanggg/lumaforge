@@ -21,8 +21,8 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 )
 
-const LumaForgeVersion = "2.1.11"
-const LumaForgeBuildID = "20260614-v2111-api-update-health1"
+const LumaForgeVersion = "2.1.12"
+const LumaForgeBuildID = "20260615-v2112-api-settings-quality1"
 const lumaUpdateDownloadStallSeconds = 45
 
 var (
@@ -1144,6 +1144,8 @@ func LumaReleaseHealth() map[string]any {
 	}
 	if boolFromAny(updateCapability["supported"]) {
 		add("auto_update", "自动更新器", "ok", "桌面更新器已连接", "")
+	} else if stringFromAny(updateCapability["mode"]) == "source-mode" {
+		add("auto_update", "自动更新器", "warn", stringFromAny(updateCapability["reason"]), "构建桌面版后再验证自动更新闭环")
 	} else {
 		add("auto_update", "自动更新器", "error", stringFromAny(updateCapability["reason"]), "通过桌面启动器启动应用")
 	}
@@ -1319,8 +1321,12 @@ func LumaUpdateCapability() map[string]any {
 	legacyURL := strings.TrimSpace(config.Cfg.LumaForgeLegacyAPI)
 	desktop := os.Getenv("LUMAFORGE_DESKTOP") == "1" || os.Getenv("INFINITE_CANVAS_DESKTOP") == "1"
 	supported := legacyURL != ""
-	mode := "legacy-updater-missing"
-	reason := "当前 Go 主体未连接 legacy updater；请通过桌面版启动 LumaForge 后再执行自动升级。"
+	mode := "source-mode"
+	reason := "当前是源码/开发模式，自动替换桌面程序不可用；桌面版启动后会启用自动更新器。"
+	if desktop {
+		mode = "legacy-updater-missing"
+		reason = "当前桌面主体未连接 legacy updater；请通过桌面启动器启动 LumaForge 后再执行自动升级。"
+	}
 	if supported {
 		mode = "desktop-updater"
 		reason = ""
@@ -1620,8 +1626,10 @@ func LumaUpdateCheck() map[string]any {
 	stateAssets := []map[string]any{}
 	if isNewer {
 		phase = "found"
-		stateAsset = asset
-		stateAssets = []map[string]any{asset}
+		if asset != nil && strings.TrimSpace(stringFromAny(asset["url"])) != "" {
+			stateAsset = asset
+			stateAssets = []map[string]any{asset}
+		}
 	}
 	LumaSaveUpdateState(map[string]any{"phase": phase, "latest_version": latest, "asset": stateAsset, "assets": stateAssets})
 	downloadURL := ""
@@ -1713,18 +1721,38 @@ func selectDesktopZipAsset(release map[string]any) map[string]any {
 			continue
 		}
 		name := stringFromAny(asset["name"])
+		url := firstNonEmptyString(stringFromAny(asset["browser_download_url"]), stringFromAny(asset["url"]))
+		if strings.TrimSpace(url) == "" {
+			continue
+		}
+		lower := strings.ToLower(name)
+		lowerURL := strings.ToLower(url)
+		if index := strings.IndexAny(lowerURL, "?#"); index >= 0 {
+			lowerURL = lowerURL[:index]
+		}
+		if !strings.HasSuffix(lower, ".zip") && !strings.HasSuffix(lowerURL, ".zip") {
+			continue
+		}
+		sha256 := ""
+		if digest := stringFromAny(asset["digest"]); strings.HasPrefix(strings.ToLower(digest), "sha256:") {
+			sha256 = strings.TrimSpace(strings.SplitN(digest, ":", 2)[1])
+		}
+		if sha256 == "" {
+			sha256 = strings.TrimSpace(stringFromAny(asset["sha256"]))
+		}
 		item := map[string]any{
 			"name":   name,
-			"url":    firstNonEmptyString(stringFromAny(asset["browser_download_url"]), stringFromAny(asset["url"])),
+			"url":    url,
 			"size":   asset["size"],
-			"sha256": "",
+			"sha256": sha256,
 			"type":   "asset",
 		}
 		if fallback["name"] == nil {
 			fallback = item
 		}
-		lower := strings.ToLower(name)
-		if strings.HasSuffix(lower, ".zip") && strings.Contains(lower, "desktop") {
+		isZip := strings.HasSuffix(lower, ".zip") || strings.HasSuffix(lowerURL, ".zip")
+		isDesktop := strings.Contains(lower, "desktop") || strings.Contains(lowerURL, "desktop")
+		if isZip && isDesktop {
 			return item
 		}
 	}

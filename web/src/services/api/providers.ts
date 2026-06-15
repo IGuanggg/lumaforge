@@ -86,6 +86,13 @@ export async function fetchProviderModels(providerId: string) {
     return rawRequest<ProviderModelsResponse>(`/api/providers/${encodeURIComponent(providerId)}/fetch-models`);
 }
 
+export async function fetchProviderModelsDraft(provider: LumaProvider) {
+    return rawRequest<ProviderModelsResponse>("/api/providers/fetch-models", {
+        method: "POST",
+        body: JSON.stringify(cleanProviderForSave(provider)),
+    });
+}
+
 export type ProviderConnectionPayload = {
     provider_id: string;
     base_url: string;

@@ -59,6 +59,75 @@ func TestLumaAppActionCapabilityExplainsMissingBridge(t *testing.T) {
 	}
 }
 
+func TestLumaUpdateCapabilityDistinguishesSourceAndDesktopModes(t *testing.T) {
+	previousLegacyAPI := config.Cfg.LumaForgeLegacyAPI
+	t.Cleanup(func() {
+		config.Cfg.LumaForgeLegacyAPI = previousLegacyAPI
+	})
+
+	t.Setenv("LUMAFORGE_DESKTOP", "")
+	t.Setenv("INFINITE_CANVAS_DESKTOP", "")
+	config.Cfg.LumaForgeLegacyAPI = ""
+	source := LumaUpdateCapability()
+	if source["supported"] != false || source["mode"] != "source-mode" || source["desktop"] != false {
+		t.Fatalf("source capability = %#v, want source-mode unsupported", source)
+	}
+
+	t.Setenv("LUMAFORGE_DESKTOP", "1")
+	desktopMissing := LumaUpdateCapability()
+	if desktopMissing["supported"] != false || desktopMissing["mode"] != "legacy-updater-missing" || desktopMissing["desktop"] != true {
+		t.Fatalf("desktop missing capability = %#v, want missing updater", desktopMissing)
+	}
+
+	config.Cfg.LumaForgeLegacyAPI = "http://127.0.0.1:18084/"
+	bridged := LumaUpdateCapability()
+	if bridged["supported"] != true || bridged["mode"] != "desktop-updater" || bridged["legacy_api_url"] != "http://127.0.0.1:18084" {
+		t.Fatalf("bridged capability = %#v, want desktop updater", bridged)
+	}
+}
+
+func TestLumaReleaseHealthMarksSourceUpdateAsWarning(t *testing.T) {
+	previousConfig := config.Cfg
+	t.Cleanup(func() { config.Cfg = previousConfig })
+
+	t.Setenv("LUMAFORGE_DESKTOP", "")
+	t.Setenv("INFINITE_CANVAS_DESKTOP", "")
+	config.Cfg = config.Config{
+		LumaForgeDataDir: t.TempDir(),
+		UpdateCheckURL:   "https://updates.example.com/releases",
+		Port:             "18082",
+	}
+
+	health := LumaReleaseHealth()
+	autoUpdate := releaseHealthCheckByID(t, health, "auto_update")
+	if autoUpdate["status"] != "warn" {
+		t.Fatalf("source auto update check = %#v, want warn", autoUpdate)
+	}
+
+	t.Setenv("LUMAFORGE_DESKTOP", "1")
+	health = LumaReleaseHealth()
+	autoUpdate = releaseHealthCheckByID(t, health, "auto_update")
+	if autoUpdate["status"] != "error" {
+		t.Fatalf("desktop missing updater check = %#v, want error", autoUpdate)
+	}
+}
+
+func releaseHealthCheckByID(t *testing.T, health map[string]any, id string) map[string]any {
+	t.Helper()
+
+	checks, ok := health["checks"].([]map[string]any)
+	if !ok {
+		t.Fatalf("release health checks missing or malformed: %#v", health["checks"])
+	}
+	for _, check := range checks {
+		if check["id"] == id {
+			return check
+		}
+	}
+	t.Fatalf("release health check %q not found in %#v", id, checks)
+	return nil
+}
+
 func TestLumaUpdateStateMarksStalledDownloads(t *testing.T) {
 	previousDataDir := config.Cfg.LumaForgeDataDir
 	t.Cleanup(func() {
@@ -132,18 +201,18 @@ func TestLumaUpdateCheckSelectsNewerDesktopRelease(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode([]map[string]any{
 			{
-				"tag_name":   "v2.1.12",
-				"name":       "LumaForge 2.1.12",
+				"tag_name":   "v2.1.13",
+				"name":       "LumaForge 2.1.13",
 				"draft":      false,
 				"prerelease": false,
 				"body":       "quality release",
 				"assets": []map[string]any{
-					{"name": "LumaForge-2.1.12-web.zip", "browser_download_url": "https://cdn.example.com/web.zip", "size": 10},
-					{"name": "LumaForge-2.1.12-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
+					{"name": "LumaForge-2.1.13-web.zip", "browser_download_url": "https://cdn.example.com/web.zip", "size": 10},
+					{"name": "LumaForge-2.1.13-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
 				},
 			},
 			{
-				"tag_name":   "v2.1.13-beta",
+				"tag_name":   "v2.1.14-beta",
 				"draft":      false,
 				"prerelease": true,
 			},
@@ -157,33 +226,33 @@ func TestLumaUpdateCheckSelectsNewerDesktopRelease(t *testing.T) {
 	}
 
 	result := LumaUpdateCheck()
-	if result["ok"] != true || result["configured"] != true || result["latest_version"] != "2.1.12" || result["is_newer"] != true {
+	if result["ok"] != true || result["configured"] != true || result["latest_version"] != "2.1.13" || result["is_newer"] != true {
 		t.Fatalf("unexpected update result: %#v", result)
 	}
 	asset, ok := result["selected_asset"].(map[string]any)
 	if !ok {
 		t.Fatalf("selected asset missing: %#v", result)
 	}
-	if asset["name"] != "LumaForge-2.1.12-desktop.zip" || asset["url"] != "https://cdn.example.com/desktop.zip" {
+	if asset["name"] != "LumaForge-2.1.13-desktop.zip" || asset["url"] != "https://cdn.example.com/desktop.zip" {
 		t.Fatalf("selected asset = %#v, want desktop zip", asset)
 	}
 	state := LumaUpdateState()
-	if state["phase"] != "found" || state["latest_version"] != "2.1.12" {
-		t.Fatalf("update state = %#v, want found 2.1.12", state)
+	if state["phase"] != "found" || state["latest_version"] != "2.1.13" {
+		t.Fatalf("update state = %#v, want found 2.1.13", state)
 	}
 }
 
-func TestLumaUpdateCheckTreatsLatest211AsCurrent(t *testing.T) {
+func TestLumaUpdateCheckTreatsLatest212AsCurrent(t *testing.T) {
 	previousConfig := config.Cfg
 	t.Cleanup(func() { config.Cfg = previousConfig })
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"tag_name":   "v2.1.11",
+			"tag_name":   "v2.1.12",
 			"draft":      false,
 			"prerelease": false,
 			"assets": []map[string]any{
-				{"name": "LumaForge-2.1.11-desktop.zip", "browser_download_url": "https://cdn.example.com/current.zip"},
+				{"name": "LumaForge-2.1.12-desktop.zip", "browser_download_url": "https://cdn.example.com/current.zip"},
 			},
 		})
 	}))
@@ -195,11 +264,11 @@ func TestLumaUpdateCheckTreatsLatest211AsCurrent(t *testing.T) {
 	}
 
 	result := LumaUpdateCheck()
-	if result["current_version"] != "2.1.11" {
-		t.Fatalf("current version = %#v, want 2.1.11", result["current_version"])
+	if result["current_version"] != "2.1.12" {
+		t.Fatalf("current version = %#v, want 2.1.12", result["current_version"])
 	}
-	if result["latest_version"] != "2.1.11" || result["is_newer"] != false || result["selected_asset"] != nil {
-		t.Fatalf("2.1.11 should be treated as current, got %#v", result)
+	if result["latest_version"] != "2.1.12" || result["is_newer"] != false || result["selected_asset"] != nil {
+		t.Fatalf("2.1.12 should be treated as current, got %#v", result)
 	}
 	state := LumaUpdateState()
 	if state["phase"] != "idle" {
@@ -212,8 +281,8 @@ func TestReleaseVersionAndVersionComparisonHelpers(t *testing.T) {
 		release map[string]any
 		want    string
 	}{
-		{map[string]any{"tag_name": "v2.1.11"}, "2.1.11"},
-		{map[string]any{"tag_name": "", "name": "V2.1.12"}, "2.1.12"},
+		{map[string]any{"tag_name": "v2.1.12"}, "2.1.12"},
+		{map[string]any{"tag_name": "", "name": "V2.1.13"}, "2.1.13"},
 		{map[string]any{"tag_name": "20.0.29"}, "2.0.29"},
 	}
 	for _, tc := range cases {
@@ -226,10 +295,10 @@ func TestReleaseVersionAndVersionComparisonHelpers(t *testing.T) {
 		a, b string
 		want int
 	}{
-		{"v2.1.12", "2.1.11", 1},
-		{"2.1.11", "2.1.11", 0},
-		{"2.1.10", "2.1.11", -1},
-		{"2.1.11-beta", "2.1.10", 1},
+		{"v2.1.13", "2.1.12", 1},
+		{"2.1.12", "2.1.12", 0},
+		{"2.1.11", "2.1.12", -1},
+		{"2.1.12-beta", "2.1.11", 1},
 	}
 	for _, tc := range comparisons {
 		if got := compareVersion(tc.a, tc.b); got != tc.want {
@@ -242,19 +311,39 @@ func TestSelectDesktopZipAssetFallsBackToFirstAsset(t *testing.T) {
 	release := map[string]any{
 		"assets": []any{
 			map[string]any{"name": "notes.txt", "browser_download_url": "https://cdn.example.com/notes.txt", "size": 1},
-			map[string]any{"name": "LumaForge-2.1.12-desktop.zip", "url": "https://api.example.com/asset/1", "size": 20},
+			map[string]any{"name": "LumaForge-2.1.12-browser.zip", "browser_download_url": "https://cdn.example.com/browser.zip", "size": 10},
+			map[string]any{"name": "LumaForge-2.1.12-desktop.zip", "url": "https://api.example.com/asset/1?download=1", "size": 20, "digest": "sha256:abc123"},
 		},
 	}
 	asset := selectDesktopZipAsset(release)
-	if asset["name"] != "LumaForge-2.1.12-desktop.zip" || asset["url"] != "https://api.example.com/asset/1" {
+	if asset["name"] != "LumaForge-2.1.12-desktop.zip" || asset["url"] != "https://api.example.com/asset/1?download=1" {
 		t.Fatalf("desktop asset = %#v", asset)
+	}
+	if asset["sha256"] != "abc123" {
+		t.Fatalf("desktop asset sha256 = %#v, want abc123", asset["sha256"])
+	}
+
+	urlDesktop := selectDesktopZipAsset(map[string]any{"assets": []any{
+		map[string]any{"name": "download", "browser_download_url": "https://cdn.example.com/LumaForge-2.1.12-desktop.zip?download=1"},
+	}})
+	if urlDesktop["name"] != "download" || urlDesktop["url"] != "https://cdn.example.com/LumaForge-2.1.12-desktop.zip?download=1" {
+		t.Fatalf("url desktop asset = %#v", urlDesktop)
 	}
 
 	fallback := selectDesktopZipAsset(map[string]any{"assets": []any{
 		map[string]any{"name": "only-installer.exe", "browser_download_url": "https://cdn.example.com/installer.exe"},
+		map[string]any{"name": "LumaForge-2.1.12-web.zip", "browser_download_url": "https://cdn.example.com/web.zip"},
 	}})
-	if fallback["name"] != "only-installer.exe" {
+	if fallback["name"] != "LumaForge-2.1.12-web.zip" {
 		t.Fatalf("fallback asset = %#v", fallback)
+	}
+
+	none := selectDesktopZipAsset(map[string]any{"assets": []any{
+		map[string]any{"name": "only-installer.exe", "browser_download_url": "https://cdn.example.com/installer.exe"},
+		map[string]any{"name": "checksum.txt", "browser_download_url": "https://cdn.example.com/checksum.txt"},
+	}})
+	if len(none) != 0 {
+		t.Fatalf("non-zip assets should not be selected: %#v", none)
 	}
 }
 

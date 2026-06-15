@@ -3,12 +3,12 @@
 import { AlertCircle, CheckCircle2, CircleDashed, Copy, DatabaseZap, ExternalLink, EyeOff, KeyRound, LoaderCircle, Plus, RefreshCcw, Save, Settings, ShieldCheck, SlidersHorizontal, Trash2, UserCog, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, App, Button, Empty, Input, Popconfirm, Select, Spin, Switch, Tag, Tooltip, Typography } from "antd";
+import { Alert, App, Button, Empty, Input, Popconfirm, Select, Space, Spin, Switch, Tag, Tooltip, Typography } from "antd";
 
 import {
     clearKeyDiagnostics,
     fetchKeyDiagnostics,
-    fetchProviderModels,
+    fetchProviderModelsDraft,
     fetchProviders,
     normalizeModels,
     probeProviderAsync,
@@ -256,7 +256,7 @@ export default function ApiSettingsPage() {
         if (!selected) return;
         setAction("fetch");
         try {
-            const data = await fetchProviderModels(selected.id);
+            const data = await fetchProviderModelsDraft(selected);
             const classified = classifyFetchedModels(data);
             setCheckResult(data);
             modal.confirm({
@@ -395,9 +395,13 @@ export default function ApiSettingsPage() {
                                             <Field label="平台名称">
                                                 <Input value={selected.name} onChange={(event) => updateSelected({ name: event.target.value })} placeholder="OpenAI Compatible" />
                                             </Field>
-                                            <Field label="平台 ID">
-                                                <Input value={selected.id} disabled={!selected.draft_new} onChange={(event) => updateSelected({ id: normalizeProviderId(event.target.value) })} addonAfter={<CopyIdButton id={selected.id} />} />
-                                            </Field>
+                                            <div className="block min-w-0">
+                                                <span className="mb-1.5 block text-sm font-medium text-stone-600 dark:text-stone-300">平台 ID</span>
+                                                <Space.Compact className="w-full">
+                                                    <Input aria-label="平台 ID" className="min-w-0" value={selected.id} disabled={!selected.draft_new} onChange={(event) => updateSelected({ id: normalizeProviderId(event.target.value) })} />
+                                                    <CopyIdButton id={selected.id} />
+                                                </Space.Compact>
+                                            </div>
                                             <Field className="sm:col-span-2" label="Base URL">
                                                 <Input value={selected.base_url} onChange={(event) => updateSelected({ base_url: event.target.value })} placeholder="https://api.openai.com/v1" />
                                             </Field>
@@ -486,6 +490,22 @@ export default function ApiSettingsPage() {
                             </div>
 
                             <aside className="space-y-4">
+                                <Panel title="操作" icon={<Save className="size-4" />}>
+                                    <div className="grid gap-2">
+                                        <Button type="primary" block icon={<Save className="size-4" />} loading={action === "save"} onClick={() => void persistProviders()}>
+                                            保存设置
+                                        </Button>
+                                        <Button block icon={<Settings className="size-4" />} disabled={selected.primary} onClick={setPrimary}>
+                                            设为主平台
+                                        </Button>
+                                        <Popconfirm title="删除当前平台？" description="删除后需要点击保存设置才会写入本地配置。" okText="删除" cancelText="取消" onConfirm={deleteSelected}>
+                                            <Button block danger icon={<Trash2 className="size-4" />} disabled={providers.length <= 1}>
+                                                删除平台
+                                            </Button>
+                                        </Popconfirm>
+                                    </div>
+                                </Panel>
+
                                 <Panel title="当前摘要" icon={<CheckCircle2 className="size-4" />}>
                                     <div className="grid gap-2 text-sm">
                                         <SummaryItem label="平台 ID" value={selected.id || "-"} />
@@ -494,7 +514,7 @@ export default function ApiSettingsPage() {
                                         <SummaryItem label="模型总数" value={String(modelCount)} />
                                         <SummaryItem label="默认生图优先" value={providerModelLabel(selected, defaultImagePreview)} />
                                     </div>
-                                    {!PROVIDER_ID_RE.test(selected.id) ? <Alert className="mt-3" type="warning" showIcon message="平台 ID 只能使用小写字母、数字、下划线或短横线" /> : null}
+                                    {!PROVIDER_ID_RE.test(selected.id) ? <Alert className="mt-3" type="warning" showIcon title="平台 ID 只能使用小写字母、数字、下划线或短横线" /> : null}
                                 </Panel>
 
                                 <Panel title="Key 诊断" icon={<ShieldCheck className="size-4" />}>
@@ -516,7 +536,7 @@ export default function ApiSettingsPage() {
                                 <Alert
                                     type="info"
                                     showIcon
-                                    message="兼容说明"
+                                    title="兼容说明"
                                     description="本页直接读写 LumaForge providers；旧版静态设置页、Go 主体和 Python legacy 会共用同一份配置。生成时模型会显示为“平台 / 模型”，后端按平台精确路由。"
                                 />
 
@@ -624,16 +644,17 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
 function CopyIdButton({ id }: { id: string }) {
     return (
         <Tooltip title="复制 ID">
-            <button
-                type="button"
-                className="flex size-5 items-center justify-center text-stone-500 hover:text-stone-950 dark:hover:text-stone-100"
+            <Button
+                aria-label="复制平台 ID"
+                htmlType="button"
+                className="!px-2"
                 onClick={(event) => {
                     event.preventDefault();
                     void navigator.clipboard?.writeText(id);
                 }}
             >
                 <Copy className="size-3.5" />
-            </button>
+            </Button>
         </Tooltip>
     );
 }

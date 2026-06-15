@@ -420,24 +420,19 @@ func LumaProviderFetchModels(w http.ResponseWriter, r *http.Request, id string) 
 	writeRawJSON(w, data)
 }
 
-func LumaProviderTestConnection(w http.ResponseWriter, r *http.Request) {
-	var payload service.LumaAPIProvider
-	var raw map[string]any
-	_ = json.NewDecoder(r.Body).Decode(&raw)
-	payload.ID = firstNonEmpty(firstMapString(raw, "provider_id"), "custom")
-	payload.Name = payload.ID
-	payload.BaseURL = firstMapString(raw, "base_url")
-	payload.APIKey = firstMapString(raw, "api_key")
-	payload.ProtocolOverride = firstMapString(raw, "protocol_override")
-	if strings.TrimSpace(payload.APIKey) == "" {
-		if saved, key, ok := service.LumaProviderByID(payload.ID); ok {
-			payload.APIKey = key
-			if strings.TrimSpace(payload.BaseURL) == "" {
-				payload.BaseURL = saved.BaseURL
-			}
-		}
+func LumaProviderFetchModelsDraft(w http.ResponseWriter, r *http.Request) {
+	provider, key := lumaProviderFromRequest(r)
+	data, err := service.LumaFetchProviderModels(provider, key)
+	if err != nil {
+		writeRawError(w, http.StatusBadRequest, err)
+		return
 	}
-	data, err := service.LumaFetchProviderModels(payload, payload.APIKey)
+	writeRawJSON(w, data)
+}
+
+func LumaProviderTestConnection(w http.ResponseWriter, r *http.Request) {
+	payload, key := lumaProviderFromRequest(r)
+	data, err := service.LumaFetchProviderModels(payload, key)
 	if err != nil {
 		writeRawJSON(w, map[string]any{"ok": false, "status": 0, "message": err.Error(), "model_count": 0, "all": []string{}})
 		return
@@ -446,14 +441,9 @@ func LumaProviderTestConnection(w http.ResponseWriter, r *http.Request) {
 }
 
 func LumaProviderProbeAsync(w http.ResponseWriter, r *http.Request) {
-	var payload service.LumaAPIProvider
 	var raw map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&raw)
-	payload.ID = firstNonEmpty(firstMapString(raw, "provider_id"), "custom")
-	payload.Name = payload.ID
-	payload.BaseURL = firstMapString(raw, "base_url")
-	payload.APIKey = firstMapString(raw, "api_key")
-	payload.ProtocolOverride = firstMapString(raw, "protocol_override")
+	payload := lumaProviderFromMap(raw)
 	if strings.TrimSpace(payload.APIKey) == "" {
 		if saved, key, ok := service.LumaProviderByID(payload.ID); ok {
 			payload.APIKey = key
@@ -470,6 +460,47 @@ func LumaProviderProbeAsync(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeRawJSON(w, service.LumaProbeProviderProtocol(payload, payload.APIKey))
+}
+
+func lumaProviderFromRequest(r *http.Request) (service.LumaAPIProvider, string) {
+	var raw map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&raw)
+	provider := lumaProviderFromMap(raw)
+	key := provider.APIKey
+	if strings.TrimSpace(key) == "" {
+		if saved, savedKey, ok := service.LumaProviderByID(provider.ID); ok {
+			key = savedKey
+			if strings.TrimSpace(provider.BaseURL) == "" {
+				provider.BaseURL = saved.BaseURL
+			}
+			if strings.TrimSpace(provider.ProtocolOverride) == "" {
+				provider.ProtocolOverride = saved.ProtocolOverride
+			}
+			if strings.TrimSpace(provider.Protocol) == "" {
+				provider.Protocol = saved.Protocol
+			}
+			if len(provider.ImageModels)+len(provider.ChatModels)+len(provider.VideoModels) == 0 {
+				provider.ImageModels = saved.ImageModels
+				provider.ChatModels = saved.ChatModels
+				provider.VideoModels = saved.VideoModels
+			}
+		}
+	}
+	return provider, key
+}
+
+func lumaProviderFromMap(raw map[string]any) service.LumaAPIProvider {
+	provider := service.LumaAPIProvider{}
+	provider.ID = firstNonEmpty(firstMapString(raw, "provider_id"), firstMapString(raw, "id"), "custom")
+	provider.Name = firstNonEmpty(firstMapString(raw, "name"), provider.ID)
+	provider.BaseURL = firstMapString(raw, "base_url")
+	provider.APIKey = firstMapString(raw, "api_key")
+	provider.Protocol = firstMapString(raw, "protocol")
+	provider.ProtocolOverride = firstMapString(raw, "protocol_override")
+	provider.ImageModels = firstMapStringSlice(raw, "image_models")
+	provider.ChatModels = firstMapStringSlice(raw, "chat_models")
+	provider.VideoModels = firstMapStringSlice(raw, "video_models")
+	return provider
 }
 
 func LumaConfig(w http.ResponseWriter, r *http.Request) {
@@ -731,6 +762,37 @@ func firstMapString(data map[string]any, key string) string {
 		return value
 	}
 	return ""
+}
+
+func firstMapStringSlice(data map[string]any, key string) []string {
+	if data == nil {
+		return nil
+	}
+	raw, ok := data[key]
+	if !ok {
+		return nil
+	}
+	seen := map[string]bool{}
+	values := []string{}
+	appendValue := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			return
+		}
+		seen[value] = true
+		values = append(values, value)
+	}
+	switch typed := raw.(type) {
+	case []string:
+		for _, value := range typed {
+			appendValue(value)
+		}
+	case []any:
+		for _, value := range typed {
+			appendValue(fmt.Sprint(value))
+		}
+	}
+	return values
 }
 
 func firstNonEmpty(values ...string) string {
