@@ -1,6 +1,6 @@
 param(
-    [string]$Version = "2.1.13",
-    [string]$BuildId = "20260617-v2113-nano-api-fixes",
+    [string]$Version = "2.1.14",
+    [string]$BuildId = "20260617-v2114-desktop-update-hotfix",
     [string]$ToolRoot = $(Join-Path $env:LOCALAPPDATA "LumaForgeDevTools")
 )
 

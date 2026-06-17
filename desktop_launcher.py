@@ -27,18 +27,32 @@ def bundle_dir():
     return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 
 
+def windows_known_folder(csidl):
+    if not sys.platform.startswith("win"):
+        return None
+    try:
+        buffer = ctypes.create_unicode_buffer(260)
+        result = ctypes.windll.shell32.SHGetFolderPathW(None, int(csidl), None, 0, buffer)
+        if result == 0 and buffer.value:
+            return Path(buffer.value)
+    except Exception:
+        logging.exception("Failed to resolve Windows known folder %s", csidl)
+    return None
+
+
 def appdata_dir():
-    base = os.getenv("APPDATA") or str(Path.home() / "AppData" / "Roaming")
-    return Path(base) / APP_NAME
+    base = windows_known_folder(0x001A) or Path(os.getenv("APPDATA") or Path.home() / "AppData" / "Roaming")
+    return base / APP_NAME
 
 
 def localappdata_dir():
-    base = os.getenv("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
-    return Path(base) / APP_NAME
+    base = windows_known_folder(0x001C) or Path(os.getenv("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+    return base / APP_NAME
 
 
 def default_save_dir():
-    return Path.home() / "Pictures" / APP_NAME
+    base = windows_known_folder(0x0027) or (Path.home() / "Pictures")
+    return base / APP_NAME
 
 
 def ensure_dir(path):
@@ -113,12 +127,12 @@ def configure_desktop_environment():
     logs_dir = ensure_dir(localappdata_dir() / "logs")
     webview_storage_dir = ensure_dir(localappdata_dir() / "webview")
 
-    os.environ.setdefault("APP_RUNTIME_DIR", str(runtime_dir))
-    os.environ.setdefault("APP_ASSETS_DIR", str(save_dir))
-    os.environ.setdefault("APP_OUTPUT_DIR", str(save_dir / "legacy-output"))
-    os.environ.setdefault("APP_LOG_DIR", str(logs_dir))
-    os.environ.setdefault("APP_CACHE_DIR", str(localappdata_dir() / "cache"))
-    os.environ.setdefault("APP_WEBVIEW_STORAGE_DIR", str(webview_storage_dir))
+    os.environ["APP_RUNTIME_DIR"] = str(runtime_dir)
+    os.environ["APP_ASSETS_DIR"] = str(save_dir)
+    os.environ["APP_OUTPUT_DIR"] = str(save_dir / "legacy-output")
+    os.environ["APP_LOG_DIR"] = str(logs_dir)
+    os.environ["APP_CACHE_DIR"] = str(localappdata_dir() / "cache")
+    os.environ["APP_WEBVIEW_STORAGE_DIR"] = str(webview_storage_dir)
     os.environ.setdefault("LUMAFORGE_DESKTOP", "1")
     os.environ.setdefault("INFINITE_CANVAS_DESKTOP", "1")
 

@@ -56,9 +56,9 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260617-v2113-nano-api-fixes"></script>
-    <script src="/static/i18n.js?v=20260617-v2113-nano-api-fixes"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260617-v2113-nano-api-fixes">
+    <script src="/static/theme.js?v=20260617-v2114-desktop-update-hotfix"></script>
+    <script src="/static/i18n.js?v=20260617-v2114-desktop-update-hotfix"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260617-v2114-desktop-update-hotfix">
     <style>
         :root {
             --bg:#f7f8fa;
@@ -640,7 +640,7 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.1.13 Nano Banana 与 API 设置修复版</div>
+                        <div class="welcome-title">v2.1.14 桌面更新热修版</div>
                         <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是让首页图片、顶部导航、画布编辑和智能增强入口更稳定。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
@@ -1003,7 +1003,7 @@
             if(phase === 'restart_failed') return 100;
             if(phase === 'done') return 100;
             if(phase === 'rollback') return 50;
-            if(phase === 'failed') return downloaded && total ? Math.min(100, Math.round(downloaded * 100 / total)) : 100;
+            if(phase === 'failed') return downloaded && total ? Math.min(100, Math.round(downloaded * 100 / total)) : 0;
             return 0;
         }
 
@@ -1064,8 +1064,9 @@
             if(failure) {
                 const shouldShow = phase === 'failed' || phase === 'rollback' || phase === 'restart_failed' || !!state.error || !!state.rollback_error || !!state.restart_error || stalled;
                 failure.classList.toggle('show', shouldShow);
+                                const errorText = state.error || state.restart_error || '-';
                 failure.textContent = shouldShow
-                    ? `${stalled ? '下载进度长时间未变化，建议清理半包后重试。' : `错误：${state.error || state.restart_error || '-'}`}${state.backup_dir ? `。备份目录：${state.backup_dir}` : ''}${state.rollback_error ? `。回滚错误：${state.rollback_error}` : ''}${state.restart_candidates ? `。候选路径：${(state.restart_candidates || []).join('；')}` : ''}`
+                    ? `${stalled ? '下载进度长时间未变化，建议清理临时包后重试。' : `错误：${errorText}`}${state.backup_dir ? `。备份目录：${state.backup_dir}` : ''}${state.rollback_error ? `。回滚错误：${state.rollback_error}` : ''}${state.restart_candidates ? `。候选路径：${(state.restart_candidates || []).join('；')}` : ''}`
                     : '';
             }
             const cleanupBtn = document.getElementById('cleanup-update-btn');
@@ -1272,13 +1273,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.1.13' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.1.14' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.1.13';
+            const version = appInfo?.version || '2.1.14';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }

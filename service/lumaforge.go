@@ -21,8 +21,8 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 )
 
-const LumaForgeVersion = "2.1.13"
-const LumaForgeBuildID = "20260617-v2113-nano-api-fixes"
+const LumaForgeVersion = "2.1.14"
+const LumaForgeBuildID = "20260617-v2114-desktop-update-hotfix"
 const lumaUpdateDownloadStallSeconds = 45
 
 var (

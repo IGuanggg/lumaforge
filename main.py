@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.1.13")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260617-v2113-nano-api-fixes")
+APP_VERSION = os.getenv("APP_VERSION", "2.1.14")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260617-v2114-desktop-update-hotfix")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 UPDATE_DOWNLOAD_STALL_SECONDS = max(10.0, float(os.getenv("UPDATE_DOWNLOAD_STALL_SECONDS", "45") or 45))
@@ -50,6 +50,20 @@ def make_async_client(*args, **kwargs):
 def make_sync_client(*args, **kwargs):
     kwargs.setdefault("trust_env", False)
     return httpx.Client(*args, **kwargs)
+
+
+def exception_detail(exc):
+    parts = [type(exc).__name__]
+    text = str(exc)
+    if text:
+        parts.append(text)
+    request = getattr(exc, "request", None)
+    if request is not None:
+        parts.append(f"url={getattr(request, 'url', '')}")
+    response = getattr(exc, "response", None)
+    if response is not None:
+        parts.append(f"status={getattr(response, 'status_code', '')}")
+    return " | ".join(str(part) for part in parts if str(part).strip())
 
 
 def configure_ssl_cert_file():
@@ -4938,6 +4952,8 @@ async def app_update_download():
                             last_state_at = now
                 os.replace(temp_path, local_path)
     except Exception as exc:
+        error_detail = exception_detail(exc)
+        logger.error("Update package download failed: %s", error_detail, exc_info=True)
         if os.path.exists(temp_path):
             os.remove(temp_path)
         save_update_state({
@@ -4952,9 +4968,10 @@ async def app_update_download():
             "total_bytes": total_bytes,
             "sha256_expected": expected_sha256 or None,
             "sha256_verified": False,
-            "error": str(exc),
+            "download_url": download_url,
+            "error": f"下载更新包失败：{error_detail}",
         })
-        raise HTTPException(status_code=502, detail=f"下载更新包失败：{exc}")
+        raise HTTPException(status_code=502, detail=f"下载更新包失败：{error_detail}")
     file_size = os.path.getsize(local_path)
     save_update_state({
         "phase": "verifying",
