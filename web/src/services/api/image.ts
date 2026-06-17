@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import { buildApiUrl, type AiConfig } from "@/stores/use-config-store";
+import { buildApiUrl, rawModelName, type AiConfig } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
 import { nanoid } from "nanoid";
 import { dataUrlToFile } from "@/lib/image-utils";
@@ -18,6 +18,15 @@ type ImageApiResponse = {
     error?: { message?: string };
     code?: number;
     msg?: string;
+};
+
+type LegacyOnlineImageResponse = {
+    images?: string[];
+    image?: string;
+    url?: string;
+    error?: string;
+    detail?: string;
+    message?: string;
 };
 
 const QUALITY_BASE: Record<string, number> = {
@@ -135,6 +144,14 @@ function parseImagePayload(payload: ImageApiResponse) {
     return images;
 }
 
+function parseLegacyImagePayload(payload: LegacyOnlineImageResponse) {
+    const urls = [...(payload.images || []), payload.image, payload.url].filter((value): value is string => Boolean(value));
+    if (!urls.length) {
+        throw new Error(payload.detail || payload.error || payload.message || "接口没有返回图片");
+    }
+    return urls.map((dataUrl) => ({ id: nanoid(), dataUrl }));
+}
+
 function readAxiosError(error: unknown, fallback: string) {
     if (axios.isAxiosError<{ error?: { message?: string }; msg?: string; code?: number }>(error)) {
         const responseData = error.response?.data;
@@ -194,7 +211,60 @@ function withSystemMessage(config: AiConfig, messages: ChatCompletionMessage[]) 
     return systemPrompt ? [{ role: "system" as const, content: systemPrompt }, ...messages] : messages;
 }
 
+function splitProviderModel(model: string) {
+    const value = String(model || "").trim();
+    const index = value.indexOf("::");
+    if (index < 0) return null;
+    const providerId = value.slice(0, index).trim();
+    const rawModel = value.slice(index + 2).trim();
+    if (!providerId || !rawModel) return null;
+    return { providerId, model: rawModel };
+}
+
+function resolveImageBridgeModel(config: AiConfig) {
+    return config.imageModel || config.model;
+}
+
+function shouldUseLegacyImageBridge(config: AiConfig) {
+    return config.channelMode === "remote" && Boolean(splitProviderModel(resolveImageBridgeModel(config)));
+}
+
+async function requestLegacyOnlineImage(config: AiConfig, prompt: string, references: ReferenceImage[] = []) {
+    const providerModel = splitProviderModel(resolveImageBridgeModel(config));
+    if (!providerModel) throw new Error("本地 API 平台模型格式无效");
+    const n = Math.max(1, Math.min(8, Math.floor(Math.abs(Number(config.count)) || 1)));
+    const requestSize = config.size?.trim() || "1024x1024";
+    const referenceImages = await Promise.all(
+        references.map(async (image) => ({
+            url: await imageToDataUrl(image),
+            name: image.name || image.id || "",
+            role: "",
+        })),
+    );
+    try {
+        const response = await axios.post<LegacyOnlineImageResponse>(
+            "/api/legacy/online-image",
+            {
+                provider_id: providerModel.providerId,
+                model: providerModel.model || rawModelName(resolveImageBridgeModel(config)),
+                prompt: withSystemPrompt(config, prompt),
+                size: requestSize,
+                quality: normalizeQuality(config.quality) || config.quality || "auto",
+                n,
+                reference_images: referenceImages.filter((item) => item.url),
+            },
+            { headers: { "Content-Type": "application/json" }, timeout: 900000 },
+        );
+        const images = parseLegacyImagePayload(response.data);
+        refreshRemoteUser(config);
+        return images;
+    } catch (error) {
+        throw new Error(readAxiosError(error, "请求失败"));
+    }
+}
+
 export async function requestGeneration(config: AiConfig, prompt: string) {
+    if (shouldUseLegacyImageBridge(config)) return requestLegacyOnlineImage(config, prompt);
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const quality = normalizeQuality(config.quality);
     const requestSize = resolveRequestSize(quality, config.size);
@@ -223,6 +293,7 @@ export async function requestGeneration(config: AiConfig, prompt: string) {
 }
 
 export async function requestEdit(config: AiConfig, prompt: string, references: ReferenceImage[], mask?: ReferenceImage) {
+    if (shouldUseLegacyImageBridge(config) && !mask) return requestLegacyOnlineImage(config, prompt, references);
     const n = Math.max(1, Math.min(15, Math.floor(Math.abs(Number(config.count)) || 1)));
     const quality = normalizeQuality(config.quality);
     const requestSize = resolveRequestSize(quality, config.size);

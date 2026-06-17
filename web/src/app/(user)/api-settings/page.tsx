@@ -216,8 +216,8 @@ export default function ApiSettingsPage() {
                 protocol_override: selected.protocol_override || "auto",
             });
             setCheckResult(data);
-            if (data.ok) message.success(`连接通过，识别到 ${data.model_count ?? data.total ?? 0} 个模型`);
-            else message.warning(data.message || "连接未通过");
+            if (data.ok && !data.fallback) message.success(`连接通过，识别到 ${data.model_count ?? data.total ?? 0} 个模型`);
+            else message.warning(data.message || (data.fallback ? "模型列表接口不可用，当前使用手动模型兜底" : "连接未通过"));
         } catch (error) {
             message.error(error instanceof Error ? error.message : "连接测试失败");
         } finally {
@@ -260,10 +260,10 @@ export default function ApiSettingsPage() {
             const classified = classifyFetchedModels(data);
             setCheckResult(data);
             modal.confirm({
-                title: "应用拉取到的模型列表？",
+                title: data.fallback ? "上游模型接口不可用" : "应用拉取到的模型列表？",
                 content: (
                     <div className="space-y-2 text-sm">
-                        <p className="m-0 text-stone-600">共识别 {classified.all.length} 个模型，会按生图、聊天、视频分区写入当前平台。</p>
+                        <p className="m-0 text-stone-600">{data.fallback ? "当前展示的是已保存的手动模型，建议保留现有配置。" : `共识别 ${classified.all.length} 个模型，默认追加到当前平台，不会覆盖手填模型。`}</p>
                         <div className="flex flex-wrap gap-2">
                             <Tag color="blue">生图 {classified.image.length}</Tag>
                             <Tag color="green">聊天 {classified.chat.length}</Tag>
@@ -271,9 +271,21 @@ export default function ApiSettingsPage() {
                         </div>
                     </div>
                 ),
-                okText: "应用",
+                okText: "追加",
                 cancelText: "只查看",
-                onOk: () => updateSelected({ image_models: classified.image, chat_models: classified.chat, video_models: classified.video }),
+                onOk: () =>
+                    updateSelected({
+                        image_models: mergeModels(selected.image_models, classified.image),
+                        chat_models: mergeModels(selected.chat_models, classified.chat),
+                        video_models: mergeModels(selected.video_models, classified.video),
+                    }),
+                footer: (_, { CancelBtn, OkBtn }) => (
+                    <div className="flex justify-end gap-2">
+                        <CancelBtn />
+                        <Button onClick={() => updateSelected({ image_models: classified.image, chat_models: classified.chat, video_models: classified.video })}>覆盖</Button>
+                        <OkBtn />
+                    </div>
+                ),
             });
         } catch (error) {
             message.error(error instanceof Error ? error.message : "模型拉取失败");
@@ -293,6 +305,17 @@ export default function ApiSettingsPage() {
         } finally {
             setAction("");
         }
+    };
+
+    const repairProviderNames = async () => {
+        const repaired = providers.map((provider) => ({ ...provider, name: repairProviderDisplayName(provider) }));
+        const changed = repaired.some((provider, index) => provider.name !== providers[index]?.name);
+        if (!changed) {
+            message.success("显示名称已经正常");
+            return;
+        }
+        setProviders(repaired);
+        await persistProviders(repaired, "显示名称已修复");
     };
 
     return (
@@ -352,6 +375,7 @@ export default function ApiSettingsPage() {
 
                     <div className="grid gap-2 border-t border-stone-200 p-3 dark:border-stone-800">
                         <Button icon={<Plus className="size-4" />} onClick={addProvider}>添加平台</Button>
+                        <Button icon={<RefreshCcw className="size-4" />} onClick={() => void repairProviderNames()}>修复显示名称</Button>
                         <Button icon={<ExternalLink className="size-4" />} href="/static/api-settings.html?embedded=1" target="_blank">打开旧版备用页</Button>
                     </div>
                 </aside>
@@ -606,8 +630,14 @@ function Field({ label, className, children }: { label: string; className?: stri
 }
 
 function ModelSection({ title, tag, placeholder, models, onChange }: { title: string; tag: string; placeholder: string; models: string[]; onChange: (models: string[]) => void }) {
+    const inputRefs = useRef<Array<{ focus: () => void } | null>>([]);
     const updateModel = (index: number, value: string) => onChange(models.map((model, itemIndex) => (itemIndex === index ? value : model)));
     const removeModel = (index: number) => onChange(models.filter((_, itemIndex) => itemIndex !== index));
+    const addModel = () => {
+        const nextIndex = models.length;
+        onChange([...models, ""]);
+        window.setTimeout(() => inputRefs.current[nextIndex]?.focus(), 0);
+    };
     return (
         <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-stone-800 dark:bg-stone-950">
             <div className="mb-3 flex items-center justify-between gap-3">
@@ -615,12 +645,12 @@ function ModelSection({ title, tag, placeholder, models, onChange }: { title: st
                     <span className="truncate text-sm font-semibold">{title}</span>
                     <Tag className="m-0">{models.length}</Tag>
                 </div>
-                <Button size="small" icon={<Plus className="size-3.5" />} onClick={() => onChange([...models, ""])}>添加</Button>
+                <Button size="small" icon={<Plus className="size-3.5" />} onClick={addModel}>添加</Button>
             </div>
             <div className="space-y-2">
                 {models.map((model, index) => (
                     <div key={`${tag}-${index}`} className="grid grid-cols-[minmax(0,1fr)_32px] gap-2">
-                        <Input value={model} placeholder={placeholder} onChange={(event) => updateModel(index, event.target.value)} />
+                        <Input ref={(node) => { inputRefs.current[index] = node; }} value={model} placeholder={placeholder} onChange={(event) => updateModel(index, event.target.value)} />
                         <Tooltip title="删除">
                             <Button icon={<Trash2 className="size-4" />} onClick={() => removeModel(index)} />
                         </Tooltip>
@@ -660,16 +690,17 @@ function CopyIdButton({ id }: { id: string }) {
 }
 
 function CheckResult({ result }: { result: ProviderModelsResponse }) {
-    const ok = result.ok === true;
+    const ok = result.ok === true && result.fallback !== true;
     const count = result.model_count ?? result.total ?? result.all?.length ?? 0;
+    const statusText = result.fallback ? "手动模型兜底" : ok ? "检测通过" : "检测完成";
     return (
         <div className="mt-2 border-t border-stone-200 pt-2 dark:border-stone-800">
             <div className={cn("flex items-center gap-2 text-xs font-semibold", ok ? "text-emerald-600" : "text-amber-600")}>
                 {ok ? <CheckCircle2 className="size-3.5" /> : <AlertCircle className="size-3.5" />}
-                <span>{result.message || (ok ? "检测通过" : "检测完成")}</span>
+                <span>{result.message || statusText}</span>
             </div>
             <Typography.Paragraph className="!mb-0 !mt-1 !text-xs !text-stone-500 dark:!text-stone-400" ellipsis={{ rows: 2 }}>
-                HTTP {result.status ?? result.status_code ?? "-"} · 模型 {count}
+                HTTP {result.status ?? result.status_code ?? "-"} · 模型 {count}{result.fallback ? " · 手动保存" : ""}
             </Typography.Paragraph>
         </div>
     );
@@ -684,9 +715,9 @@ function normalizeDraft(provider: Partial<ProviderDraft>): ProviderDraft {
         protocol_override: normalizeProtocolOverride(provider.protocol_override),
         enabled: provider.enabled !== false,
         primary: provider.primary === true,
-        image_models: normalizeModels(provider.image_models),
-        chat_models: normalizeModels(provider.chat_models),
-        video_models: normalizeModels(provider.video_models),
+        image_models: normalizeDraftModels(provider.image_models),
+        chat_models: normalizeDraftModels(provider.chat_models),
+        video_models: normalizeDraftModels(provider.video_models),
         ms_loras: Array.isArray(provider.ms_loras) ? provider.ms_loras : [],
         ms_defaults_version: Number(provider.ms_defaults_version || 0),
         api_key: provider.api_key || "",
@@ -717,6 +748,32 @@ function normalizeProviderList(providers: ProviderDraft[]) {
         chat_models: normalizeModels(provider.chat_models),
         video_models: normalizeModels(provider.video_models),
     }));
+}
+
+function normalizeDraftModels(models?: string[]) {
+    return (models || []).map((item) => String(item ?? ""));
+}
+
+function mergeModels(current: string[], incoming: string[]) {
+    return normalizeModels([...current, ...incoming]);
+}
+
+function repairProviderDisplayName(provider: Pick<ProviderDraft, "id" | "name" | "base_url">) {
+    const name = String(provider.name || "").trim();
+    const id = String(provider.id || "").trim().toLowerCase();
+    const baseUrl = String(provider.base_url || "").trim().toLowerCase();
+    const lowerName = name.toLowerCase();
+    if (!isBrokenProviderName(name)) return name || provider.id;
+    if (baseUrl.includes("dashscope.aliyuncs.com")) return "百炼";
+    if (baseUrl.includes("gemini") || id.includes("gemini") || lowerName.includes("gemini")) return "Gemini";
+    if (baseUrl.includes("grsai") || id.includes("grsai")) return "grsai";
+    if (id.includes("gpt") || lowerName.includes("gpt")) return "GPT";
+    return provider.id || "API 平台";
+}
+
+function isBrokenProviderName(name: string) {
+    const value = name.trim();
+    return !value || value === "??" || value === "???" || value.includes("�") || value.includes("锟") || value.includes("ç¾ç¼") || value.includes("é»ä¸ç½") || value.includes("鐧剧偧") || value.includes("榛戜笌鐧") || value.includes("???");
 }
 
 function ensureOnePrimary(providers: ProviderDraft[]) {

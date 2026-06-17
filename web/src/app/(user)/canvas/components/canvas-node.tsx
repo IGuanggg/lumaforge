@@ -13,6 +13,9 @@ import type { CanvasResourceReference } from "../utils/canvas-resource-reference
 
 type ResizeCorner = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 const selectionBlue = "#2f80ff";
+const NODE_MIN_WIDTH = 220;
+const NODE_MIN_HEIGHT = 160;
+const NODE_WHEEL_MAX_FACTOR = 1.18;
 
 type CanvasNodeProps = {
     data: CanvasNodeData;
@@ -184,14 +187,12 @@ export const CanvasNode = React.memo(function CanvasNode({
 
             const dx = (event.clientX - resizeRef.current.startX) / scale;
             const dy = (event.clientY - resizeRef.current.startY) / scale;
-            const minWidth = 220;
-            const minHeight = 160;
             const startRight = resizeRef.current.startLeft + resizeRef.current.startWidth;
             const startBottom = resizeRef.current.startTop + resizeRef.current.startHeight;
             const fromLeft = resizeRef.current.corner.includes("left");
             const fromTop = resizeRef.current.corner.includes("top");
-            const rawWidth = Math.max(minWidth, resizeRef.current.startWidth + (fromLeft ? -dx : dx));
-            const rawHeight = Math.max(minHeight, resizeRef.current.startHeight + (fromTop ? -dy : dy));
+            const rawWidth = Math.max(NODE_MIN_WIDTH, resizeRef.current.startWidth + (fromLeft ? -dx : dx));
+            const rawHeight = Math.max(NODE_MIN_HEIGHT, resizeRef.current.startHeight + (fromTop ? -dy : dy));
             let width = rawWidth;
             let height = rawHeight;
             if (resizeRef.current.keepRatio) {
@@ -201,12 +202,12 @@ export const CanvasNode = React.memo(function CanvasNode({
                 } else {
                     width = height * ratio;
                 }
-                if (height < minHeight) {
-                    height = minHeight;
+                if (height < NODE_MIN_HEIGHT) {
+                    height = NODE_MIN_HEIGHT;
                     width = height * ratio;
                 }
-                if (width < minWidth) {
-                    width = minWidth;
+                if (width < NODE_MIN_WIDTH) {
+                    width = NODE_MIN_WIDTH;
                     height = width / ratio;
                 }
             }
@@ -244,6 +245,45 @@ export const CanvasNode = React.memo(function CanvasNode({
         window.addEventListener("mouseup", handleResizeUp);
     };
 
+    const handleNodeWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+        if (!(event.ctrlKey || event.metaKey)) return;
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest("input,textarea,select,[contenteditable='true'],[data-canvas-no-zoom]")) return;
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const rect = event.currentTarget.getBoundingClientRect();
+        const anchorX = rect.width > 0 ? Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)) : 0.5;
+        const anchorY = rect.height > 0 ? Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)) : 0.5;
+        const factor = Math.min(NODE_WHEEL_MAX_FACTOR, Math.max(1 / NODE_WHEEL_MAX_FACTOR, Math.pow(1.1, -event.deltaY / 180)));
+        const keepRatio = (data.type === CanvasNodeType.Image && !data.metadata?.freeResize) || data.type === CanvasNodeType.Video;
+        let nextWidth = Math.max(NODE_MIN_WIDTH, data.width * factor);
+        let nextHeight = Math.max(NODE_MIN_HEIGHT, data.height * factor);
+
+        if (keepRatio) {
+            const ratio = (data.metadata?.naturalWidth || data.width) / (data.metadata?.naturalHeight || data.height || 1);
+            if (data.width >= data.height) {
+                nextHeight = nextWidth / ratio;
+                if (nextHeight < NODE_MIN_HEIGHT) {
+                    nextHeight = NODE_MIN_HEIGHT;
+                    nextWidth = nextHeight * ratio;
+                }
+            } else {
+                nextWidth = nextHeight * ratio;
+                if (nextWidth < NODE_MIN_WIDTH) {
+                    nextWidth = NODE_MIN_WIDTH;
+                    nextHeight = nextWidth / ratio;
+                }
+            }
+        }
+
+        onResize(data.id, nextWidth, nextHeight, {
+            x: data.position.x + data.width * anchorX - nextWidth * anchorX,
+            y: data.position.y + data.height * anchorY - nextHeight * anchorY,
+        });
+    };
+
     useEffect(() => {
         return () => {
             window.removeEventListener("mousemove", handleResizeMove);
@@ -273,6 +313,7 @@ export const CanvasNode = React.memo(function CanvasNode({
                 onHoverEnd(data.id);
             }}
             onContextMenu={(event) => onContextMenu(event, data.id)}
+            onWheel={handleNodeWheel}
         >
             <NodeTitleLabel
                 title={data.title}

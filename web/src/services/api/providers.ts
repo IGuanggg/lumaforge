@@ -23,6 +23,7 @@ export type LumaProvider = {
 
 export type ProviderModelsResponse = {
     ok?: boolean;
+    fallback?: boolean;
     status?: number;
     status_code?: number;
     message?: string;

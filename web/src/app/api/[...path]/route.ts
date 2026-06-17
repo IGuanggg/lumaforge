@@ -31,7 +31,11 @@ function responseHeaders(response: Response) {
 async function proxy(request: NextRequest, context: RouteContext) {
     const { path } = await context.params;
     const apiBaseUrl = process.env.API_BASE_URL || "http://127.0.0.1:8080";
-    const target = `${apiBaseUrl.replace(/\/$/, "")}/api/${path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
+    const legacyApiBaseUrl = process.env.LEGACY_API_BASE_URL || process.env.LUMAFORGE_LEGACY_API_URL || "http://127.0.0.1:8090";
+    const isLegacyProxy = path[0] === "legacy";
+    const targetBase = isLegacyProxy ? legacyApiBaseUrl : apiBaseUrl;
+    const targetPath = isLegacyProxy ? path.slice(1) : path;
+    const target = `${targetBase.replace(/\/$/, "")}/api/${targetPath.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
     const hasBody = request.method !== "GET" && request.method !== "HEAD";
 
     try {

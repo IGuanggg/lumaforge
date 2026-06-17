@@ -201,18 +201,18 @@ func TestLumaUpdateCheckSelectsNewerDesktopRelease(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode([]map[string]any{
 			{
-				"tag_name":   "v2.1.13",
-				"name":       "LumaForge 2.1.13",
+				"tag_name":   "v2.1.14",
+				"name":       "LumaForge 2.1.14",
 				"draft":      false,
 				"prerelease": false,
 				"body":       "quality release",
 				"assets": []map[string]any{
-					{"name": "LumaForge-2.1.13-web.zip", "browser_download_url": "https://cdn.example.com/web.zip", "size": 10},
-					{"name": "LumaForge-2.1.13-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
+					{"name": "LumaForge-2.1.14-web.zip", "browser_download_url": "https://cdn.example.com/web.zip", "size": 10},
+					{"name": "LumaForge-2.1.14-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
 				},
 			},
 			{
-				"tag_name":   "v2.1.14-beta",
+				"tag_name":   "v2.1.15-beta",
 				"draft":      false,
 				"prerelease": true,
 			},
@@ -226,33 +226,33 @@ func TestLumaUpdateCheckSelectsNewerDesktopRelease(t *testing.T) {
 	}
 
 	result := LumaUpdateCheck()
-	if result["ok"] != true || result["configured"] != true || result["latest_version"] != "2.1.13" || result["is_newer"] != true {
+	if result["ok"] != true || result["configured"] != true || result["latest_version"] != "2.1.14" || result["is_newer"] != true {
 		t.Fatalf("unexpected update result: %#v", result)
 	}
 	asset, ok := result["selected_asset"].(map[string]any)
 	if !ok {
 		t.Fatalf("selected asset missing: %#v", result)
 	}
-	if asset["name"] != "LumaForge-2.1.13-desktop.zip" || asset["url"] != "https://cdn.example.com/desktop.zip" {
+	if asset["name"] != "LumaForge-2.1.14-desktop.zip" || asset["url"] != "https://cdn.example.com/desktop.zip" {
 		t.Fatalf("selected asset = %#v, want desktop zip", asset)
 	}
 	state := LumaUpdateState()
-	if state["phase"] != "found" || state["latest_version"] != "2.1.13" {
-		t.Fatalf("update state = %#v, want found 2.1.13", state)
+	if state["phase"] != "found" || state["latest_version"] != "2.1.14" {
+		t.Fatalf("update state = %#v, want found 2.1.14", state)
 	}
 }
 
-func TestLumaUpdateCheckTreatsLatest212AsCurrent(t *testing.T) {
+func TestLumaUpdateCheckTreatsLatest213AsCurrent(t *testing.T) {
 	previousConfig := config.Cfg
 	t.Cleanup(func() { config.Cfg = previousConfig })
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"tag_name":   "v2.1.12",
+			"tag_name":   "v2.1.13",
 			"draft":      false,
 			"prerelease": false,
 			"assets": []map[string]any{
-				{"name": "LumaForge-2.1.12-desktop.zip", "browser_download_url": "https://cdn.example.com/current.zip"},
+				{"name": "LumaForge-2.1.13-desktop.zip", "browser_download_url": "https://cdn.example.com/current.zip"},
 			},
 		})
 	}))
@@ -264,11 +264,11 @@ func TestLumaUpdateCheckTreatsLatest212AsCurrent(t *testing.T) {
 	}
 
 	result := LumaUpdateCheck()
-	if result["current_version"] != "2.1.12" {
-		t.Fatalf("current version = %#v, want 2.1.12", result["current_version"])
+	if result["current_version"] != "2.1.13" {
+		t.Fatalf("current version = %#v, want 2.1.13", result["current_version"])
 	}
-	if result["latest_version"] != "2.1.12" || result["is_newer"] != false || result["selected_asset"] != nil {
-		t.Fatalf("2.1.12 should be treated as current, got %#v", result)
+	if result["latest_version"] != "2.1.13" || result["is_newer"] != false || result["selected_asset"] != nil {
+		t.Fatalf("2.1.13 should be treated as current, got %#v", result)
 	}
 	state := LumaUpdateState()
 	if state["phase"] != "idle" {
@@ -295,9 +295,9 @@ func TestReleaseVersionAndVersionComparisonHelpers(t *testing.T) {
 		a, b string
 		want int
 	}{
-		{"v2.1.13", "2.1.12", 1},
-		{"2.1.12", "2.1.12", 0},
-		{"2.1.11", "2.1.12", -1},
+		{"v2.1.14", "2.1.13", 1},
+		{"2.1.13", "2.1.13", 0},
+		{"2.1.12", "2.1.13", -1},
 		{"2.1.12-beta", "2.1.11", 1},
 	}
 	for _, tc := range comparisons {

@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.1.12")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260615-v2112-api-settings-quality1")
+APP_VERSION = os.getenv("APP_VERSION", "2.1.13")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260617-v2113-nano-api-fixes")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 UPDATE_DOWNLOAD_STALL_SECONDS = max(10.0, float(os.getenv("UPDATE_DOWNLOAD_STALL_SECONDS", "45") or 45))
@@ -730,14 +730,44 @@ def normalize_ms_loras(values):
         })
     return normalized
 
+def broken_provider_name(name):
+    value = str(name or "").strip()
+    return (
+        not value
+        or value in {"??", "???"}
+        or "�" in value
+        or "锟" in value
+        or "ç¾ç¼" in value
+        or "é»ä¸ç½" in value
+        or "鐧剧偧" in value
+        or "榛戜笌鐧" in value
+        or "???" in value
+    )
+
+def repair_provider_name(name, provider_id, base_url):
+    value = re.sub(r"\s+", " ", str(name or "").strip())[:60]
+    provider_id = str(provider_id or "").strip().lower()
+    lower_name = value.lower()
+    lower_base = str(base_url or "").strip().lower()
+    if value and not broken_provider_name(value):
+        return value
+    if "dashscope.aliyuncs.com" in lower_base:
+        return "百炼"
+    if "gemini" in lower_base or "gemini" in provider_id or "gemini" in lower_name:
+        return "Gemini"
+    if "grsai" in lower_base or "grsai" in provider_id:
+        return "grsai"
+    if "gpt" in provider_id or "gpt" in lower_name:
+        return "GPT"
+    return provider_id or "API 平台"
+
 def normalize_provider(item):
     provider_id = str(item.get("id") or "").strip().lower()
     if not PROVIDER_ID_RE.fullmatch(provider_id):
         raise HTTPException(status_code=400, detail=f"API 平台 ID 不合法：{provider_id or '(empty)'}")
     name = re.sub(r"\s+", " ", str(item.get("name") or provider_id).strip())[:60] or provider_id
     base_url = str(item.get("base_url") or "").strip().rstrip("/")
-    if "dashscope.aliyuncs.com" in base_url.lower() and (not name or name == provider_id or "\ufffd" in name):
-        name = "百炼"
+    name = repair_provider_name(name, provider_id, base_url)
     if base_url and not re.match(r"^https?://", base_url):
         raise HTTPException(status_code=400, detail=f"{name} 的 Base URL 需要以 http:// 或 https:// 开头")
     protocol = str(item.get("protocol") or "openai").strip().lower()
@@ -2520,6 +2550,34 @@ def is_apimart_provider(provider):
     base_url = str((provider or {}).get("base_url") or "").lower()
     return provider_protocol(provider) == "apimart" or "apimart.ai" in base_url
 
+def is_grsai_provider(provider):
+    base_url = str((provider or {}).get("base_url") or "").lower()
+    provider_id = str((provider or {}).get("id") or "").lower()
+    return provider_id == "grsai" or "grsai" in base_url or "dakka.com.cn" in base_url
+
+def grsai_api_root(provider):
+    base_url = str((provider or {}).get("base_url") or "").strip().rstrip("/")
+    if not base_url:
+        raise HTTPException(status_code=400, detail=f"{(provider or {}).get('name') or 'grsai'} 未配置 Base URL")
+    return base_url[:-3] if base_url.endswith("/v1") else base_url
+
+def json_from_grsai_response(response):
+    text = response.text or ""
+    if text.startswith("data: "):
+        text = text[6:]
+    try:
+        return json.loads(text) if text else {}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Nano Banana 返回不是有效 JSON：{text[:300]}") from exc
+
+def grsai_reference_url(ref):
+    url = str((ref or {}).get("url") or "").strip()
+    if not url:
+        return ""
+    if url.lower().startswith(("http://", "https://", "data:image/")):
+        return url
+    return reference_to_data_url(ref, max_size=1536)
+
 async def wait_for_image_task(client, task_id, provider=None):
     base_url = (provider.get("base_url") if provider else AI_BASE_URL).rstrip("/")
     is_apimart = is_apimart_provider(provider)
@@ -3136,10 +3194,36 @@ async def generate_modelscope_provider_image(prompt, size, model, reference_imag
                 raise HTTPException(status_code=502, detail=f"ModelScope 任务失败：{detail}")
         raise HTTPException(status_code=504, detail=f"ModelScope 生图任务超时（已等待 {int(task_timeout)} 秒）：{last_payload}")
 
+async def generate_grsai_nano_banana_image(prompt, size, model, reference_images=None, provider=None):
+    aspect_ratio, resolution = apimart_size_resolution(size)
+    payload = {
+        "model": selected_model(model, "nano-banana-pro"),
+        "prompt": str(prompt or "").strip(),
+        "urls": [url for url in [grsai_reference_url(ref) for ref in (reference_images or [])[:8]] if url],
+        "shutProgress": True,
+    }
+    if aspect_ratio:
+        payload["aspectRatio"] = aspect_ratio
+    if resolution and str(resolution).upper() in {"1K", "2K", "4K"}:
+        payload["imageSize"] = str(resolution).upper()
+    timeout = httpx.Timeout(connect=20.0, read=max(900.0, float(AI_REQUEST_TIMEOUT)), write=180.0, pool=20.0)
+    async with make_async_client(timeout=timeout) as client:
+        url = f"{grsai_api_root(provider)}/v1/draw/nano-banana"
+        response = await client.post(url, headers=api_headers(provider=provider), json=payload)
+        if response.status_code >= 400:
+            raise HTTPException(status_code=response.status_code, detail=f"Nano Banana 上游错误：{response.text[:600]}")
+        raw = json_from_grsai_response(response)
+        try:
+            return extract_image(raw), raw
+        except HTTPException as exc:
+            raise HTTPException(status_code=502, detail=f"Nano Banana 已响应但没有图片 URL：{raw}") from exc
+
 async def generate_ai_image(prompt, size, quality, model, reference_images=None, provider_id="comfly"):
     provider = get_api_provider(provider_id)
     if provider["id"] == "modelscope":
         return await generate_modelscope_provider_image(prompt, size, model, reference_images, provider)
+    if is_grsai_provider(provider) and is_nano_banana_model(model):
+        return await generate_grsai_nano_banana_image(prompt, size, model, reference_images, provider)
     is_gpt2 = is_gpt_image_2_model(model)
     is_apimart = is_apimart_provider(provider)
     if is_gpt_image_2_model(model) and not is_apimart:

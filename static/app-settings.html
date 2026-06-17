@@ -56,9 +56,9 @@
     </script>
     <script src="/static/vendor/tailwind/tailwindcss-cdn.js"></script>
     <script src="/static/vendor/lucide/lucide.min.js"></script>
-    <script src="/static/theme.js?v=20260615-v2112-api-settings-quality1"></script>
-    <script src="/static/i18n.js?v=20260615-v2112-api-settings-quality1"></script>
-    <link rel="stylesheet" href="/static/theme.css?v=20260615-v2112-api-settings-quality1">
+    <script src="/static/theme.js?v=20260617-v2113-nano-api-fixes"></script>
+    <script src="/static/i18n.js?v=20260617-v2113-nano-api-fixes"></script>
+    <link rel="stylesheet" href="/static/theme.css?v=20260617-v2113-nano-api-fixes">
     <style>
         :root {
             --bg:#f7f8fa;
@@ -640,7 +640,7 @@
             <section class="welcome-card" id="version-welcome-card">
                 <div class="welcome-top">
                     <div>
-                        <div class="welcome-title">v2.1.12 API 与发布检查稳定版</div>
+                        <div class="welcome-title">v2.1.13 Nano Banana 与 API 设置修复版</div>
                         <div class="welcome-desc">这张卡只在本版本首次进入设置时显示。本次重点是让首页图片、顶部导航、画布编辑和智能增强入口更稳定。</div>
                     </div>
                     <button class="action-btn" id="dismiss-version-welcome-btn" type="button"><i data-lucide="x" class="w-4 h-4"></i><span>不再显示</span></button>
@@ -1272,13 +1272,13 @@
             const card = document.getElementById('version-welcome-card');
             if(!card) return;
             const version = appInfo?.version || '';
-            const shouldShow = version === '2.1.12' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
+            const shouldShow = version === '2.1.13' && localStorage.getItem(versionWelcomeStorageKey(version)) !== '1';
             card.classList.toggle('show', shouldShow);
             if(shouldShow && window.lucide) lucide.createIcons();
         }
 
         function dismissVersionWelcome() {
-            const version = appInfo?.version || '2.1.12';
+            const version = appInfo?.version || '2.1.13';
             localStorage.setItem(versionWelcomeStorageKey(version), '1');
             renderVersionWelcome();
         }

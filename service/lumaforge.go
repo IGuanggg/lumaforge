@@ -21,8 +21,8 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 )
 
-const LumaForgeVersion = "2.1.12"
-const LumaForgeBuildID = "20260615-v2112-api-settings-quality1"
+const LumaForgeVersion = "2.1.13"
+const LumaForgeBuildID = "20260617-v2113-nano-api-fixes"
 const lumaUpdateDownloadStallSeconds = 45
 
 var (
@@ -569,6 +569,7 @@ func normalizeLumaProvider(provider LumaAPIProvider) (LumaAPIProvider, error) {
 		provider.Name = provider.ID
 	}
 	provider.BaseURL = strings.TrimRight(strings.TrimSpace(provider.BaseURL), "/")
+	provider.Name = repairLumaProviderName(provider.Name, provider.ID, provider.BaseURL)
 	if provider.BaseURL != "" {
 		parsed, err := url.Parse(provider.BaseURL)
 		if err != nil || parsed.Scheme == "" || parsed.Host == "" {
@@ -585,6 +586,42 @@ func normalizeLumaProvider(provider LumaAPIProvider) (LumaAPIProvider, error) {
 	provider.ChatModels = uniqueStrings(provider.ChatModels)
 	provider.VideoModels = uniqueStrings(provider.VideoModels)
 	return provider, nil
+}
+
+func repairLumaProviderName(name string, id string, baseURL string) string {
+	name = strings.TrimSpace(name)
+	id = strings.ToLower(strings.TrimSpace(id))
+	lowerName := strings.ToLower(name)
+	lowerBase := strings.ToLower(baseURL)
+	suspicious := name == "" ||
+		name == "??" ||
+		name == "???" ||
+		strings.Contains(name, "�") ||
+		strings.Contains(name, "锟") ||
+		strings.Contains(name, "ç¾ç¼") ||
+		strings.Contains(name, "é»ä¸ç½") ||
+		strings.Contains(name, "Gpt") ||
+		strings.Contains(name, "鐧剧偧") ||
+		strings.Contains(name, "榛戜笌鐧") ||
+		strings.HasPrefix(name, "??? ") ||
+		strings.Contains(name, "???")
+	if !suspicious {
+		return name
+	}
+	switch {
+	case strings.Contains(lowerBase, "dashscope.aliyuncs.com"):
+		return "百炼"
+	case strings.Contains(lowerBase, "gemini") || strings.Contains(id, "gemini") || strings.Contains(lowerName, "gemini"):
+		return "Gemini"
+	case strings.Contains(id, "grsai") || strings.Contains(lowerBase, "grsai"):
+		return "grsai"
+	case strings.Contains(id, "gpt") || strings.Contains(lowerName, "gpt"):
+		return "GPT"
+	case id != "":
+		return id
+	default:
+		return "API 平台"
+	}
 }
 
 func normalizeProtocolOverride(value string) string {
@@ -879,11 +916,18 @@ func LumaFetchProviderModels(provider LumaAPIProvider, apiKey string) (map[strin
 	if err != nil {
 		if len(provider.ImageModels)+len(provider.ChatModels)+len(provider.VideoModels) > 0 {
 			all := uniqueStrings(append(append([]string{}, provider.ImageModels...), append(provider.ChatModels, provider.VideoModels...)...))
-			return classifiedModelPayload(all, status, message), nil
+			payload := classifiedModelPayload(all, status, message)
+			payload["ok"] = false
+			payload["fallback"] = true
+			payload["message"] = fmt.Sprintf("模型列表接口不可用，当前展示的是手动保存模型。上游返回：%s", firstNonEmptyString(message, err.Error()))
+			payload["reason"] = err.Error()
+			return payload, nil
 		}
 		return nil, err
 	}
-	return classifiedModelPayload(models, status, message), nil
+	payload := classifiedModelPayload(models, status, message)
+	payload["fallback"] = false
+	return payload, nil
 }
 
 func LumaProbeProviderProtocol(provider LumaAPIProvider, apiKey string) map[string]any {
@@ -947,7 +991,8 @@ func LumaProbeProviderProtocol(provider LumaAPIProvider, apiKey string) map[stri
 	}
 	if len(provider.ImageModels)+len(provider.ChatModels)+len(provider.VideoModels) > 0 {
 		return map[string]any{
-			"ok":          true,
+			"ok":          false,
+			"fallback":    true,
 			"protocol":    "openai",
 			"confidence":  "low",
 			"status_code": status,
