@@ -1,5 +1,12 @@
 # LumaForge Changelog
 
+## v2.1.15 - Update Experience Stabilization
+
++ [v2.1.15] Settings and release-health endpoints now report version, entry, and update state reliably in the Go + Next desktop runtime.
++ [v2.1.15] Source/development mode update actions no longer create a fake failed update state when the app is already current or cannot self-replace.
++ [v2.1.15] Update preflight now checks the update source, runtime mode, updater bridge, and writable update/data/assets directories before installation.
++ [v2.1.15] The settings page hides stale update packages and failure panels when the latest release is older than the installed version.
+
 ## v2.1.12 - API 设置与更新体验质量版
 
 + [v2.1.12] API 设置页支持在未保存草稿状态下直接拉取模型，新增、测试、设为主平台、保存和删除流程更顺。
