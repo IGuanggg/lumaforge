@@ -79,7 +79,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
                 <BookOpen className="size-4" />
             </a>
             {showConfig ? (
-                <button type="button" className={naturalIconClass} style={iconStyle} onClick={() => openConfigDialog(false)} aria-label="配置" title="配置">
+                <button type="button" className={naturalIconClass} style={iconStyle} onClick={() => openConfigDialog(false)} aria-label="全局配置" title="全局配置">
                     <SlidersHorizontal className="size-4" />
                 </button>
             ) : null}
@@ -98,7 +98,7 @@ export function UserStatusActions({ showConfig = true, variant = "default", onOp
                 </Tooltip>
             ) : null}
             {!user && onOpenShortcuts ? (
-                <button type="button" className={naturalIconClass} style={iconStyle} onClick={onOpenShortcuts} aria-label="快捷键" title="快捷键">
+                <button type="button" className={naturalIconClass} style={iconStyle} onClick={onOpenShortcuts} aria-label="全局快捷键" title="全局快捷键">
                     <Keyboard className="size-4" />
                 </button>
             ) : null}
