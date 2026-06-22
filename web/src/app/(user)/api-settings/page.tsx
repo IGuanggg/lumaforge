@@ -41,6 +41,7 @@ export default function ApiSettingsPage() {
     const [diagnostics, setDiagnostics] = useState<ProviderKeyDiagnostics | null>(null);
     const [checkResult, setCheckResult] = useState<ProviderModelsResponse | null>(null);
     const [action, setAction] = useState<ActionKey>("refresh");
+    const [loadError, setLoadError] = useState("");
     const autoRecoverRef = useRef(false);
 
     const selectedIndex = useMemo(() => providers.findIndex((provider) => provider.id === selectedId), [providers, selectedId]);
@@ -96,12 +97,13 @@ export default function ApiSettingsPage() {
             setSelectedId((current) => pickSelectedId(next, current));
             const keyDiagnostics = await refreshDiagnostics();
             setCheckResult(null);
+            setLoadError("");
             if (!autoRecoverRef.current && keyDiagnostics.recoverable_from_cloud && !keyDiagnostics.stored_key_count) {
                 autoRecoverRef.current = true;
                 void recoverCloudKeys(true);
             }
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "API 平台读取失败");
+            setLoadError(error instanceof Error ? error.message : "API 平台读取失败");
         } finally {
             setAction("");
         }
@@ -347,7 +349,7 @@ export default function ApiSettingsPage() {
                                 </div>
                             </div>
                             <Tooltip title="刷新">
-                                <Button size="small" icon={action === "refresh" ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />} onClick={() => void loadProviders()} />
+                                <Button aria-label="刷新 API 平台" size="small" icon={action === "refresh" ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />} onClick={() => void loadProviders()} />
                             </Tooltip>
                         </div>
                     </div>
@@ -384,13 +386,22 @@ export default function ApiSettingsPage() {
                                 </button>
                             );
                         })}
-                        {!providers.length && action !== "refresh" ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 API 平台" /> : null}
+                        {!providers.length && action !== "refresh" && loadError ? (
+                            <Alert
+                                type="error"
+                                showIcon
+                                message="API 平台加载失败"
+                                description={loadError}
+                                action={<Button size="small" icon={<RefreshCcw className="size-3.5" />} onClick={() => void loadProviders()}>重试</Button>}
+                            />
+                        ) : null}
+                        {!providers.length && action !== "refresh" && !loadError ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 API 平台" /> : null}
                         {action === "refresh" && !providers.length ? <Spin className="flex justify-center py-10" /> : null}
                     </div>
 
                     <div className="grid gap-2 border-t border-stone-200 p-3 dark:border-stone-800">
                         <Button icon={<Plus className="size-4" />} onClick={addProvider}>添加平台</Button>
-                        <Button icon={<RefreshCcw className="size-4" />} onClick={() => void repairProviderNames()}>修复显示名称</Button>
+                        <Button icon={<RefreshCcw className="size-4" />} disabled={!providers.length} onClick={() => void repairProviderNames()}>修复显示名称</Button>
                         <Button icon={<ExternalLink className="size-4" />} href="/static/api-settings.html?embedded=1" target="_blank">打开旧版备用页</Button>
                     </div>
                 </aside>

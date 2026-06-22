@@ -1,7 +1,7 @@
 "use client";
 
-import { FolderPlus, Search } from "lucide-react";
-import { type UIEvent, useEffect, useState } from "react";
+import { FolderPlus, RefreshCcw, Search } from "lucide-react";
+import { type UIEvent, useState } from "react";
 import { App, Button, Empty, Input, Spin, Tag } from "antd";
 
 import { PromptCard } from "@/components/prompts/prompt-card";
@@ -21,12 +21,6 @@ export default function PromptsPage() {
     const addAsset = useAssetStore((state) => state.addAsset);
     const copyText = useCopyText();
     const { query, items: promptItems, tags: promptTags, categories: promptCategoryOptions, total: totalPrompts } = usePromptList({ keyword: titleKeyword, tags: selectedTags, category: selectedCategory });
-
-    useEffect(() => {
-        if (query.isError) {
-            message.error(query.error instanceof Error ? query.error.message : "获取提示词失败");
-        }
-    }, [message, query.error, query.isError]);
 
     const toggleTag = (tag: string) => {
         if (tag === ALL_PROMPTS_OPTION) return setSelectedTags([]);
@@ -54,7 +48,9 @@ export default function PromptsPage() {
                 <div className="pb-8">
                     <div className="mx-auto max-w-5xl text-center">
                         <h1 className="text-4xl font-semibold tracking-tight text-stone-950 dark:text-stone-100">提示词中心</h1>
-                        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">共 {totalPrompts} 条提示词，按标题、标签与分类快速查找灵感。</p>
+                        <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
+                            {query.isError ? "提示词库暂时无法连接，恢复后可以继续搜索和收藏。" : `共 ${totalPrompts} 条提示词，按标题、标签与分类快速查找灵感。`}
+                        </p>
                     </div>
                     {query.isLoading ? (
                         <div className="flex h-60 items-center justify-center">
@@ -114,7 +110,17 @@ export default function PromptsPage() {
                                 />
                             ))}
                         </div>
-                        {promptItems.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到匹配的提示词" className="py-16" /> : null}
+                        {promptItems.length === 0 && query.isError ? (
+                            <div className="rounded-xl border border-dashed border-stone-200 bg-white/80 px-6 py-14 text-center dark:border-stone-800 dark:bg-stone-900/80">
+                                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="提示词库加载失败" />
+                                <p className="mx-auto -mt-4 max-w-lg text-sm leading-6 text-stone-500 dark:text-stone-400">{query.error instanceof Error ? query.error.message : "请确认本地服务已启动后重新加载。"}</p>
+                                <Button className="mt-4" type="primary" icon={<RefreshCcw className="size-4" />} loading={query.isFetching} onClick={() => void query.refetch()}>
+                                    重新加载
+                                </Button>
+                            </div>
+                        ) : promptItems.length === 0 ? (
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到匹配的提示词" className="py-16" />
+                        ) : null}
                         <div className="mx-auto mt-6 max-w-7xl text-center text-xs text-stone-500 dark:text-stone-400">
                             {query.isFetchingNextPage ? "加载中..." : query.hasNextPage ? "继续向下滚动加载更多" : promptItems.length > 0 ? "已经到底了" : null}
                         </div>

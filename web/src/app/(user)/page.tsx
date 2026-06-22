@@ -63,6 +63,8 @@ export default function IndexPage() {
     const [failedCoverIds, setFailedCoverIds] = useState<Set<string>>(() => new Set());
     const [previewIndex, setPreviewIndex] = useState(0);
     const [previewOpen, setPreviewOpen] = useState(false);
+    const [showcaseError, setShowcaseError] = useState("");
+    const [showcaseReloadKey, setShowcaseReloadKey] = useState(0);
     const previewImages = useMemo(() => promptShowcase.filter((item) => isUsablePromptCover(item.coverUrl) && !failedCoverIds.has(item.id)), [failedCoverIds, promptShowcase]);
 
     useEffect(() => {
@@ -70,9 +72,14 @@ export default function IndexPage() {
             .then((data) => {
                 setPromptShowcase(data);
                 setFailedCoverIds(new Set());
+                setShowcaseError("");
             })
-            .catch((error) => message.error(error instanceof Error ? error.message : "获取提示词失败"));
-    }, [message]);
+            .catch((error) => {
+                const errorMessage = error instanceof Error ? error.message : "获取提示词失败";
+                setPromptShowcase([]);
+                setShowcaseError(errorMessage);
+            });
+    }, [showcaseReloadKey]);
 
     return (
         <main className="relative h-full overflow-y-auto bg-background bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] text-stone-950 dark:bg-[radial-gradient(rgba(245,245,244,.18)_1px,transparent_1px)] dark:text-stone-100">
@@ -89,7 +96,7 @@ export default function IndexPage() {
                         </Highlighter>
                         中生成、连接和重组
                         <Highlighter action="highlight" color="#87CEFA">
-                            图片、文字与图形
+                            图片、视频、音频与文字
                         </Highlighter>
                         ，让创作从单次生成变成连续推演。
                     </p>
@@ -97,8 +104,8 @@ export default function IndexPage() {
                         <Button type="primary" size="large" href={`/${primaryTool.slug}`} icon={<ArrowRight className="size-4" />} iconPlacement="end">
                             开始使用
                         </Button>
-                        <Button size="large" href="/canvas">
-                            打开智能画布
+                        <Button size="large" href="/image">
+                            打开生图工作台
                         </Button>
                     </div>
                 </div>
@@ -155,6 +162,16 @@ export default function IndexPage() {
                             </button>
                         ))}
                     </div>
+                    {!promptShowcase.length ? (
+                        <div className="rounded-xl border border-dashed border-stone-200 bg-white/70 px-6 py-12 text-center dark:border-stone-800 dark:bg-stone-900/70">
+                            <p className="text-sm text-stone-500 dark:text-stone-400">{showcaseError || "正在加载提示词图片..."}</p>
+                            {showcaseError ? (
+                                <Button className="mt-4" onClick={() => setShowcaseReloadKey((value) => value + 1)}>
+                                    重新加载
+                                </Button>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </section>
             </section>
             <Image.PreviewGroup
