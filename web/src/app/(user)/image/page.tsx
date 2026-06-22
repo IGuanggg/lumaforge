@@ -23,6 +23,7 @@ import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/ima
 import { useAssetStore } from "@/stores/use-asset-store";
 import type { ReferenceImage } from "@/types/image";
 import { markOnboardingMilestone } from "@/services/onboarding";
+import { consumeImageReference } from "@/services/image-reference-transfer";
 
 type GeneratedImage = {
     id: string;
@@ -109,6 +110,15 @@ export default function ImagePage() {
     useEffect(() => {
         void refreshLogs();
     }, []);
+
+    useEffect(() => {
+        const pending = consumeImageReference();
+        if (!pending) return;
+        void resolveImageUrl(pending.storageKey, pending.dataUrl).then((dataUrl) => {
+            setReferences((current) => [...current, { ...pending, dataUrl }]);
+            message.success("素材图片已加入参考图");
+        });
+    }, [message]);
 
     const addReferences = async (files?: FileList | null) => {
         const imageFiles = Array.from(files || []).filter((file) => file.type.startsWith("image/"));

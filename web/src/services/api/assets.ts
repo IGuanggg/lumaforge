@@ -18,6 +18,7 @@ export type AssetLibraryItem = {
     canvasId?: string;
     nodeId?: string;
     storageKey?: string;
+    localPath?: string;
 };
 
 export type AssetLibraryResponse = {
@@ -120,6 +121,7 @@ function normalizeAssetLibraryItem(raw: unknown): AssetLibraryItem {
         canvasId: firstString(item.canvasId, item.canvas_id),
         nodeId: firstString(item.nodeId, item.node_id),
         storageKey: firstString(item.storageKey, item.storage_key),
+        localPath: firstString(item.localPath, item.local_path),
     };
 }
 

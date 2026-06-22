@@ -390,6 +390,25 @@ func TestLumaAppOpenPathRejectsUnknownTarget(t *testing.T) {
 	}
 }
 
+func TestResolveLumaOpenPathUsesParentDirectoryForFile(t *testing.T) {
+	directory := t.TempDir()
+	file := filepath.Join(directory, "asset.png")
+	if err := os.WriteFile(file, []byte("image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := resolveLumaOpenPath("", file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.Abs(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved != want {
+		t.Fatalf("resolved = %q, want %q", resolved, want)
+	}
+}
+
 func TestLumaAppOpenURLRejectsUnsafeSchemes(t *testing.T) {
 	request := httptest.NewRequest(http.MethodPost, "/api/app/open-url", strings.NewReader(`{"url":"file:///C:/Windows"}`))
 	recorder := httptest.NewRecorder()

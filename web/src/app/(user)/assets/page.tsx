@@ -1,9 +1,11 @@
 "use client";
 
-import { Archive, CheckSquare, Copy, Download, ExternalLink, History, PencilLine, RefreshCw, Search, Tags, Trash2, Upload, UploadCloud, X } from "lucide-react";
+import { Archive, CheckSquare, Copy, Download, ExternalLink, FolderOpen, History, ImagePlus, Info, PencilLine, RefreshCw, Search, Tags, Trash2, Upload, UploadCloud, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import { App, Button, Card, Checkbox, Drawer, Empty, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
+import { App, Button, Card, Checkbox, Descriptions, Drawer, Empty, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
+import { useRouter } from "next/navigation";
+import { nanoid } from "nanoid";
 
 import { useCopyText } from "@/hooks/use-copy-text";
 import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
@@ -16,6 +18,7 @@ import { DownloadHistoryDrawer } from "@/components/download-history-drawer";
 import { cn } from "@/lib/utils";
 import { useAssetStore, type Asset, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
 import { createZip } from "@/lib/zip";
+import { queueImageReference } from "@/services/image-reference-transfer";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
 
 type AssetFormValues = {
@@ -30,7 +33,7 @@ type AssetFormValues = {
 
 type ImageDraft = ImageAsset["data"] | null;
 type MediaDraft = (Omit<UploadedFile, "storageKey"> & { storageKey?: string }) | null;
-type DisplayAsset = Asset & { readonly?: boolean; backendId?: string };
+type DisplayAsset = Asset & { readonly?: boolean; backendId?: string; diskPath?: string };
 type AssetContextMenuState = {
     asset: DisplayAsset;
     x: number;
@@ -47,6 +50,7 @@ const kindOptions = [
 
 export default function AssetsPage() {
     const { message, modal } = App.useApp();
+    const router = useRouter();
     const copyText = useCopyText();
     const [form] = Form.useForm<AssetFormValues>();
     const coverInputRef = useRef<HTMLInputElement>(null);
@@ -69,6 +73,7 @@ export default function AssetsPage() {
     const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
     const [isAssetOpen, setIsAssetOpen] = useState(false);
     const [previewAsset, setPreviewAsset] = useState<DisplayAsset | null>(null);
+    const [propertiesAsset, setPropertiesAsset] = useState<DisplayAsset | null>(null);
     const [deletingAsset, setDeletingAsset] = useState<DisplayAsset | null>(null);
     const [assetContextMenu, setAssetContextMenu] = useState<AssetContextMenuState | null>(null);
     const [downloadHistoryOpen, setDownloadHistoryOpen] = useState(false);
@@ -315,6 +320,38 @@ export default function AssetsPage() {
             return;
         }
         message.success("保存完成");
+    };
+
+    const openAssetInNewWindow = (asset: DisplayAsset) => {
+        if (asset.kind === "text") return;
+        const url = asset.kind === "image" ? asset.data.dataUrl : asset.data.url;
+        if (!url) {
+            message.warning("素材没有可打开的地址");
+            return;
+        }
+        const opened = window.open("", "_blank");
+        if (!opened) {
+            message.warning("浏览器阻止了新窗口，请允许弹窗后重试");
+            return;
+        }
+        opened.opener = null;
+        opened.location.href = url;
+    };
+
+    const openAssetLocation = async (asset: DisplayAsset) => {
+        if (!asset.diskPath) {
+            message.info("该素材保存在浏览器内部，没有对应的磁盘文件夹");
+            return;
+        }
+        const opened = await openSavedFileLocation(asset.diskPath).catch(() => false);
+        opened ? message.success("已打开文件所在位置") : message.error("无法打开所在位置，请确认本地服务正在运行");
+    };
+
+    const useAssetAsReference = (asset: DisplayAsset) => {
+        if (asset.kind !== "image") return;
+        queueImageReference({ id: nanoid(), name: asset.title || "素材参考图", type: asset.data.mimeType || "image/png", dataUrl: asset.data.dataUrl, storageKey: asset.data.storageKey });
+        message.success("已加入参考图，正在打开生图工作台");
+        router.push("/image?reference=asset");
     };
 
     const exportAllAssets = async () => {
@@ -600,6 +637,10 @@ export default function AssetsPage() {
                     menu={assetContextMenu}
                     onClose={() => setAssetContextMenu(null)}
                     onOpen={(asset) => setPreviewAsset(asset)}
+                    onOpenExternal={openAssetInNewWindow}
+                    onOpenLocation={(asset) => void openAssetLocation(asset)}
+                    onProperties={(asset) => setPropertiesAsset(asset)}
+                    onUseAsReference={useAssetAsReference}
                     onEdit={openEdit}
                     onCopy={(asset) => void copyAssetText(asset)}
                     onDownload={(asset) => void downloadAsset(asset)}
@@ -704,6 +745,7 @@ export default function AssetsPage() {
             </Modal>
 
             <AssetDrawer asset={previewAsset} onClose={() => setPreviewAsset(null)} onCopy={copyAssetText} onDownload={downloadAsset} />
+            <AssetPropertiesModal asset={propertiesAsset} onClose={() => setPropertiesAsset(null)} onOpenLocation={(asset) => void openAssetLocation(asset)} onUseAsReference={useAssetAsReference} />
             <input ref={assetInputRef} type="file" accept="application/zip,.zip" className="hidden" onChange={(event) => void importAssetZip(event.target.files?.[0])} />
             <Modal title="删除素材" open={Boolean(deletingAsset)} onCancel={() => setDeletingAsset(null)} onOk={() => void confirmDelete()} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除“{deletingAsset?.title}”吗？后端素材会从素材库移除，本地收藏会从当前浏览器移除。
@@ -744,6 +786,10 @@ function AssetContextMenu({
     menu,
     onClose,
     onOpen,
+    onOpenExternal,
+    onOpenLocation,
+    onProperties,
+    onUseAsReference,
     onEdit,
     onCopy,
     onDownload,
@@ -752,6 +798,10 @@ function AssetContextMenu({
     menu: AssetContextMenuState;
     onClose: () => void;
     onOpen: (asset: DisplayAsset) => void;
+    onOpenExternal: (asset: DisplayAsset) => void;
+    onOpenLocation: (asset: DisplayAsset) => void;
+    onProperties: (asset: DisplayAsset) => void;
+    onUseAsReference: (asset: DisplayAsset) => void;
     onEdit: (asset: DisplayAsset) => void;
     onCopy: (asset: DisplayAsset) => void;
     onDownload: (asset: DisplayAsset) => void;
@@ -767,8 +817,12 @@ function AssetContextMenu({
 
     return (
         <div className="fixed z-[120] min-w-44 overflow-hidden rounded-lg border border-stone-200 bg-white py-1 text-sm text-stone-800 shadow-2xl dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100" style={{ left: menu.x, top: menu.y }} onPointerDown={(event) => event.stopPropagation()}>
-            <AssetMenuButton label="查看" onClick={() => run(() => onOpen(asset))} />
+            <AssetMenuButton label="打开预览" onClick={() => run(() => onOpen(asset))} />
+            {canDownload ? <AssetMenuButton label="在新窗口打开" icon={<ExternalLink className="size-4" />} onClick={() => run(() => onOpenExternal(asset))} /> : null}
             {canDownload ? <AssetMenuButton label={asset.kind === "video" ? "下载视频" : asset.kind === "audio" ? "下载音频" : "下载图片"} icon={<Download className="size-4" />} onClick={() => run(() => onDownload(asset))} /> : null}
+            {asset.diskPath ? <AssetMenuButton label="打开文件所在位置" icon={<FolderOpen className="size-4" />} onClick={() => run(() => onOpenLocation(asset))} /> : null}
+            {asset.kind === "image" ? <AssetMenuButton label="作为参考图使用" icon={<ImagePlus className="size-4" />} onClick={() => run(() => onUseAsReference(asset))} /> : null}
+            <AssetMenuButton label="查看属性" icon={<Info className="size-4" />} onClick={() => run(() => onProperties(asset))} />
             {asset.kind === "text" ? <AssetMenuButton label="复制文本" icon={<Copy className="size-4" />} onClick={() => run(() => onCopy(asset))} /> : null}
             {canEdit ? <AssetMenuButton label="编辑" icon={<PencilLine className="size-4" />} onClick={() => run(() => onEdit(asset))} /> : null}
             <AssetMenuButton label="删除" icon={<Trash2 className="size-4" />} danger onClick={() => run(() => onDelete(asset))} />
@@ -875,11 +929,49 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: DisplayAss
     );
 }
 
+function AssetPropertiesModal({ asset, onClose, onOpenLocation, onUseAsReference }: { asset: DisplayAsset | null; onClose: () => void; onOpenLocation: (asset: DisplayAsset) => void; onUseAsReference: (asset: DisplayAsset) => void }) {
+    if (!asset) return null;
+    const metadata = asset.metadata || {};
+    const dimensions = asset.kind === "image" || asset.kind === "video" ? `${asset.data.width || "-"} x ${asset.data.height || "-"}` : "-";
+    const bytes = asset.kind === "text" ? new Blob([asset.data.content]).size : asset.data.bytes;
+    const mimeType = asset.kind === "text" ? "text/plain" : asset.data.mimeType || "-";
+    const storageKey = asset.kind === "text" ? "" : asset.data.storageKey || String(metadata.storageKey || "");
+    const propertyItems = [
+        { key: "type", label: "类型", children: assetKindLabel(asset.kind) },
+        { key: "source", label: "来源", children: asset.source || assetSourceLabel(asset) },
+        { key: "mime", label: "格式", children: mimeType },
+        { key: "size", label: "大小", children: formatBytes(bytes) },
+        { key: "dimensions", label: "尺寸", children: dimensions },
+        { key: "created", label: "创建时间", children: formatAssetTime(asset.createdAt) },
+        { key: "updated", label: "更新时间", children: formatAssetTime(asset.updatedAt) },
+        { key: "model", label: "模型", children: String(metadata.model || "-") },
+        { key: "canvas", label: "来源画布", children: String(metadata.canvasId || "-") },
+        { key: "node", label: "来源节点", children: String(metadata.nodeId || "-") },
+        { key: "backend", label: "后端素材 ID", children: asset.backendId || "-" },
+        { key: "storage", label: "存储标识", children: storageKey || "-" },
+        { key: "path", label: "磁盘路径", children: asset.diskPath || "浏览器内部存储" },
+    ];
+    return (
+        <Modal title="素材属性" open onCancel={onClose} footer={null} width={720} destroyOnHidden>
+            <div className="space-y-4 pt-2">
+                <div><Typography.Title level={4} className="!mb-1">{asset.title}</Typography.Title><Space size={[4, 4]} wrap>{(asset.tags || []).map((tag) => <Tag key={tag}>{tag}</Tag>)}</Space></div>
+                <Descriptions bordered size="small" column={{ xs: 1, sm: 2 }} items={propertyItems} />
+                {typeof metadata.prompt === "string" && metadata.prompt ? <div className="rounded-lg border border-stone-200 p-3 dark:border-stone-800"><Typography.Text type="secondary" className="text-xs">生成提示词</Typography.Text><Typography.Paragraph className="!mb-0 !mt-1 whitespace-pre-wrap">{metadata.prompt}</Typography.Paragraph></div> : null}
+                <Space wrap>
+                    {asset.diskPath ? <Button icon={<FolderOpen className="size-4" />} onClick={() => onOpenLocation(asset)}>打开文件所在位置</Button> : null}
+                    {asset.kind === "image" ? <Button type="primary" icon={<ImagePlus className="size-4" />} onClick={() => onUseAsReference(asset)}>作为参考图使用</Button> : null}
+                </Space>
+            </div>
+        </Modal>
+    );
+}
+
 function libraryItemToAsset(item: AssetLibraryItem): DisplayAsset {
     const kind = item.type;
     const base = {
         id: `library:${item.id}`,
         backendId: item.id,
+        diskPath: item.localPath,
         readonly: true,
         kind,
         title: item.title || "未命名素材",
@@ -903,6 +995,11 @@ function libraryItemToAsset(item: AssetLibraryItem): DisplayAsset {
     if (kind === "video") return { ...base, kind: "video", data: { url: item.url, storageKey: undefined, width: 0, height: 0, bytes: 0, mimeType: "video/mp4" } };
     if (kind === "audio") return { ...base, kind: "audio", data: { url: item.url, storageKey: undefined, bytes: 0, mimeType: "audio/mpeg" } };
     return { ...base, kind: "image", data: { dataUrl: item.url || item.coverUrl, storageKey: undefined, width: 0, height: 0, bytes: 0, mimeType: "image/png" } };
+}
+
+function formatAssetTime(value: string) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("zh-CN");
 }
 
 function dedupeAssets(items: DisplayAsset[]) {

@@ -6,7 +6,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -659,9 +661,10 @@ func LumaAppExit(w http.ResponseWriter, r *http.Request) {
 func LumaAppOpenPath(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		Target string `json:"target"`
+		Path   string `json:"path"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&payload)
-	path, err := service.LumaAppPath(payload.Target)
+	path, err := resolveLumaOpenPath(payload.Target, payload.Path)
 	if err != nil {
 		writeRawError(w, http.StatusBadRequest, err)
 		return
@@ -671,6 +674,25 @@ func LumaAppOpenPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeRawJSON(w, map[string]any{"ok": true, "path": path})
+}
+
+func resolveLumaOpenPath(target, requestedPath string) (string, error) {
+	path := strings.TrimSpace(requestedPath)
+	if path == "" {
+		return service.LumaAppPath(target)
+	}
+	resolved, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("路径无效")
+	}
+	info, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("路径不存在")
+	}
+	if !info.IsDir() {
+		resolved = filepath.Dir(resolved)
+	}
+	return resolved, nil
 }
 
 func LumaAppSelectPath(w http.ResponseWriter, r *http.Request) {
