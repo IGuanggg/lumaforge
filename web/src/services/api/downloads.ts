@@ -83,6 +83,33 @@ export async function saveFileWithPrompt(url: string, filename: string): Promise
     return browserDownload(cleanUrl, cleanFilename);
 }
 
+export async function saveBlobWithPrompt(blob: Blob, filename: string): Promise<PromptSaveResult> {
+    const cleanFilename = sanitizeDownloadFilename(filename || "download");
+    if (!blob.size) return { ok: false, message: "文件内容为空" };
+    const picker = (window as typeof window & {
+        showSaveFilePicker?: (options: { suggestedName: string }) => Promise<{ createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }> }>;
+    }).showSaveFilePicker;
+    if (picker) {
+        try {
+            const handle = await picker({ suggestedName: cleanFilename });
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            recordDownloadHistory({ filename: cleanFilename, fallback: false });
+            return { ok: true, filename: cleanFilename, sizeBytes: blob.size, contentType: blob.type };
+        } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") return { ok: false, cancelled: true, filename: cleanFilename };
+        }
+    }
+    try {
+        saveAs(blob, cleanFilename);
+        recordDownloadHistory({ filename: cleanFilename, fallback: true });
+        return { ok: true, fallback: true, filename: cleanFilename, sizeBytes: blob.size, contentType: blob.type, message: "文件已进入浏览器默认下载目录" };
+    } catch (error) {
+        return { ok: false, message: error instanceof Error ? error.message : "浏览器下载失败" };
+    }
+}
+
 export async function openSavedFileLocation(path: string) {
     const cleanPath = (path || "").trim();
     if (!cleanPath) return false;

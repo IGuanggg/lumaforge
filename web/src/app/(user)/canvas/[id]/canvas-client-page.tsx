@@ -10,6 +10,7 @@ import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audi
 import { requestVideoGeneration, storeGeneratedVideo } from "@/services/api/video";
 import { uploadAssetDataUrl, uploadAssetFileWithMetadata } from "@/services/api/assets";
 import { openSavedFileLocation, saveFileWithPrompt } from "@/services/api/downloads";
+import { markOnboardingMilestone } from "@/services/onboarding";
 import { DOCS_URL } from "@/constant/env";
 import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { imageToDataUrl, resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
@@ -173,6 +174,7 @@ function extensionFromMime(mimeType: string | undefined, fallback: string) {
 }
 
 function addCanvasGeneratedImageAsset({ nodeId, title, prompt, image, canvasId, model }: { nodeId: string; title: string; prompt: string; image: UploadedImage; canvasId: string; model?: string }) {
+    markOnboardingMilestone("generated");
     const store = useAssetStore.getState();
     if (store.assets.some((asset) => asset.kind === "image" && asset.data.storageKey === image.storageKey)) return;
     const assetTitle = uniqueAssetTitle(title || prompt || "画布生成图片", store.assets.map((asset) => asset.title));
@@ -189,6 +191,7 @@ function addCanvasGeneratedImageAsset({ nodeId, title, prompt, image, canvasId, 
 }
 
 function addCanvasGeneratedVideoAsset({ nodeId, title, prompt, video, width, height, canvasId, model }: { nodeId: string; title: string; prompt: string; video: UploadedFile; width: number; height: number; canvasId: string; model?: string }) {
+    markOnboardingMilestone("generated");
     const store = useAssetStore.getState();
     if (store.assets.some((asset) => asset.kind === "video" && asset.data.storageKey === video.storageKey)) return;
     const assetTitle = uniqueAssetTitle(title || prompt || "画布生成视频", store.assets.map((asset) => asset.title));
@@ -205,6 +208,7 @@ function addCanvasGeneratedVideoAsset({ nodeId, title, prompt, video, width, hei
 }
 
 function addCanvasGeneratedAudioAsset({ nodeId, title, prompt, audio, canvasId, model }: { nodeId: string; title: string; prompt: string; audio: UploadedFile; canvasId: string; model?: string }) {
+    markOnboardingMilestone("generated");
     const store = useAssetStore.getState();
     if (store.assets.some((asset) => asset.kind === "audio" && asset.data.storageKey === audio.storageKey)) return;
     const assetTitle = uniqueAssetTitle(title || prompt || "画布生成音频", store.assets.map((asset) => asset.title));
@@ -221,6 +225,7 @@ function addCanvasGeneratedAudioAsset({ nodeId, title, prompt, audio, canvasId, 
 }
 
 function addCanvasGeneratedTextAsset({ nodeId, title, prompt, content, canvasId, model }: { nodeId: string; title: string; prompt: string; content: string; canvasId: string; model?: string }) {
+    markOnboardingMilestone("generated");
     const trimmed = content.trim();
     if (!trimmed) return;
     const store = useAssetStore.getState();

@@ -1,13 +1,17 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Check, Circle, X } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { App, Button, Image, Tag } from "antd";
 
-import { fetchPrompts, type Prompt } from "@/services/api/prompts";
+import { fetchPromptsWithCache, type Prompt } from "@/services/api/prompts";
 import { navigationTools } from "@/constant/navigation-tools";
 import { cn } from "@/lib/utils";
 import { isUsablePromptCover, PromptCover } from "@/components/prompts/prompt-cover";
+import { fetchProviders } from "@/services/api/providers";
+import { dismissOnboardingChecklist, getOnboardingState, markOnboardingMilestone, ONBOARDING_EVENT } from "@/services/onboarding";
+import { useAssetStore } from "@/stores/use-asset-store";
+import { useCanvasStore } from "@/app/(user)/canvas/stores/use-canvas-store";
 
 function Highlighter({ action, color, children }: { action: "highlight" | "underline"; color: string; children: ReactNode }) {
     return (
@@ -45,11 +49,11 @@ function uniqueUsablePrompts(items: Prompt[]) {
 }
 
 async function fetchRandomShowcasePrompts() {
-    const summary = await fetchPrompts({ pageSize: 1 });
+    const summary = await fetchPromptsWithCache({ pageSize: 1 });
     const total = Math.max(summary.total, summary.items.length);
     const maxPage = Math.max(1, Math.ceil(total / SHOWCASE_POOL_SIZE));
     const pages = shuffleArray(Array.from({ length: maxPage }, (_, index) => index + 1)).slice(0, Math.min(maxPage, SHOWCASE_RANDOM_PAGE_COUNT));
-    const batches = await Promise.all(pages.map((page) => fetchPrompts({ page, pageSize: SHOWCASE_POOL_SIZE }).catch(() => null)));
+    const batches = await Promise.all(pages.map((page) => fetchPromptsWithCache({ page, pageSize: SHOWCASE_POOL_SIZE }).catch(() => null)));
     const pool = uniqueUsablePrompts(batches.flatMap((batch) => batch?.items || []));
     const selected = shuffleArray(pool).slice(0, SHOWCASE_SIZE);
     if (selected.length >= Math.min(SHOWCASE_SIZE, total)) return selected;
@@ -65,6 +69,9 @@ export default function IndexPage() {
     const [previewOpen, setPreviewOpen] = useState(false);
     const [showcaseError, setShowcaseError] = useState("");
     const [showcaseReloadKey, setShowcaseReloadKey] = useState(0);
+    const assets = useAssetStore((state) => state.assets);
+    const projects = useCanvasStore((state) => state.projects);
+    const [onboardingState, setOnboardingState] = useState({ dismissed: false, milestones: {} } as ReturnType<typeof getOnboardingState>);
     const previewImages = useMemo(() => promptShowcase.filter((item) => isUsablePromptCover(item.coverUrl) && !failedCoverIds.has(item.id)), [failedCoverIds, promptShowcase]);
 
     useEffect(() => {
@@ -80,6 +87,27 @@ export default function IndexPage() {
                 setShowcaseError(errorMessage);
             });
     }, [showcaseReloadKey]);
+
+    useEffect(() => {
+        const refresh = () => setOnboardingState(getOnboardingState());
+        refresh();
+        window.addEventListener(ONBOARDING_EVENT, refresh);
+        void fetchProviders()
+            .then((providers) => {
+                const configured = providers.some((provider) => provider.enabled && provider.has_key && [...provider.image_models, ...provider.chat_models, ...provider.video_models].length > 0);
+                if (configured) markOnboardingMilestone("api");
+            })
+            .catch(() => undefined);
+        return () => window.removeEventListener(ONBOARDING_EVENT, refresh);
+    }, []);
+
+    const checklist = [
+        { key: "api", label: "配置可用的 API", href: "/api-settings", done: Boolean(onboardingState.milestones.api) },
+        { key: "generated", label: "完成首次生成", href: "/image", done: Boolean(onboardingState.milestones.generated) },
+        { key: "asset", label: "保存首个素材", href: "/assets", done: assets.length > 0 },
+        { key: "canvas", label: "创建或进入画布", href: "/canvas", done: projects.length > 0 },
+    ];
+    const completedSteps = checklist.filter((item) => item.done).length;
 
     return (
         <main className="relative h-full overflow-y-auto bg-background bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] text-stone-950 dark:bg-[radial-gradient(rgba(245,245,244,.18)_1px,transparent_1px)] dark:text-stone-100">
@@ -109,6 +137,22 @@ export default function IndexPage() {
                         </Button>
                     </div>
                 </div>
+
+                {!onboardingState.dismissed ? (
+                    <section className="relative mx-auto mb-12 w-full max-w-6xl border-y border-stone-200 py-5 dark:border-stone-800">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div><h2 className="text-base font-semibold">开始使用 LumaForge</h2><p className="mt-1 text-sm text-stone-500">已完成 {completedSteps}/4，按自己的节奏继续。</p></div>
+                            <Button type="text" size="small" icon={<X className="size-4" />} onClick={() => dismissOnboardingChecklist()}>永久隐藏</Button>
+                        </div>
+                        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                            {checklist.map((item, index) => (
+                                <Button key={item.key} href={item.href} className="!flex !h-auto !items-center !justify-start !gap-2 !px-3 !py-3" icon={item.done ? <Check className="size-4 text-emerald-600" /> : <Circle className="size-4 text-stone-400" />}>
+                                    <span className={item.done ? "text-stone-500 line-through" : ""}>{index + 1}. {item.label}</span>
+                                </Button>
+                            ))}
+                        </div>
+                    </section>
+                ) : null}
 
                 <section className="relative mx-auto mb-20 max-w-6xl border-t border-stone-200 pt-12 dark:border-stone-800">
                     <div className="mb-8 grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-start">

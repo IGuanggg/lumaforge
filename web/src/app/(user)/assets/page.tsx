@@ -1,9 +1,9 @@
 "use client";
 
-import { Copy, Download, ExternalLink, History, PencilLine, RefreshCw, Search, Trash2, Upload, UploadCloud } from "lucide-react";
+import { Archive, CheckSquare, Copy, Download, ExternalLink, History, PencilLine, RefreshCw, Search, Tags, Trash2, Upload, UploadCloud, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import { App, Button, Card, Drawer, Empty, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
+import { App, Button, Card, Checkbox, Drawer, Empty, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
 
 import { useCopyText } from "@/hooks/use-copy-text";
 import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
@@ -11,10 +11,11 @@ import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
 import { fetchCloudMediaStatus, restoreCloudMedia, syncCloudMedia, type CloudMediaStatus } from "@/services/api/cloud";
-import { openSavedFileLocation, saveFileWithPrompt } from "@/services/api/downloads";
+import { openSavedFileLocation, saveBlobWithPrompt, saveFileWithPrompt } from "@/services/api/downloads";
 import { DownloadHistoryDrawer } from "@/components/download-history-drawer";
 import { cn } from "@/lib/utils";
 import { useAssetStore, type Asset, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
+import { createZip } from "@/lib/zip";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
 
 type AssetFormValues = {
@@ -45,7 +46,7 @@ const kindOptions = [
 ];
 
 export default function AssetsPage() {
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const copyText = useCopyText();
     const [form] = Form.useForm<AssetFormValues>();
     const coverInputRef = useRef<HTMLInputElement>(null);
@@ -71,6 +72,11 @@ export default function AssetsPage() {
     const [deletingAsset, setDeletingAsset] = useState<DisplayAsset | null>(null);
     const [assetContextMenu, setAssetContextMenu] = useState<AssetContextMenuState | null>(null);
     const [downloadHistoryOpen, setDownloadHistoryOpen] = useState(false);
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(() => new Set());
+    const [batchTagOpen, setBatchTagOpen] = useState(false);
+    const [batchTagInput, setBatchTagInput] = useState("");
+    const [batchWorking, setBatchWorking] = useState("");
     const [formKind, setFormKind] = useState<AssetKind>("text");
     const [imageDraft, setImageDraft] = useState<ImageDraft>(null);
     const [mediaDraft, setMediaDraft] = useState<MediaDraft>(null);
@@ -95,6 +101,8 @@ export default function AssetsPage() {
         const start = (page - 1) * pageSize;
         return filteredAssets.slice(start, start + pageSize);
     }, [filteredAssets, page, pageSize]);
+    const selectedAssets = useMemo(() => mergedAssets.filter((asset) => selectedAssetIds.has(asset.id)), [mergedAssets, selectedAssetIds]);
+    const allFilteredSelected = Boolean(filteredAssets.length) && filteredAssets.every((asset) => selectedAssetIds.has(asset.id));
 
     const loadRemoteAssets = async () => {
         setLoadingRemote(true);
@@ -120,6 +128,11 @@ export default function AssetsPage() {
         const maxPage = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
         setPage((value) => Math.min(value, maxPage));
     }, [filteredAssets.length, pageSize]);
+
+    useEffect(() => {
+        const available = new Set(mergedAssets.map((asset) => asset.id));
+        setSelectedAssetIds((current) => new Set([...current].filter((id) => available.has(id))));
+    }, [mergedAssets]);
 
     useEffect(() => {
         if (!assetContextMenu) return;
@@ -348,6 +361,113 @@ export default function AssetsPage() {
         setDeletingAsset(null);
     };
 
+    const toggleAssetSelection = (id: string) => {
+        setSelectedAssetIds((current) => {
+            const next = new Set(current);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
+    };
+
+    const leaveSelectionMode = () => {
+        setSelectionMode(false);
+        setSelectedAssetIds(new Set());
+    };
+
+    const toggleAllFiltered = () => {
+        setSelectedAssetIds((current) => {
+            const next = new Set(current);
+            if (allFilteredSelected) filteredAssets.forEach((asset) => next.delete(asset.id));
+            else filteredAssets.forEach((asset) => next.add(asset.id));
+            return next;
+        });
+    };
+
+    const downloadSelectedAssets = async () => {
+        if (!selectedAssets.length) return;
+        setBatchWorking("download");
+        const files: { name: string; data: BlobPart }[] = [];
+        const errors: string[] = [];
+        const usedNames = new Set<string>();
+        await Promise.all(
+            selectedAssets.map(async (asset, index) => {
+                const extension = assetExtension(asset);
+                const baseName = `${String(index + 1).padStart(2, "0")}-${safeAssetFileStem(asset.title)}`;
+                let filename = `${baseName}.${extension}`;
+                let suffix = 2;
+                while (usedNames.has(filename)) filename = `${baseName}-${suffix++}.${extension}`;
+                usedNames.add(filename);
+                try {
+                    if (asset.kind === "text") {
+                        files.push({ name: filename, data: asset.data.content });
+                        return;
+                    }
+                    const url = asset.backendId ? `/api/assets/${encodeURIComponent(asset.backendId)}/download` : asset.kind === "image" ? asset.data.dataUrl : asset.data.url;
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    files.push({ name: filename, data: await response.blob() });
+                } catch (error) {
+                    errors.push(`${asset.title}: ${error instanceof Error ? error.message : "下载失败"}`);
+                }
+            }),
+        );
+        if (errors.length) files.push({ name: "errors.txt", data: errors.join("\r\n") });
+        try {
+            const zip = await createZip(files);
+            const result = await saveBlobWithPrompt(zip, `素材-${new Date().toISOString().slice(0, 10)}.zip`);
+            if (result.cancelled) message.info("已取消保存");
+            else if (!result.ok) message.error(result.message || "批量下载失败");
+            else message.success(errors.length ? `已打包 ${files.length - 1} 项，${errors.length} 项失败，详情见 errors.txt` : `已打包 ${selectedAssets.length} 项素材`);
+        } finally {
+            setBatchWorking("");
+        }
+    };
+
+    const deleteSelectedAssets = () => {
+        if (!selectedAssets.length) return;
+        modal.confirm({
+            title: `删除选中的 ${selectedAssets.length} 项素材？`,
+            content: "此操作会同时处理本地素材和后端素材，无法撤销。",
+            okText: "删除",
+            okButtonProps: { danger: true },
+            cancelText: "取消",
+            onOk: async () => {
+                setBatchWorking("delete");
+                const failures: string[] = [];
+                await Promise.all(
+                    selectedAssets.map(async (asset) => {
+                        try {
+                            if (asset.readonly && asset.backendId) {
+                                const response = await fetch(`/api/assets/${encodeURIComponent(asset.backendId)}`, { method: "DELETE" });
+                                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                            } else removeAsset(asset.id);
+                        } catch {
+                            failures.push(asset.title);
+                        }
+                    }),
+                );
+                await loadRemoteAssets();
+                setBatchWorking("");
+                leaveSelectionMode();
+                failures.length ? message.warning(`已删除其余素材，${failures.length} 项删除失败`) : message.success("所选素材已删除");
+            },
+        });
+    };
+
+    const applyBatchTags = () => {
+        const nextTags = batchTagInput.split(/[,，\s]+/).map((item) => item.trim()).filter(Boolean);
+        if (!nextTags.length) {
+            message.warning("请输入至少一个标签");
+            return;
+        }
+        const local = selectedAssets.filter((asset) => !asset.readonly);
+        local.forEach((asset) => updateAsset(asset.id, { tags: Array.from(new Set([...(asset.tags || []), ...nextTags])) }));
+        const skipped = selectedAssets.length - local.length;
+        setBatchTagOpen(false);
+        setBatchTagInput("");
+        message.success(`已为 ${local.length} 项本地素材追加标签${skipped ? `，跳过 ${skipped} 项后端素材` : ""}`);
+    };
+
     return (
         <div className="flex h-full flex-col overflow-hidden bg-background text-stone-900 dark:text-stone-100">
             <main className="min-h-0 flex-1 overflow-y-auto bg-stone-50 px-6 py-8 dark:bg-stone-950">
@@ -358,6 +478,7 @@ export default function AssetsPage() {
                             <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">统一查看本地收藏、旧版素材库和云端恢复的图片/视频/文本。</p>
                         </div>
                         <Space wrap>
+                            <Button icon={<CheckSquare className="size-4" />} type={selectionMode ? "primary" : "default"} onClick={() => selectionMode ? leaveSelectionMode() : setSelectionMode(true)}>{selectionMode ? "退出选择" : "批量管理"}</Button>
                             <Button icon={<RefreshCw className="size-4" />} loading={loadingRemote} onClick={() => void loadRemoteAssets()}>刷新</Button>
                             <Button icon={<History className="size-4" />} onClick={() => setDownloadHistoryOpen(true)}>最近下载</Button>
                             <Button icon={<UploadCloud className="size-4" />} loading={syncing === "sync"} onClick={() => runCloudAction("sync", syncCloudMedia, "云素材同步完成")}>同步素材</Button>
@@ -408,12 +529,30 @@ export default function AssetsPage() {
                         </div>
                     </section>
 
+                    {selectionMode ? (
+                        <section className="sticky top-2 z-20 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-stone-300 bg-white px-4 py-3 shadow-lg dark:border-stone-700 dark:bg-stone-900">
+                            <div className="flex flex-wrap items-center gap-3">
+                                <Checkbox checked={allFilteredSelected} indeterminate={selectedAssetIds.size > 0 && !allFilteredSelected} onChange={toggleAllFiltered}>全选当前筛选</Checkbox>
+                                <Tag color="blue" className="m-0">已选 {selectedAssets.length}</Tag>
+                            </div>
+                            <Space wrap>
+                                <Button icon={<Archive className="size-4" />} disabled={!selectedAssets.length} loading={batchWorking === "download"} onClick={() => void downloadSelectedAssets()}>下载 ZIP</Button>
+                                <Button icon={<Tags className="size-4" />} disabled={!selectedAssets.length} onClick={() => setBatchTagOpen(true)}>追加标签</Button>
+                                <Button danger icon={<Trash2 className="size-4" />} disabled={!selectedAssets.length} loading={batchWorking === "delete"} onClick={deleteSelectedAssets}>删除</Button>
+                                <Button type="text" icon={<X className="size-4" />} onClick={leaveSelectionMode}>取消选择</Button>
+                            </Space>
+                        </section>
+                    ) : null}
+
                     <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {visibleAssets.map((asset) => (
                             <AssetCard
                                 key={asset.id}
                                 asset={asset}
-                                onOpen={() => setPreviewAsset(asset)}
+                                selectionMode={selectionMode}
+                                selected={selectedAssetIds.has(asset.id)}
+                                onToggleSelection={() => toggleAssetSelection(asset.id)}
+                                onOpen={() => selectionMode ? toggleAssetSelection(asset.id) : setPreviewAsset(asset)}
                                 onEdit={() => openEdit(asset)}
                                 onCopy={copyAssetText}
                                 onDownload={downloadAsset}
@@ -472,6 +611,10 @@ export default function AssetsPage() {
                 open={downloadHistoryOpen}
                 onClose={() => setDownloadHistoryOpen(false)}
             />
+            <Modal title="为所选本地素材追加标签" open={batchTagOpen} onCancel={() => setBatchTagOpen(false)} onOk={applyBatchTags} okText="追加" cancelText="取消">
+                <p className="text-sm text-stone-500">多个标签用逗号或空格分隔。后端素材会自动跳过，不会修改远端标签。</p>
+                <Input value={batchTagInput} onChange={(event) => setBatchTagInput(event.target.value)} placeholder="例如：人物 海报 已确认" onPressEnter={applyBatchTags} />
+            </Modal>
 
             <Modal title={editingAsset ? "编辑素材" : "新增素材"} open={isAssetOpen} width={980} onCancel={() => setIsAssetOpen(false)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
                 <div className="grid gap-6 pt-1 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -644,6 +787,9 @@ function AssetMenuButton({ label, icon, danger = false, onClick }: { label: stri
 
 function AssetCard({
     asset,
+    selectionMode,
+    selected,
+    onToggleSelection,
     onOpen,
     onEdit,
     onCopy,
@@ -652,6 +798,9 @@ function AssetCard({
     onContextMenu,
 }: {
     asset: DisplayAsset;
+    selectionMode: boolean;
+    selected: boolean;
+    onToggleSelection: () => void;
     onOpen: () => void;
     onEdit: () => void;
     onCopy: (asset: DisplayAsset) => void;
@@ -662,8 +811,9 @@ function AssetCard({
     const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
     const summary = assetSummary(asset);
     return (
-        <div onContextMenu={onContextMenu}>
-        <Card hoverable className="overflow-hidden" styles={{ body: { padding: 0 } }} cover={<button type="button" className="block w-full text-left" onClick={onOpen}>{cover ? <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" /> : <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : asset.kind === "audio" ? "音频素材" : "暂无封面"}</div>}</button>}>
+        <div className="relative" onContextMenu={onContextMenu}>
+        {selectionMode ? <Checkbox checked={selected} className="absolute left-3 top-3 z-10 rounded bg-white/90 p-1 shadow dark:bg-stone-900/90" onClick={(event) => event.stopPropagation()} onChange={onToggleSelection} aria-label={`选择 ${asset.title}`} /> : null}
+        <Card hoverable className={cn("overflow-hidden", selected && "ring-2 ring-stone-950 dark:ring-stone-100")} styles={{ body: { padding: 0 } }} cover={<button type="button" className="block w-full text-left" onClick={onOpen}>{cover ? <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" /> : <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : asset.kind === "audio" ? "音频素材" : "暂无封面"}</div>}</button>}>
             <button type="button" className="block w-full text-left" onClick={onOpen}>
                 <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -680,13 +830,13 @@ function AssetCard({
                     <div className="mt-3 flex flex-wrap gap-1.5">{(asset.tags || []).slice(0, 3).map((tag) => <Tag key={tag} className="m-0 text-[11px]">{tag}</Tag>)}{!asset.tags?.length ? <Tag className="m-0 text-[11px]">无标签</Tag> : null}</div>
                 </div>
             </button>
-            <div className="flex flex-wrap items-center gap-2 px-4 pb-4">
+            {!selectionMode ? <div className="flex flex-wrap items-center gap-2 px-4 pb-4">
                 <Button size="small" onClick={onOpen}>查看</Button>
                 {!asset.readonly && asset.kind !== "video" && asset.kind !== "audio" ? <Button size="small" icon={<PencilLine className="size-3.5" />} onClick={onEdit}>编辑</Button> : null}
                 {asset.kind === "text" ? <Button size="small" icon={<Copy className="size-3.5" />} onClick={() => void onCopy(asset)}>复制</Button> : null}
                 {asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? <Button size="small" icon={<Download className="size-3.5" />} onClick={() => onDownload(asset)}>下载</Button> : null}
                 <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={onDelete}>删除</Button>
-            </div>
+            </div> : null}
         </Card>
         </div>
     );

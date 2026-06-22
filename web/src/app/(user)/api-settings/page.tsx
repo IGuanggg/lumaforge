@@ -43,6 +43,8 @@ export default function ApiSettingsPage() {
     const [action, setAction] = useState<ActionKey>("refresh");
     const [loadError, setLoadError] = useState("");
     const autoRecoverRef = useRef(false);
+    const baselineRef = useRef<ProviderDraft[]>([]);
+    const dirtyRef = useRef(false);
 
     const selectedIndex = useMemo(() => providers.findIndex((provider) => provider.id === selectedId), [providers, selectedId]);
     const selected = selectedIndex >= 0 ? providers[selectedIndex] : providers[0];
@@ -50,6 +52,19 @@ export default function ApiSettingsPage() {
     const savedKeyCount = diagnostics?.stored_key_count ?? providers.filter((provider) => provider.has_key).length;
     const modelCount = selected ? selected.image_models.length + selected.chat_models.length + selected.video_models.length : 0;
     const defaultImagePreview = selected ? selected.image_models.find((item) => item === "gpt-image-2-vip") || selected.image_models[0] || "-" : "-";
+    const isDirty = useMemo(() => providerFingerprint(providers) !== providerFingerprint(baselineRef.current), [providers]);
+    dirtyRef.current = isDirty;
+
+    const rememberBaseline = useCallback((next: ProviderDraft[]) => {
+        baselineRef.current = cloneProviderDrafts(next);
+    }, []);
+
+    const discardChanges = useCallback(() => {
+        const baseline = cloneProviderDrafts(baselineRef.current);
+        setProviders(baseline);
+        setSelectedId((current) => pickSelectedId(baseline, current));
+        setCheckResult(null);
+    }, []);
 
     const refreshDiagnostics = useCallback(async () => {
         const data = await fetchKeyDiagnostics();
@@ -70,6 +85,7 @@ export default function ApiSettingsPage() {
                 const data = await fetchProviders();
                 const next = data.map((provider) => ({ ...provider, draft_new: false }));
                 setProviders(next);
+                rememberBaseline(next);
                 setSelectedId((current) => pickSelectedId(next, current));
                 const nextDiagnostics = await refreshDiagnostics();
                 broadcastProvidersChanged();
@@ -85,7 +101,7 @@ export default function ApiSettingsPage() {
                 setAction("");
             }
         },
-        [message, refreshDiagnostics],
+        [message, refreshDiagnostics, rememberBaseline],
     );
 
     const loadProviders = useCallback(async () => {
@@ -94,6 +110,7 @@ export default function ApiSettingsPage() {
             const data = await fetchProviders();
             const next = data.map((provider) => ({ ...provider, draft_new: false }));
             setProviders(next);
+            rememberBaseline(next);
             setSelectedId((current) => pickSelectedId(next, current));
             const keyDiagnostics = await refreshDiagnostics();
             setCheckResult(null);
@@ -107,11 +124,47 @@ export default function ApiSettingsPage() {
         } finally {
             setAction("");
         }
-    }, [message, recoverCloudKeys, refreshDiagnostics]);
+    }, [recoverCloudKeys, refreshDiagnostics, rememberBaseline]);
 
     useEffect(() => {
         void loadProviders();
     }, [loadProviders]);
+
+    useEffect(() => {
+        const warning = "API 设置尚未保存，确定放弃这些更改吗？";
+        const beforeUnload = (event: BeforeUnloadEvent) => {
+            if (!dirtyRef.current) return;
+            event.preventDefault();
+            event.returnValue = "";
+        };
+        const captureNavigation = (event: MouseEvent) => {
+            if (!dirtyRef.current || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            const anchor = (event.target as Element | null)?.closest("a[href]") as HTMLAnchorElement | null;
+            if (!anchor || anchor.target === "_blank" || anchor.origin !== window.location.origin || anchor.href === window.location.href) return;
+            event.preventDefault();
+            if (!window.confirm(warning)) return;
+            dirtyRef.current = false;
+            discardChanges();
+            window.location.assign(anchor.href);
+        };
+        const handlePopState = () => {
+            if (!dirtyRef.current) return;
+            if (window.confirm(warning)) {
+                dirtyRef.current = false;
+                discardChanges();
+                return;
+            }
+            window.history.forward();
+        };
+        window.addEventListener("beforeunload", beforeUnload);
+        document.addEventListener("click", captureNavigation, true);
+        window.addEventListener("popstate", handlePopState);
+        return () => {
+            window.removeEventListener("beforeunload", beforeUnload);
+            document.removeEventListener("click", captureNavigation, true);
+            window.removeEventListener("popstate", handlePopState);
+        };
+    }, [discardChanges]);
 
     const updateSelected = (patch: Partial<ProviderDraft>) => {
         if (!selected) return;
@@ -136,6 +189,7 @@ export default function ApiSettingsPage() {
             const saved = await saveProviders(normalized);
             const next = saved.map((provider) => ({ ...provider, draft_new: false }));
             setProviders(next);
+            rememberBaseline(next);
             setSelectedId((current) => pickSelectedId(next, current || selectedId));
             setCheckResult(null);
             await refreshDiagnostics();
@@ -337,6 +391,15 @@ export default function ApiSettingsPage() {
 
     return (
         <main className="flex h-full min-h-0 flex-col overflow-hidden bg-stone-50 text-stone-950 dark:bg-stone-950 dark:text-stone-100">
+            {isDirty ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+                    <div className="flex items-center gap-2"><AlertCircle className="size-4" /><strong>有未保存的 API 设置</strong><span className="hidden opacity-75 sm:inline">离开页面前请保存或放弃更改。</span></div>
+                    <div className="flex gap-2">
+                        <Button size="small" onClick={discardChanges}>放弃更改</Button>
+                        <Button size="small" type="primary" icon={<Save className="size-3.5" />} loading={action === "save"} onClick={() => void persistProviders()}>保存</Button>
+                    </div>
+                </div>
+            ) : null}
             <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-y-auto p-3 lg:grid-cols-[320px_minmax(0,1fr)] lg:overflow-hidden">
                 <aside className="flex min-h-[320px] flex-col rounded-lg border border-stone-200 bg-card shadow-sm dark:border-stone-800 lg:min-h-0">
                     <div className="border-b border-stone-200 p-4 dark:border-stone-800">
@@ -349,7 +412,7 @@ export default function ApiSettingsPage() {
                                 </div>
                             </div>
                             <Tooltip title="刷新">
-                                <Button aria-label="刷新 API 平台" size="small" icon={action === "refresh" ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />} onClick={() => void loadProviders()} />
+                                <Button aria-label="刷新 API 平台" size="small" icon={action === "refresh" ? <LoaderCircle className="size-4 animate-spin" /> : <RefreshCcw className="size-4" />} onClick={() => { if (!isDirty || window.confirm("刷新会放弃未保存的 API 设置，确定继续吗？")) void loadProviders(); }} />
                             </Tooltip>
                         </div>
                     </div>
@@ -778,6 +841,26 @@ function normalizeProviderList(providers: ProviderDraft[]) {
 
 function normalizeDraftModels(models?: string[]) {
     return (models || []).map((item) => String(item ?? ""));
+}
+
+function cloneProviderDrafts(providers: ProviderDraft[]) {
+    return providers.map((provider) => ({
+        ...provider,
+        image_models: [...provider.image_models],
+        chat_models: [...provider.chat_models],
+        video_models: [...provider.video_models],
+    }));
+}
+
+function providerFingerprint(providers: ProviderDraft[]) {
+    return JSON.stringify(
+        providers.map((provider) => ({
+            ...provider,
+            image_models: normalizeDraftModels(provider.image_models),
+            chat_models: normalizeDraftModels(provider.chat_models),
+            video_models: normalizeDraftModels(provider.video_models),
+        })),
+    );
 }
 
 function mergeModels(current: string[], incoming: string[]) {

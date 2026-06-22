@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, ArrowRight, BookOpen, CheckSquare, ClipboardPaste, Download, FolderPlus, History, ImagePlus, LoaderCircle, PenLine, Plus, SlidersHorizontal, Sparkles, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, CheckSquare, ClipboardPaste, Download, FolderPlus, History, ImagePlus, LoaderCircle, PenLine, Plus, Send, SlidersHorizontal, Sparkles, Trash2, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { App, Button, Checkbox, Drawer, Empty, Image, Input, Modal, Tag, Tooltip, Typography } from "antd";
 import localforage from "localforage";
@@ -9,6 +9,8 @@ import { ImageSettingsPanel } from "@/components/image-settings-panel";
 import { ModelPicker } from "@/components/model-picker";
 import { PromptSelectDialog } from "@/components/prompts/prompt-select-dialog";
 import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
+import { SendToCanvasDialog } from "@/app/(user)/canvas/components/send-to-canvas-dialog";
+import type { CanvasTransferPayload } from "@/app/(user)/canvas/utils/canvas-transfer";
 import { canvasThemes } from "@/lib/canvas-theme";
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
 import { modelDisplayLabel, useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
@@ -20,6 +22,7 @@ import { openSavedFileLocation, saveFileWithPrompt } from "@/services/api/downlo
 import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
 import type { ReferenceImage } from "@/types/image";
+import { markOnboardingMilestone } from "@/services/onboarding";
 
 type GeneratedImage = {
     id: string;
@@ -90,6 +93,7 @@ export default function ImagePage() {
     const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
     const [previewLog, setPreviewLog] = useState<GenerationLog | null>(null);
     const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [canvasTransfer, setCanvasTransfer] = useState<CanvasTransferPayload | null>(null);
 
     const model = effectiveConfig.imageModel || effectiveConfig.model;
     const modelLabel = modelDisplayLabel(effectiveConfig, model) || model;
@@ -188,6 +192,7 @@ export default function ImagePage() {
                     images: logImages,
                 }),
             );
+            if (successCount) markOnboardingMilestone("generated");
             successCount ? message.success("图片已生成") : message.error(failed?.reason instanceof Error ? failed.reason.message : "生成失败");
         } finally {
             setRunning(false);
@@ -244,6 +249,25 @@ export default function ImagePage() {
             metadata: { source: "image-page", prompt },
         });
         message.success("已加入我的素材");
+    };
+
+    const sendResultToCanvas = async (image: GeneratedImage, index: number) => {
+        const stored = await uploadImage(image.dataUrl);
+        setCanvasTransfer({
+            kind: "image",
+            title: `生成图片 ${index + 1}`,
+            url: stored.url,
+            storageKey: stored.storageKey,
+            prompt: prompt.trim(),
+            model,
+            size: effectiveConfig.size,
+            quality: effectiveConfig.quality,
+            width: stored.width || image.width,
+            height: stored.height || image.height,
+            bytes: stored.bytes || image.bytes,
+            mimeType: stored.mimeType || image.mimeType,
+            durationMs: image.durationMs,
+        });
     };
 
     const insertPickedAsset = async (payload: InsertAssetPayload) => {
@@ -455,7 +479,7 @@ export default function ImagePage() {
                             <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-3">
                                 {results.map((result, index) =>
                                     result.status === "success" && result.image ? (
-                                        <ResultImageCard key={result.id} image={result.image} index={index} onEdit={addResultToReferences} onDownload={downloadImage} onSaveAsset={saveResultToAssets} />
+                                        <ResultImageCard key={result.id} image={result.image} index={index} onEdit={addResultToReferences} onDownload={downloadImage} onSaveAsset={saveResultToAssets} onSendToCanvas={sendResultToCanvas} />
                                     ) : result.status === "failed" ? (
                                         <FailedImageCard key={result.id} error={result.error || "生成失败"} onRetry={() => retryResult(index)} />
                                     ) : (
@@ -501,6 +525,7 @@ export default function ImagePage() {
             </Drawer>
             <PromptSelectDialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen} onSelect={setPrompt} />
             <AssetPickerModal open={assetPickerOpen} defaultTab="my-assets" onInsert={(payload) => void insertPickedAsset(payload)} onClose={() => setAssetPickerOpen(false)} />
+            <SendToCanvasDialog open={Boolean(canvasTransfer)} payload={canvasTransfer} onClose={() => setCanvasTransfer(null)} />
             <Modal title="删除生成记录" open={deleteConfirmOpen} onCancel={() => setDeleteConfirmOpen(false)} onOk={deleteSelectedLogs} okText="删除" okButtonProps={{ danger: true }} cancelText="取消">
                 确定删除选中的 {selectedLogIds.length} 条生成记录吗？
             </Modal>
@@ -530,12 +555,14 @@ function ResultImageCard({
     onEdit,
     onDownload,
     onSaveAsset,
+    onSendToCanvas,
 }: {
     image: GeneratedImage;
     index: number;
     onEdit: (image: GeneratedImage, index: number) => void;
     onDownload: (image: GeneratedImage, index: number) => void;
     onSaveAsset: (image: GeneratedImage, index: number) => void;
+    onSendToCanvas: (image: GeneratedImage, index: number) => void;
 }) {
     return (
         <div className="overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
@@ -548,7 +575,12 @@ function ResultImageCard({
                     <span>{formatBytes(image.bytes)}</span>
                     <span>{formatDuration(image.durationMs)}</span>
                 </div>
-                <div className="grid min-w-0 grid-cols-3 gap-2">
+                <div className="grid min-w-0 grid-cols-2 gap-2">
+                    <Tooltip title="送入画布并定位">
+                        <Button className={RESULT_ACTION_BUTTON_CLASS} size="small" icon={<Send className="size-3.5" />} onClick={() => void onSendToCanvas(image, index)}>
+                            送入画布
+                        </Button>
+                    </Tooltip>
                     <Tooltip title="添加到素材">
                         <Button className={RESULT_ACTION_BUTTON_CLASS} size="small" icon={<FolderPlus className="size-3.5" />} onClick={() => void onSaveAsset(image, index)}>
                             添加到素材

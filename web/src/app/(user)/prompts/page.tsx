@@ -20,7 +20,7 @@ export default function PromptsPage() {
     const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
     const addAsset = useAssetStore((state) => state.addAsset);
     const copyText = useCopyText();
-    const { query, items: promptItems, tags: promptTags, categories: promptCategoryOptions, total: totalPrompts } = usePromptList({ keyword: titleKeyword, tags: selectedTags, category: selectedCategory });
+    const { query, items: promptItems, tags: promptTags, categories: promptCategoryOptions, total: totalPrompts, source, cachedAt } = usePromptList({ keyword: titleKeyword, tags: selectedTags, category: selectedCategory });
 
     const toggleTag = (tag: string) => {
         if (tag === ALL_PROMPTS_OPTION) return setSelectedTags([]);
@@ -51,6 +51,7 @@ export default function PromptsPage() {
                         <p className="mt-3 text-sm text-stone-500 dark:text-stone-400">
                             {query.isError ? "提示词库暂时无法连接，恢复后可以继续搜索和收藏。" : `共 ${totalPrompts} 条提示词，按标题、标签与分类快速查找灵感。`}
                         </p>
+                        {source === "cache" ? <Tag color="gold" className="mt-3">离线缓存 · {cachedAt ? new Date(cachedAt).toLocaleString("zh-CN") : "时间未知"}</Tag> : null}
                     </div>
                     {query.isLoading ? (
                         <div className="flex h-60 items-center justify-center">
