@@ -246,9 +246,9 @@ export const CanvasNode = React.memo(function CanvasNode({
     };
 
     const handleNodeWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-        if (!(event.ctrlKey || event.metaKey)) return;
+        if (!event.altKey || event.ctrlKey || event.metaKey) return;
         const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("input,textarea,select,[contenteditable='true'],[data-canvas-no-zoom]")) return;
+        if (target?.closest("button,input,textarea,select,[contenteditable='true'],[data-canvas-no-zoom],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown")) return;
 
         event.preventDefault();
         event.stopPropagation();

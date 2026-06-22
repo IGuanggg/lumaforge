@@ -12,6 +12,12 @@ export type AssetLibraryItem = {
     url: string;
     createdAt: string;
     updatedAt: string;
+    sourceType?: string;
+    prompt?: string;
+    model?: string;
+    canvasId?: string;
+    nodeId?: string;
+    storageKey?: string;
 };
 
 export type AssetLibraryResponse = {
@@ -108,6 +114,12 @@ function normalizeAssetLibraryItem(raw: unknown): AssetLibraryItem {
         url,
         createdAt: normalizeTime(item.createdAt ?? item.created_at),
         updatedAt: normalizeTime(item.updatedAt ?? item.updated_at),
+        sourceType: firstString(item.sourceType, item.source_type),
+        prompt: firstString(item.prompt),
+        model: firstString(item.model),
+        canvasId: firstString(item.canvasId, item.canvas_id),
+        nodeId: firstString(item.nodeId, item.node_id),
+        storageKey: firstString(item.storageKey, item.storage_key),
     };
 }
 

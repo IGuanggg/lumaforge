@@ -1,15 +1,17 @@
 "use client";
 
-import { Copy, Download, PencilLine, RefreshCw, Search, Trash2, Upload, UploadCloud } from "lucide-react";
+import { Copy, Download, ExternalLink, History, PencilLine, RefreshCw, Search, Trash2, Upload, UploadCloud } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import { App, Button, Card, Drawer, Empty, Form, Image, Input, Modal, Pagination, Select, Space, Tag, Typography } from "antd";
-import { saveAs } from "file-saver";
 
 import { useCopyText } from "@/hooks/use-copy-text";
 import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
 import { uploadImage } from "@/services/image-storage";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
 import { fetchCloudMediaStatus, restoreCloudMedia, syncCloudMedia, type CloudMediaStatus } from "@/services/api/cloud";
+import { openSavedFileLocation, saveFileWithPrompt } from "@/services/api/downloads";
+import { DownloadHistoryDrawer } from "@/components/download-history-drawer";
 import { cn } from "@/lib/utils";
 import { useAssetStore, type Asset, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
 import { exportAssets, readAssetPackage } from "./asset-transfer";
@@ -26,6 +28,11 @@ type AssetFormValues = {
 
 type ImageDraft = ImageAsset["data"] | null;
 type DisplayAsset = Asset & { readonly?: boolean; backendId?: string };
+type AssetContextMenuState = {
+    asset: DisplayAsset;
+    x: number;
+    y: number;
+};
 
 const kindOptions = [
     { label: "全部", value: "all" },
@@ -58,6 +65,8 @@ export default function AssetsPage() {
     const [isAssetOpen, setIsAssetOpen] = useState(false);
     const [previewAsset, setPreviewAsset] = useState<DisplayAsset | null>(null);
     const [deletingAsset, setDeletingAsset] = useState<DisplayAsset | null>(null);
+    const [assetContextMenu, setAssetContextMenu] = useState<AssetContextMenuState | null>(null);
+    const [downloadHistoryOpen, setDownloadHistoryOpen] = useState(false);
     const [formKind, setFormKind] = useState<AssetKind>("text");
     const [imageDraft, setImageDraft] = useState<ImageDraft>(null);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
@@ -101,6 +110,20 @@ export default function AssetsPage() {
         const maxPage = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
         setPage((value) => Math.min(value, maxPage));
     }, [filteredAssets.length, pageSize]);
+
+    useEffect(() => {
+        if (!assetContextMenu) return;
+        const close = () => setAssetContextMenu(null);
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") close();
+        };
+        window.addEventListener("pointerdown", close);
+        window.addEventListener("keydown", handleKeyDown);
+        return () => {
+            window.removeEventListener("pointerdown", close);
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [assetContextMenu]);
 
     const runCloudAction = async (key: string, action: () => Promise<unknown>, success: string) => {
         setSyncing(key);
@@ -187,11 +210,65 @@ export default function AssetsPage() {
         copyText(asset.data.content, "文本已复制");
     };
 
-    const downloadAsset = (asset: DisplayAsset) => {
+    const fallbackAssetExtension = (kind: AssetKind) => {
+        if (kind === "video") return "mp4";
+        if (kind === "audio") return "mp3";
+        if (kind === "image") return "png";
+        return "txt";
+    };
+
+    const assetExtension = (asset: DisplayAsset) => {
+        if (asset.kind === "text") return "txt";
+        const mimeType = asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? asset.data.mimeType : "";
+        const subtype = mimeType.split("/")[1]?.split(";")[0]?.trim().toLowerCase();
+        if (subtype) {
+            if (subtype === "jpeg") return "jpg";
+            if (subtype === "mpeg") return asset.kind === "audio" ? "mp3" : "mpeg";
+            if (subtype === "x-wav") return "wav";
+            return subtype.replace(/[^a-z0-9.+-]/g, "") || fallbackAssetExtension(asset.kind);
+        }
+        return fallbackAssetExtension(asset.kind);
+    };
+
+    const safeAssetFileStem = (value: string) =>
+        String(value || "asset")
+            .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 80) || "asset";
+
+    const downloadAsset = async (asset: DisplayAsset) => {
         if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio") return;
-        const url = asset.kind === "image" ? asset.data.dataUrl : asset.data.url;
-        const ext = asset.data.mimeType.split("/")[1] || (asset.kind === "video" ? "mp4" : asset.kind === "audio" ? "mp3" : "png");
-        saveAs(url, `${asset.title || "asset"}.${ext}`);
+        const url = asset.backendId ? `/api/assets/${encodeURIComponent(asset.backendId)}/download` : asset.kind === "image" ? asset.data.dataUrl : asset.data.url;
+        const filename = `${safeAssetFileStem(asset.title || "asset")}.${assetExtension(asset)}`;
+        const result = await saveFileWithPrompt(url, filename);
+        if (result.cancelled) {
+            message.info("已取消保存");
+            return;
+        }
+        if (!result.ok) {
+            message.error(result.message || "下载失败");
+            return;
+        }
+        if (result.fallback) {
+            message.success(result.message || "已交给浏览器下载，文件会进入浏览器默认下载目录");
+            return;
+        }
+        if (result.path) {
+            message.success({
+                content: (
+                    <span className="inline-flex items-center gap-2">
+                        <span>{`已保存到：${result.path}`}</span>
+                        <button type="button" className="text-[#2f80ff] underline-offset-2 hover:underline" onClick={() => void openSavedFileLocation(result.path!)}>
+                            打开所在文件夹
+                        </button>
+                    </span>
+                ),
+                duration: 8,
+            });
+            return;
+        }
+        message.success("保存完成");
     };
 
     const exportAllAssets = async () => {
@@ -249,6 +326,7 @@ export default function AssetsPage() {
                         </div>
                         <Space wrap>
                             <Button icon={<RefreshCw className="size-4" />} loading={loadingRemote} onClick={() => void loadRemoteAssets()}>刷新</Button>
+                            <Button icon={<History className="size-4" />} onClick={() => setDownloadHistoryOpen(true)}>最近下载</Button>
                             <Button icon={<UploadCloud className="size-4" />} loading={syncing === "sync"} onClick={() => runCloudAction("sync", syncCloudMedia, "云素材同步完成")}>同步素材</Button>
                             <Button icon={<Download className="size-4" />} loading={syncing === "restore"} onClick={() => runCloudAction("restore", restoreCloudMedia, "云素材恢复完成")}>恢复云素材</Button>
                             <Button onClick={openCreate}>新增素材</Button>
@@ -299,7 +377,19 @@ export default function AssetsPage() {
 
                     <section className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                         {visibleAssets.map((asset) => (
-                            <AssetCard key={asset.id} asset={asset} onOpen={() => setPreviewAsset(asset)} onEdit={() => openEdit(asset)} onCopy={copyAssetText} onDownload={downloadAsset} onDelete={() => setDeletingAsset(asset)} />
+                            <AssetCard
+                                key={asset.id}
+                                asset={asset}
+                                onOpen={() => setPreviewAsset(asset)}
+                                onEdit={() => openEdit(asset)}
+                                onCopy={copyAssetText}
+                                onDownload={downloadAsset}
+                                onDelete={() => setDeletingAsset(asset)}
+                                onContextMenu={(event) => {
+                                    event.preventDefault();
+                                    setAssetContextMenu({ asset, x: event.clientX, y: event.clientY });
+                                }}
+                            />
                         ))}
                     </section>
 
@@ -320,6 +410,23 @@ export default function AssetsPage() {
                     </div>
                 </div>
             </main>
+
+            {assetContextMenu ? (
+                <AssetContextMenu
+                    menu={assetContextMenu}
+                    onClose={() => setAssetContextMenu(null)}
+                    onOpen={(asset) => setPreviewAsset(asset)}
+                    onEdit={openEdit}
+                    onCopy={(asset) => void copyAssetText(asset)}
+                    onDownload={(asset) => void downloadAsset(asset)}
+                    onDelete={(asset) => setDeletingAsset(asset)}
+                />
+            ) : null}
+
+            <DownloadHistoryDrawer
+                open={downloadHistoryOpen}
+                onClose={() => setDownloadHistoryOpen(false)}
+            />
 
             <Modal title={editingAsset ? "编辑素材" : "新增素材"} open={isAssetOpen} width={980} onCancel={() => setIsAssetOpen(false)} onOk={() => void saveAsset()} okText="保存" cancelText="取消" destroyOnHidden>
                 <div className="grid gap-6 pt-1 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -386,10 +493,72 @@ function SummaryCard({ label, value }: { label: string; value: string | number }
     return <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900"><div className="text-xs text-stone-500 dark:text-stone-400">{label}</div><div className="mt-2 text-2xl font-semibold text-stone-950 dark:text-stone-100">{value}</div></div>;
 }
 
-function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { asset: DisplayAsset; onOpen: () => void; onEdit: () => void; onCopy: (asset: DisplayAsset) => void; onDownload: (asset: DisplayAsset) => void; onDelete: () => void }) {
+function AssetContextMenu({
+    menu,
+    onClose,
+    onOpen,
+    onEdit,
+    onCopy,
+    onDownload,
+    onDelete,
+}: {
+    menu: AssetContextMenuState;
+    onClose: () => void;
+    onOpen: (asset: DisplayAsset) => void;
+    onEdit: (asset: DisplayAsset) => void;
+    onCopy: (asset: DisplayAsset) => void;
+    onDownload: (asset: DisplayAsset) => void;
+    onDelete: (asset: DisplayAsset) => void;
+}) {
+    const asset = menu.asset;
+    const canDownload = asset.kind === "image" || asset.kind === "video" || asset.kind === "audio";
+    const canEdit = !asset.readonly && asset.kind !== "video" && asset.kind !== "audio";
+    const run = (action: () => void) => {
+        onClose();
+        action();
+    };
+
+    return (
+        <div className="fixed z-[120] min-w-44 overflow-hidden rounded-lg border border-stone-200 bg-white py-1 text-sm text-stone-800 shadow-2xl dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100" style={{ left: menu.x, top: menu.y }} onPointerDown={(event) => event.stopPropagation()}>
+            <AssetMenuButton label="查看" onClick={() => run(() => onOpen(asset))} />
+            {canDownload ? <AssetMenuButton label={asset.kind === "video" ? "下载视频" : asset.kind === "audio" ? "下载音频" : "下载图片"} icon={<Download className="size-4" />} onClick={() => run(() => onDownload(asset))} /> : null}
+            {asset.kind === "text" ? <AssetMenuButton label="复制文本" icon={<Copy className="size-4" />} onClick={() => run(() => onCopy(asset))} /> : null}
+            {canEdit ? <AssetMenuButton label="编辑" icon={<PencilLine className="size-4" />} onClick={() => run(() => onEdit(asset))} /> : null}
+            <AssetMenuButton label="删除" icon={<Trash2 className="size-4" />} danger onClick={() => run(() => onDelete(asset))} />
+        </div>
+    );
+}
+
+function AssetMenuButton({ label, icon, danger = false, onClick }: { label: string; icon?: ReactNode; danger?: boolean; onClick: () => void }) {
+    return (
+        <button type="button" className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-stone-100 dark:hover:bg-stone-800 ${danger ? "text-red-500" : ""}`} onClick={onClick}>
+            {icon ? icon : <span className="size-4" />}
+            <span>{label}</span>
+        </button>
+    );
+}
+
+function AssetCard({
+    asset,
+    onOpen,
+    onEdit,
+    onCopy,
+    onDownload,
+    onDelete,
+    onContextMenu,
+}: {
+    asset: DisplayAsset;
+    onOpen: () => void;
+    onEdit: () => void;
+    onCopy: (asset: DisplayAsset) => void;
+    onDownload: (asset: DisplayAsset) => void;
+    onDelete: () => void;
+    onContextMenu: (event: ReactMouseEvent<HTMLElement>) => void;
+}) {
     const cover = asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "");
     const summary = assetSummary(asset);
     return (
+        <div onContextMenu={onContextMenu}>
         <Card hoverable className="overflow-hidden" styles={{ body: { padding: 0 } }} cover={<button type="button" className="block w-full text-left" onClick={onOpen}>{cover ? <img src={cover} alt={asset.title} className="aspect-[4/3] w-full object-cover" /> : <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm leading-6 text-stone-600 dark:bg-stone-900 dark:text-stone-300">{asset.kind === "text" ? asset.data.content : asset.kind === "audio" ? "音频素材" : "暂无封面"}</div>}</button>}>
             <button type="button" className="block w-full text-left" onClick={onOpen}>
                 <div className="p-4">
@@ -398,7 +567,10 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
                             <h2 className="line-clamp-1 text-sm font-semibold text-stone-950 dark:text-stone-100">{asset.title}</h2>
                             <Typography.Text type="secondary" className="mt-1 block text-xs">{asset.source || "未标注来源"}</Typography.Text>
                         </div>
-                        <Tag className="m-0 shrink-0 text-[11px]">{assetKindLabel(asset.kind)}</Tag>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                            <Tag className="m-0 text-[11px]">{assetKindLabel(asset.kind)}</Tag>
+                            <Tag className="m-0 text-[11px]" color={assetSourceTone(asset)}>{assetSourceLabel(asset)}</Tag>
+                        </div>
                     </div>
                     <Typography.Paragraph type="secondary" ellipsis={{ rows: 3 }} className="!mb-0 !mt-2 !text-xs !leading-5">{summary}</Typography.Paragraph>
                     <div className="mt-3 flex flex-wrap gap-1.5">{(asset.tags || []).slice(0, 3).map((tag) => <Tag key={tag} className="m-0 text-[11px]">{tag}</Tag>)}{!asset.tags?.length ? <Tag className="m-0 text-[11px]">无标签</Tag> : null}</div>
@@ -412,11 +584,13 @@ function AssetCard({ asset, onOpen, onEdit, onCopy, onDownload, onDelete }: { as
                 <Button size="small" danger icon={<Trash2 className="size-3.5" />} onClick={onDelete}>删除</Button>
             </div>
         </Card>
+        </div>
     );
 }
 
 function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: DisplayAsset | null; onClose: () => void; onCopy: (asset: DisplayAsset) => void; onDownload: (asset: DisplayAsset) => void }) {
     const cover = asset ? asset.coverUrl || (asset.kind === "image" ? asset.data.dataUrl : "") : "";
+    const sourceInfo = asset ? canvasSourceInfo(asset) : null;
     return (
         <Drawer title="素材详情" open={Boolean(asset)} size="large" onClose={onClose}>
             {asset ? (
@@ -430,6 +604,15 @@ function AssetDrawer({ asset, onClose, onCopy, onDownload }: { asset: DisplayAss
                         <Typography.Text type="secondary" className="block text-xs">内容</Typography.Text>
                         {asset.kind === "text" ? <Typography.Paragraph className="mt-2 whitespace-pre-wrap">{asset.data.content}</Typography.Paragraph> : asset.kind === "video" ? <video src={asset.data.url} controls className="mt-2 aspect-video w-full rounded-lg bg-black" /> : asset.kind === "audio" ? <audio src={asset.data.url} controls className="mt-3 w-full" /> : <Typography.Text className="mt-2 block">{asset.data.width}x{asset.data.height} · {formatBytes(asset.data.bytes)} · {asset.data.mimeType}</Typography.Text>}
                     </div>
+                    {sourceInfo ? (
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-100">
+                            <div className="font-medium">来自画布素材</div>
+                            <div className="mt-1 text-xs opacity-80">{sourceInfo.nodeId ? `节点：${sourceInfo.nodeId}` : "已记录画布来源"}</div>
+                            <Button className="mt-3" size="small" icon={<ExternalLink className="size-3.5" />} href={sourceInfo.href}>
+                                回到来源画布
+                            </Button>
+                        </div>
+                    ) : null}
                     {asset.note ? <div><Typography.Text type="secondary">备注</Typography.Text><Typography.Paragraph className="mt-1">{asset.note}</Typography.Paragraph></div> : null}
                     <Space>{asset.kind === "text" ? <Button type="primary" icon={<Copy className="size-4" />} onClick={() => onCopy(asset)}>复制文本</Button> : null}{asset.kind === "image" || asset.kind === "video" || asset.kind === "audio" ? <Button type="primary" icon={<Download className="size-4" />} onClick={() => onDownload(asset)}>{asset.kind === "video" ? "下载视频" : asset.kind === "audio" ? "下载音频" : "下载图片"}</Button> : null}</Space>
                 </div>
@@ -452,7 +635,15 @@ function libraryItemToAsset(item: AssetLibraryItem): DisplayAsset {
         note: item.description,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
-        metadata: { source: "backend-assets", backendId: item.id },
+        metadata: {
+            source: item.sourceType || "backend-assets",
+            backendId: item.id,
+            prompt: item.prompt || item.description,
+            model: item.model,
+            canvasId: item.canvasId,
+            nodeId: item.nodeId,
+            storageKey: item.storageKey,
+        },
     };
     if (kind === "text") return { ...base, kind: "text", data: { content: item.content || item.description || item.title } };
     if (kind === "video") return { ...base, kind: "video", data: { url: item.url, storageKey: undefined, width: 0, height: 0, bytes: 0, mimeType: "video/mp4" } };
@@ -482,4 +673,27 @@ function assetSearchText(asset: DisplayAsset) {
 
 function assetKindLabel(kind: AssetKind) {
     return kind === "image" ? "图片" : kind === "video" ? "视频" : kind === "audio" ? "音频" : "文本";
+}
+
+function assetSourceLabel(asset: DisplayAsset) {
+    const source = String(asset.metadata?.source || asset.source || "").toLowerCase();
+    if (source.includes("canvas") || asset.source === "Canvas" || asset.source === "画布") return "来自画布";
+    if (asset.readonly || source.includes("backend")) return "后端库";
+    return "本地";
+}
+
+function assetSourceTone(asset: DisplayAsset) {
+    const label = assetSourceLabel(asset);
+    if (label === "来自画布") return "blue";
+    if (label === "后端库") return "purple";
+    return "default";
+}
+
+function canvasSourceInfo(asset: DisplayAsset) {
+    const metadata = asset.metadata || {};
+    const canvasId = typeof metadata.canvasId === "string" ? metadata.canvasId : "";
+    const nodeId = typeof metadata.nodeId === "string" ? metadata.nodeId : "";
+    if (!canvasId) return null;
+    const params = nodeId ? `?nodeId=${encodeURIComponent(nodeId)}` : "";
+    return { canvasId, nodeId, href: `/canvas/${encodeURIComponent(canvasId)}${params}` };
 }

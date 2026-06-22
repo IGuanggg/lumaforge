@@ -32,9 +32,10 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.1.14")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260617-v2114-desktop-update-hotfix")
+APP_VERSION = os.getenv("APP_VERSION", "2.1.15")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260617-v2115-desktop-info-hotfix")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
+LUMAFORGE_LEGACY_API_URL = os.getenv("LUMAFORGE_LEGACY_API_URL", "http://127.0.0.1:8090").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
 UPDATE_DOWNLOAD_STALL_SECONDS = max(10.0, float(os.getenv("UPDATE_DOWNLOAD_STALL_SECONDS", "45") or 45))
 UPDATE_DOWNLOAD_CONNECT_TIMEOUT = max(3.0, float(os.getenv("UPDATE_DOWNLOAD_CONNECT_TIMEOUT", "15") or 15))
@@ -1897,7 +1898,8 @@ class CloudEmailVerifyConfirmRequest(BaseModel):
     token: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 class AppOpenPathRequest(BaseModel):
-    target: str = Field(max_length=40)
+    target: str = Field(default="", max_length=40)
+    path: str = Field(default="", max_length=1000)
 
 class AppPathSelectRequest(BaseModel):
     target: str = Field(max_length=40)
@@ -4544,7 +4546,17 @@ async def app_cleanup_run(payload: AppCleanupRequest):
 async def app_open_path(payload: AppOpenPathRequest):
     paths = app_paths_payload()
     target = (payload.target or "").strip()
-    path = paths.get(target)
+    raw_path = (payload.path or "").strip()
+    path = ""
+    if raw_path:
+        candidate = os.path.abspath(os.path.expanduser(raw_path))
+        if os.path.isfile(candidate):
+            candidate = os.path.dirname(candidate)
+        if not os.path.isdir(candidate):
+            raise HTTPException(status_code=400, detail="目录不存在")
+        path = candidate
+    elif target:
+        path = paths.get(target)
     if not path:
         raise HTTPException(status_code=400, detail="未知目录")
     try:

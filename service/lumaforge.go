@@ -21,8 +21,8 @@ import (
 	"github.com/basketikun/infinite-canvas/model"
 )
 
-const LumaForgeVersion = "2.1.14"
-const LumaForgeBuildID = "20260617-v2114-desktop-update-hotfix"
+const LumaForgeVersion = "2.1.15"
+const LumaForgeBuildID = "20260617-v2115-desktop-info-hotfix"
 const lumaUpdateDownloadStallSeconds = 45
 
 var (
@@ -1516,6 +1516,8 @@ func LumaUpdateState() map[string]any {
 	}
 	if latest := stringFromAny(state["latest_version"]); latest != "" && compareVersion(latest, LumaForgeVersion) <= 0 {
 		state["phase"] = "idle"
+		state["latest_version"] = LumaForgeVersion
+		state["target_version"] = ""
 		state["asset"] = nil
 		state["assets"] = []map[string]any{}
 	}

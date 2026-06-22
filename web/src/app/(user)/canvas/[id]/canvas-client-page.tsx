@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent as ReactChangeEvent, DragEvent as ReactDragEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { BookOpen, Group, Home, ImageIcon, Images, List, Menu, MessageSquare, Music2, Plus, Redo2, Settings2, Trash2, Undo2, Ungroup, Upload, Video } from "lucide-react";
-import { saveAs } from "file-saver";
+import { BookOpen, Group, History, Home, ImageIcon, Images, List, Menu, MessageSquare, Music2, Plus, Redo2, Settings2, Trash2, Undo2, Ungroup, Upload, Video } from "lucide-react";
 
 import { requestEdit, requestGeneration, requestImageQuestion } from "@/services/api/image";
 import { requestAudioGeneration, storeGeneratedAudio } from "@/services/api/audio";
 import { requestVideoGeneration, storeGeneratedVideo } from "@/services/api/video";
 import { uploadAssetDataUrl, uploadAssetFileWithMetadata } from "@/services/api/assets";
+import { openSavedFileLocation, saveFileWithPrompt } from "@/services/api/downloads";
 import { DOCS_URL } from "@/constant/env";
 import { defaultConfig, type AiConfig, useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { imageToDataUrl, resolveImageUrl, uploadImage, type UploadedImage } from "@/services/image-storage";
@@ -17,7 +17,9 @@ import { resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/
 import { nanoid } from "nanoid";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
+import { RuntimeEntryBadge } from "@/components/layout/runtime-entry-badge";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
+import { DownloadHistoryDrawer } from "@/components/download-history-drawer";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { cropDataUrl, splitGridDataUrl } from "../utils/canvas-image-data";
@@ -469,6 +471,7 @@ function InfiniteCanvasPage() {
     const applyingHistoryRef = useRef(false);
     const historyPausedRef = useRef(false);
     const didInitialCenterRef = useRef(false);
+    const focusedSourceNodeRef = useRef("");
     const rafRef = useRef<number | null>(null);
     const toolbarHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const nodeDraggingRef = useRef(false);
@@ -546,6 +549,7 @@ function InfiniteCanvasPage() {
     const [collapsingBatchIds, setCollapsingBatchIds] = useState<Set<string>>(new Set());
     const [openingBatchIds, setOpeningBatchIds] = useState<Set<string>>(new Set());
     const [isNodeDragging, setIsNodeDragging] = useState(false);
+    const [downloadHistoryOpen, setDownloadHistoryOpen] = useState(false);
 
     const nodesRef = useRef(nodes);
     const connectionsRef = useRef(connections);
@@ -643,6 +647,27 @@ function InfiniteCanvasPage() {
         if (!projectLoaded || historyPausedRef.current) return;
         updateProject(projectId, { nodes, connections, chatSessions, activeChatId, backgroundMode, showImageInfo });
     }, [activeChatId, backgroundMode, chatSessions, connections, nodes, projectId, projectLoaded, showImageInfo, updateProject]);
+
+    useEffect(() => {
+        if (!projectLoaded || !nodes.length || typeof window === "undefined") return;
+        const requestedNodeId = new URLSearchParams(window.location.search).get("nodeId")?.trim();
+        if (!requestedNodeId) return;
+        const focusKey = `${projectId}:${requestedNodeId}`;
+        if (focusedSourceNodeRef.current === focusKey) return;
+        const node = nodes.find((item) => item.id === requestedNodeId);
+        if (!node) return;
+
+        focusedSourceNodeRef.current = focusKey;
+        const scale = Math.min(1.2, Math.max(0.72, viewportRef.current.k || 1));
+        setSelectedNodeIds(new Set([node.id]));
+        setToolbarNodeId(node.id);
+        setViewport({
+            x: size.width / 2 - (node.position.x + node.width / 2) * scale,
+            y: size.height / 2 - (node.position.y + node.height / 2) * scale,
+            k: scale,
+        });
+        message.info(`已定位来源节点：${node.title || "未命名节点"}`);
+    }, [message, nodes, projectId, projectLoaded, size.height, size.width]);
 
     useEffect(() => {
         if (!dialogNodeId) setNodeImageSettingsOpen(false);
@@ -1876,11 +1901,39 @@ function InfiniteCanvasPage() {
         );
     }, []);
 
-    const downloadNodeImage = useCallback((node: CanvasNodeData) => {
+    const downloadNodeImage = useCallback(async (node: CanvasNodeData) => {
         if ((node.type !== CanvasNodeType.Image && node.type !== CanvasNodeType.Video && node.type !== CanvasNodeType.Audio) || !node.metadata?.content) return;
         const title = safeFileStem(node.title || node.metadata?.prompt || `canvas-${node.type}-${node.id}`);
-        saveAs(node.metadata.content, `${title}.${node.type === CanvasNodeType.Video ? "mp4" : node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`);
-    }, []);
+        const filename = `${title}.${node.type === CanvasNodeType.Video ? "mp4" : node.type === CanvasNodeType.Audio ? audioExtension(node.metadata.mimeType) : imageExtension(node.metadata.content)}`;
+        const result = await saveFileWithPrompt(node.metadata.content, filename);
+        if (result.cancelled) {
+            message.info("已取消保存");
+            return;
+        }
+        if (!result.ok) {
+            message.error(result.message || "下载失败");
+            return;
+        }
+        if (result.fallback) {
+            message.success(result.message || "已交给浏览器下载，文件会进入浏览器默认下载目录");
+            return;
+        }
+        if (result.path) {
+            message.success({
+                content: (
+                    <span className="inline-flex items-center gap-2">
+                        <span>{`已保存到：${result.path}`}</span>
+                        <button type="button" className="text-[#2f80ff] underline-offset-2 hover:underline" onClick={() => void openSavedFileLocation(result.path!)}>
+                            打开所在文件夹
+                        </button>
+                    </span>
+                ),
+                duration: 8,
+            });
+            return;
+        }
+        message.success("保存完成");
+    }, [message]);
 
     const saveNodeAsset = useCallback(
         async (node: CanvasNodeData, grid: { columns: number; rows: number; columnStops?: number[]; rowStops?: number[] } = { columns: 3, rows: 3 }) => {
@@ -1888,20 +1941,20 @@ function InfiniteCanvasPage() {
             if (node.type === CanvasNodeType.Text) {
                 const content = node.metadata?.content?.trim();
                 if (!content) return message.error("没有可保存的文本");
-                addAsset({ kind: "text", title: assetTitle, coverUrl: "", tags: [], source: "Canvas", data: { content }, metadata: { source: "canvas", nodeId: node.id } });
+                addAsset({ kind: "text", title: assetTitle, coverUrl: "", tags: [], source: "Canvas", data: { content }, metadata: { source: "canvas", canvasId: projectId, nodeId: node.id } });
                 message.success("已加入我的素材");
                 return;
             }
             if (node.type === CanvasNodeType.Video) {
                 if (!node.metadata?.content) return message.error("没有可保存的视频");
-                addAsset({ kind: "video", title: assetTitle, coverUrl: "", tags: [], source: "Canvas", data: { url: node.metadata.content, storageKey: node.metadata.storageKey, width: node.width, height: node.height, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "video/mp4" }, metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt } });
+                addAsset({ kind: "video", title: assetTitle, coverUrl: "", tags: [], source: "Canvas", data: { url: node.metadata.content, storageKey: node.metadata.storageKey, width: node.width, height: node.height, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "video/mp4" }, metadata: { source: "canvas", canvasId: projectId, nodeId: node.id, prompt: node.metadata?.prompt, model: node.metadata?.model } });
                 void syncCanvasGeneratedAssetToBackend({ kind: "video", url: node.metadata.content, title: assetTitle, prompt: node.metadata?.prompt || "", canvasId: projectId, nodeId: node.id, model: node.metadata?.model, storageKey: node.metadata.storageKey, mimeType: node.metadata.mimeType || "video/mp4" }).catch((error) => console.warn("Canvas asset backend sync failed", error));
                 message.success("已加入我的素材");
                 return;
             }
             if (node.type === CanvasNodeType.Audio) {
                 if (!node.metadata?.content) return message.error("没有可保存的音频");
-                addAsset({ kind: "audio", title: assetTitle, coverUrl: "", tags: [], source: "Canvas", data: { url: node.metadata.content, storageKey: node.metadata.storageKey, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "audio/mpeg", durationMs: node.metadata.durationMs }, metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt } });
+                addAsset({ kind: "audio", title: assetTitle, coverUrl: "", tags: [], source: "Canvas", data: { url: node.metadata.content, storageKey: node.metadata.storageKey, bytes: node.metadata.bytes || 0, mimeType: node.metadata.mimeType || "audio/mpeg", durationMs: node.metadata.durationMs }, metadata: { source: "canvas", canvasId: projectId, nodeId: node.id, prompt: node.metadata?.prompt, model: node.metadata?.model } });
                 void syncCanvasGeneratedAssetToBackend({ kind: "audio", url: node.metadata.content, title: assetTitle, prompt: node.metadata?.prompt || "", canvasId: projectId, nodeId: node.id, model: node.metadata?.model, storageKey: node.metadata.storageKey, mimeType: node.metadata.mimeType || "audio/mpeg" }).catch((error) => console.warn("Canvas asset backend sync failed", error));
                 message.success("已加入我的素材");
                 return;
@@ -1922,7 +1975,7 @@ function InfiniteCanvasPage() {
                     bytes: node.metadata.bytes || getDataUrlByteSize(dataUrl),
                     mimeType: node.metadata.mimeType || "image/png",
                 },
-                metadata: { source: "canvas", nodeId: node.id, prompt: node.metadata?.prompt },
+                metadata: { source: "canvas", canvasId: projectId, nodeId: node.id, prompt: node.metadata?.prompt, model: node.metadata?.model },
             });
             try {
                 await uploadAssetDataUrl(dataUrl, `${safeFileStem(assetTitle)}.${imageExtension(dataUrl)}`, {
@@ -1934,10 +1987,10 @@ function InfiniteCanvasPage() {
                     storageKey: node.metadata.storageKey,
                     tags: ["canvas"],
                 });
-                message.success("已加入我的素材和旧素材库");
+                message.success("已加入我的素材和后端素材库");
             } catch (error) {
                 console.warn("Asset library sync failed", error);
-                message.warning("已加入本地素材，旧素材库同步失败");
+                message.warning("已加入本地素材，后端素材库同步失败");
             }
         },
         [addAsset, localAssets, message, projectId],
@@ -2981,6 +3034,8 @@ function InfiniteCanvasPage() {
         }));
     }, [missingReferenceSummary.missing, size.height, size.width]);
 
+    const contextMenuNode = contextMenu?.type === "node" ? nodes.find((node) => node.id === contextMenu.nodeId) || null : null;
+
     if (!projectLoaded) return <CanvasRefreshShell />;
 
     return (
@@ -3008,6 +3063,7 @@ function InfiniteCanvasPage() {
                         setAssistantMounted(true);
                         setAssistantCollapsed(false);
                     }}
+                    onOpenDownloadHistory={() => setDownloadHistoryOpen(true)}
                 />
 
                 {selectedNodeIds.size > 1 ? (
@@ -3324,10 +3380,23 @@ function InfiniteCanvasPage() {
                         menu={contextMenu}
                         canGroup={contextMenu.type === "node" && selectedNodeIds.size > 1 && selectedNodeIds.has(contextMenu.nodeId)}
                         canUngroup={contextMenu.type === "node" && getLayerGroupIds(nodes.find((node) => node.id === contextMenu.nodeId) || ({ id: contextMenu.nodeId, type: CanvasNodeType.Image, title: "", position: { x: 0, y: 0 }, width: 0, height: 0 } as CanvasNodeData), nodes).size > 1}
+                        canDownload={Boolean(contextMenuNode && isDownloadableNode(contextMenuNode))}
+                        canSaveAsset={Boolean(contextMenuNode && isAssetSaveableNode(contextMenuNode))}
+                        downloadLabel={contextMenuNode ? nodeDownloadLabel(contextMenuNode) : undefined}
                         onClose={() => setContextMenu(null)}
                         onDuplicate={() => {
                             if (contextMenu.type !== "node") return;
                             duplicateNode(contextMenu.nodeId);
+                            setContextMenu(null);
+                        }}
+                        onDownload={() => {
+                            if (!contextMenuNode) return;
+                            void downloadNodeImage(contextMenuNode);
+                            setContextMenu(null);
+                        }}
+                        onSaveAsset={() => {
+                            if (!contextMenuNode) return;
+                            void saveNodeAsset(contextMenuNode);
                             setContextMenu(null);
                         }}
                         onUngroup={() => {
@@ -3420,8 +3489,8 @@ function InfiniteCanvasPage() {
                     }}
                 />
             </section>
-            {assistantMounted ? (
-                <CanvasAssistantPanel
+                {assistantMounted ? (
+                    <CanvasAssistantPanel
                     nodes={nodes}
                     selectedNodeIds={selectedNodeIds}
                     sessions={chatSessions}
@@ -3434,7 +3503,8 @@ function InfiniteCanvasPage() {
                     onCollapseStart={() => setAssistantCollapsed(true)}
                     onCollapse={() => setAssistantMounted(false)}
                 />
-            ) : null}
+                ) : null}
+                <DownloadHistoryDrawer open={downloadHistoryOpen} onClose={() => setDownloadHistoryOpen(false)} />
         </main>
     );
 }
@@ -3458,6 +3528,7 @@ function CanvasTopBar({
     onRedo,
     assistantCollapsed,
     onExpandAssistant,
+    onOpenDownloadHistory,
 }: {
     title: string;
     titleDraft: string;
@@ -3477,6 +3548,7 @@ function CanvasTopBar({
     onRedo: () => void;
     assistantCollapsed: boolean;
     onExpandAssistant: () => void;
+    onOpenDownloadHistory: () => void;
 }) {
     const colorTheme = useThemeStore((state) => state.theme);
     const theme = canvasThemes[colorTheme];
@@ -3554,10 +3626,20 @@ function CanvasTopBar({
                                 {title}
                             </button>
                         )}
+                        <RuntimeEntryBadge className="hidden sm:inline-flex" style={{ borderColor: theme.toolbar.border, background: `${theme.toolbar.panel}cc`, color: theme.node.text }} />
                     </div>
                 </div>
 
                 <div className="pointer-events-auto flex items-center gap-1.5">
+                    <Button
+                        type="text"
+                        className="!h-10 !rounded-xl !px-3 !font-medium"
+                        style={{ background: theme.toolbar.panel, color: theme.node.text, boxShadow: "0 10px 30px rgba(28,25,23,.10)" }}
+                        icon={<History className="size-4" />}
+                        onClick={onOpenDownloadHistory}
+                    >
+                        下载记录
+                    </Button>
                     <UserStatusActions
                         variant="canvas"
                         accountOpen={accountOpen}
@@ -3590,7 +3672,8 @@ function CanvasTopBar({
                     <Shortcut keys={["左键"]} value="选择节点 / 空白处框选" />
                     <Shortcut keys={["中键拖动"]} value="平移画布" />
                     <Shortcut keys={["空格", "左键拖动"]} value="平移画布" />
-                    <Shortcut keys={["Ctrl / Alt", "滚轮"]} value="缩放画布" />
+                    <Shortcut keys={["Ctrl / Cmd", "滚轮"]} value="缩放画布" />
+                    <Shortcut keys={["Alt", "滚轮"]} value="缩放节点大小" />
                     <Shortcut keys={["普通滚轮"]} value="滚动画布视图" />
                     <Shortcut keys={["Shift / Ctrl / Cmd", "点击"]} value="追加选择节点" />
                     <Shortcut keys={["Ctrl / Cmd", "A"]} value="全选节点" />
@@ -3648,6 +3731,21 @@ function audioExtension(mimeType?: string) {
     if (mimeType?.includes("flac")) return "flac";
     if (mimeType?.includes("pcm")) return "pcm";
     return "mp3";
+}
+
+function isDownloadableNode(node: CanvasNodeData) {
+    return Boolean(node.metadata?.content && (node.type === CanvasNodeType.Image || node.type === CanvasNodeType.Video || node.type === CanvasNodeType.Audio));
+}
+
+function isAssetSaveableNode(node: CanvasNodeData) {
+    if (node.type === CanvasNodeType.Text) return Boolean(node.metadata?.content?.trim());
+    return isDownloadableNode(node);
+}
+
+function nodeDownloadLabel(node: CanvasNodeData) {
+    if (node.type === CanvasNodeType.Video) return "下载视频";
+    if (node.type === CanvasNodeType.Audio) return "下载音频";
+    return "下载图片";
 }
 
 function safeFileStem(value: string) {

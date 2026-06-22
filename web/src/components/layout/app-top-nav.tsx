@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { navigationTools, type NavigationToolSlug } from "@/constant/navigation-tools";
 import { AppConfigModal } from "@/components/layout/app-config-modal";
 import { MobileNavDrawer } from "@/components/layout/mobile-nav-drawer";
+import { RuntimeEntryBadge } from "@/components/layout/runtime-entry-badge";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -77,6 +78,7 @@ export function AppTopNav() {
                         </div>
 
                         <div className="my-auto flex h-9 min-w-0 items-center justify-end gap-2 justify-self-end whitespace-nowrap">
+                            <RuntimeEntryBadge className="hidden border-stone-200 bg-stone-100 text-stone-600 md:inline-flex dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300" />
                             <UserStatusActions />
                         </div>
                     </div>
