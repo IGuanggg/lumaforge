@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { App, Button, Checkbox, Drawer, Empty, Input, Modal, Tag, Typography } from "antd";
 import localforage from "localforage";
 import { nanoid } from "nanoid";
-import { saveAs } from "file-saver";
 
 import { AssetPickerModal, type InsertAssetPayload } from "@/app/(user)/canvas/components/asset-picker-modal";
 import { ModelPicker } from "@/components/model-picker";
@@ -17,6 +16,7 @@ import { boolConfig, isSeedanceVideoConfig, normalizeSeedanceRatio, seedanceRefe
 import { deleteStoredMedia, resolveMediaUrl, uploadMediaFile } from "@/services/file-storage";
 import { resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { requestVideoGeneration, storeGeneratedVideo } from "@/services/api/video";
+import { openSavedFileLocation, saveFileWithPrompt } from "@/services/api/downloads";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useConfigStore, useEffectiveConfig, type AiConfig } from "@/stores/use-config-store";
 import { useThemeStore } from "@/stores/use-theme-store";
@@ -221,8 +221,35 @@ export default function VideoPage() {
         void generate();
     };
 
-    const downloadVideo = (video: GeneratedVideo) => {
-        saveAs(video.url, "video.mp4");
+    const downloadVideo = async (video: GeneratedVideo) => {
+        const result = await saveFileWithPrompt(video.url, "video.mp4");
+        if (result.cancelled) {
+            message.info("已取消保存");
+            return;
+        }
+        if (!result.ok) {
+            message.error(result.message || "下载失败");
+            return;
+        }
+        if (result.fallback) {
+            message.success(result.message || "已交给浏览器下载，文件会进入浏览器默认下载目录");
+            return;
+        }
+        if (result.path) {
+            message.success({
+                content: (
+                    <span className="inline-flex items-center gap-2">
+                        <span>{`已保存到：${result.path}`}</span>
+                        <button type="button" className="text-[#2f80ff] underline-offset-2 hover:underline" onClick={() => void openSavedFileLocation(result.path!)}>
+                            打开所在文件夹
+                        </button>
+                    </span>
+                ),
+                duration: 8,
+            });
+            return;
+        }
+        message.success("保存完成");
     };
 
     const saveResultToAssets = (video: GeneratedVideo) => {

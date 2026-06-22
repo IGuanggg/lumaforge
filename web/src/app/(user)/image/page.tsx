@@ -4,7 +4,6 @@ import { ArrowLeft, ArrowRight, BookOpen, CheckSquare, ClipboardPaste, Download,
 import { useEffect, useRef, useState } from "react";
 import { App, Button, Checkbox, Drawer, Empty, Image, Input, Modal, Tag, Tooltip, Typography } from "antd";
 import localforage from "localforage";
-import { saveAs } from "file-saver";
 
 import { ImageSettingsPanel } from "@/components/image-settings-panel";
 import { ModelPicker } from "@/components/model-picker";
@@ -17,6 +16,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { nanoid } from "nanoid";
 import { formatBytes, formatDuration, getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
 import { requestEdit, requestGeneration } from "@/services/api/image";
+import { openSavedFileLocation, saveFileWithPrompt } from "@/services/api/downloads";
 import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
 import type { ReferenceImage } from "@/types/image";
@@ -194,8 +194,36 @@ export default function ImagePage() {
         }
     };
 
-    const downloadImage = (image: GeneratedImage, index: number) => {
-        saveAs(image.dataUrl, `image-${index + 1}.png`);
+    const downloadImage = async (image: GeneratedImage, index: number) => {
+        const extension = image.mimeType?.includes("jpeg") ? "jpg" : "png";
+        const result = await saveFileWithPrompt(image.dataUrl, `image-${index + 1}.${extension}`);
+        if (result.cancelled) {
+            message.info("已取消保存");
+            return;
+        }
+        if (!result.ok) {
+            message.error(result.message || "下载失败");
+            return;
+        }
+        if (result.fallback) {
+            message.success(result.message || "已交给浏览器下载，文件会进入浏览器默认下载目录");
+            return;
+        }
+        if (result.path) {
+            message.success({
+                content: (
+                    <span className="inline-flex items-center gap-2">
+                        <span>{`已保存到：${result.path}`}</span>
+                        <button type="button" className="text-[#2f80ff] underline-offset-2 hover:underline" onClick={() => void openSavedFileLocation(result.path!)}>
+                            打开所在文件夹
+                        </button>
+                    </span>
+                ),
+                duration: 8,
+            });
+            return;
+        }
+        message.success("保存完成");
     };
 
     const addResultToReferences = async (image: GeneratedImage, index: number) => {
