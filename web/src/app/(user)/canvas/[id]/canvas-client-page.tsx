@@ -538,7 +538,6 @@ function InfiniteCanvasPage() {
     const [maskEditNodeId, setMaskEditNodeId] = useState<string | null>(null);
     const [gridSplitNodeId, setGridSplitNodeId] = useState<string | null>(null);
     const [upscaleNodeId, setUpscaleNodeId] = useState<string | null>(null);
-    const [superResolveNodeId, setSuperResolveNodeId] = useState<string | null>(null);
     const [angleNodeId, setAngleNodeId] = useState<string | null>(null);
     const [previewNodeId, setPreviewNodeId] = useState<string | null>(null);
     const [assistantCollapsed, setAssistantCollapsed] = useState(true);
@@ -891,7 +890,6 @@ function InfiniteCanvasPage() {
     const maskEditNode = maskEditNodeId ? nodeById.get(maskEditNodeId) || null : null;
     const gridSplitNode = gridSplitNodeId ? nodeById.get(gridSplitNodeId) || null : null;
     const upscaleNode = upscaleNodeId ? nodeById.get(upscaleNodeId) || null : null;
-    const superResolveNode = superResolveNodeId ? nodeById.get(superResolveNodeId) || null : null;
     const angleNode = angleNodeId ? nodeById.get(angleNodeId) || null : null;
     const previewNode = previewNodeId ? nodeById.get(previewNodeId) || null : null;
     const hasMultipleSelectedNodes = selectedNodeIds.size > 1;
@@ -3328,7 +3326,6 @@ function InfiniteCanvasPage() {
                     onCrop={(node) => setCropNodeId(node.id)}
                     onSplitGrid={(node) => setGridSplitNodeId(node.id)}
                     onUpscale={(node) => setUpscaleNodeId(node.id)}
-                    onSuperResolve={(node) => setSuperResolveNodeId(node.id)}
                     onAngle={(node) => setAngleNodeId(node.id)}
                     onViewImage={(node) => setPreviewNodeId(node.id)}
                     onReversePrompt={createImageReversePromptNodes}
@@ -3437,10 +3434,6 @@ function InfiniteCanvasPage() {
                 ) : null}
 
                 {upscaleNode?.metadata?.content ? <CanvasNodeUpscaleDialog dataUrl={upscaleNode.metadata.content} open={Boolean(upscaleNode)} onClose={() => setUpscaleNodeId(null)} onConfirm={(params) => void upscaleImageNode(upscaleNode!, params)} /> : null}
-
-                <Modal title="AI 超分" open={Boolean(superResolveNode?.metadata?.content)} centered footer={null} onCancel={() => setSuperResolveNodeId(null)}>
-                    <div className="py-8 text-center text-base font-medium">暂未实现</div>
-                </Modal>
 
                 {angleNode?.metadata?.content ? <CanvasNodeAngleDialog dataUrl={angleNode.metadata.content} open={Boolean(angleNode)} onClose={() => setAngleNodeId(null)} onConfirm={(params) => void generateAngleNode(angleNode!, params)} /> : null}
 
