@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Drawer, Empty, Tag, Typography } from "antd";
+import { Button, Empty, Modal, Tag, Typography } from "antd";
 import { FolderOpen } from "lucide-react";
 
 import { clearDownloadHistory, DOWNLOAD_HISTORY_EVENT, getDownloadHistory, openSavedFileLocation, type DownloadHistoryItem } from "@/services/api/downloads";
@@ -22,13 +22,17 @@ export function DownloadHistoryDrawer({ open, onClose }: DownloadHistoryDrawerPr
     }, []);
 
     return (
-        <Drawer
+        <Modal
             title="最近下载"
             open={open}
-            size={520}
-            onClose={onClose}
-            extra={
-                items.length ? (
+            centered
+            width={560}
+            footer={null}
+            onCancel={onClose}
+            styles={{ body: { maxHeight: "70vh", overflowY: "auto" } }}
+        >
+            <div className="mb-3 flex items-center justify-end gap-2">
+                {items.length ? (
                     <Button
                         size="small"
                         danger
@@ -39,9 +43,11 @@ export function DownloadHistoryDrawer({ open, onClose }: DownloadHistoryDrawerPr
                     >
                         清空
                     </Button>
-                ) : null
-            }
-        >
+                ) : null}
+                <Button size="small" aria-label="关闭下载记录" onClick={onClose}>
+                    关闭
+                </Button>
+            </div>
             {items.length ? (
                 <div className="space-y-3">
                     {items.map((item) => (
@@ -71,7 +77,7 @@ export function DownloadHistoryDrawer({ open, onClose }: DownloadHistoryDrawerPr
             ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无下载记录" />
             )}
-        </Drawer>
+        </Modal>
     );
 }
 

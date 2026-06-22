@@ -284,6 +284,8 @@ export const useConfigStore = create<ConfigStore>()(
                         publicSettings,
                         config: reconcileConfigWithPublicSettings(state.config, publicSettings),
                     }));
+                } catch (error) {
+                    console.warn("Public settings unavailable, using local defaults.", error);
                 } finally {
                     set({ isPublicSettingsLoading: false });
                 }
