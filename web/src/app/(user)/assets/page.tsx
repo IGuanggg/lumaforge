@@ -8,6 +8,7 @@ import { App, Button, Card, Drawer, Empty, Form, Image, Input, Modal, Pagination
 import { useCopyText } from "@/hooks/use-copy-text";
 import { formatBytes, readFileAsDataUrl } from "@/lib/image-utils";
 import { uploadImage } from "@/services/image-storage";
+import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
 import { fetchCloudMediaStatus, restoreCloudMedia, syncCloudMedia, type CloudMediaStatus } from "@/services/api/cloud";
 import { openSavedFileLocation, saveFileWithPrompt } from "@/services/api/downloads";
@@ -27,6 +28,7 @@ type AssetFormValues = {
 };
 
 type ImageDraft = ImageAsset["data"] | null;
+type MediaDraft = (Omit<UploadedFile, "storageKey"> & { storageKey?: string }) | null;
 type DisplayAsset = Asset & { readonly?: boolean; backendId?: string };
 type AssetContextMenuState = {
     asset: DisplayAsset;
@@ -48,6 +50,7 @@ export default function AssetsPage() {
     const [form] = Form.useForm<AssetFormValues>();
     const coverInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
+    const mediaInputRef = useRef<HTMLInputElement>(null);
     const assetInputRef = useRef<HTMLInputElement>(null);
     const assets = useAssetStore((state) => state.assets);
     const addAsset = useAssetStore((state) => state.addAsset);
@@ -70,6 +73,7 @@ export default function AssetsPage() {
     const [downloadHistoryOpen, setDownloadHistoryOpen] = useState(false);
     const [formKind, setFormKind] = useState<AssetKind>("text");
     const [imageDraft, setImageDraft] = useState<ImageDraft>(null);
+    const [mediaDraft, setMediaDraft] = useState<MediaDraft>(null);
     const coverUrl = Form.useWatch("coverUrl", form) || "";
     const title = Form.useWatch("title", form) || "";
     const tags = Form.useWatch("tags", form) || [];
@@ -147,6 +151,7 @@ export default function AssetsPage() {
     const openCreate = () => {
         setEditingAsset(null);
         setImageDraft(null);
+        setMediaDraft(null);
         setFormKind("text");
         form.setFieldsValue({ kind: "text", title: "", coverUrl: "", tags: [], source: "手动添加", note: "", content: "" });
         setIsAssetOpen(true);
@@ -157,6 +162,7 @@ export default function AssetsPage() {
         setEditingAsset(asset);
         setFormKind(asset.kind);
         setImageDraft(asset.kind === "image" ? asset.data : null);
+        setMediaDraft(asset.kind === "video" || asset.kind === "audio" ? { ...asset.data } : null);
         form.setFieldsValue({
             kind: asset.kind,
             title: asset.title,
@@ -183,12 +189,22 @@ export default function AssetsPage() {
         if (values.kind === "text") {
             const asset = { ...base, kind: "text" as const, data: { content: (values.content || "").trim() } };
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
-        } else {
+        } else if (values.kind === "image") {
             if (!imageDraft) {
                 message.error("请选择图片文件");
                 return;
             }
             const asset = { ...base, kind: "image" as const, data: imageDraft };
+            editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
+        } else {
+            if (!mediaDraft) {
+                message.error(values.kind === "video" ? "请选择视频文件" : "请选择音频文件");
+                return;
+            }
+            const asset =
+                values.kind === "video"
+                    ? { ...base, kind: "video" as const, data: { url: mediaDraft.url, storageKey: mediaDraft.storageKey, width: mediaDraft.width || 0, height: mediaDraft.height || 0, bytes: mediaDraft.bytes, mimeType: mediaDraft.mimeType } }
+                    : { ...base, kind: "audio" as const, data: { url: mediaDraft.url, storageKey: mediaDraft.storageKey, bytes: mediaDraft.bytes, mimeType: mediaDraft.mimeType, durationMs: mediaDraft.durationMs } };
             editingAsset ? updateAsset(editingAsset.id, asset) : addAsset(asset);
         }
 
@@ -208,6 +224,17 @@ export default function AssetsPage() {
         const draft = { dataUrl: image.url, storageKey: image.storageKey, width: image.width, height: image.height, bytes: image.bytes, mimeType: image.mimeType };
         setImageDraft(draft);
         if (!form.getFieldValue("coverUrl")) form.setFieldValue("coverUrl", draft.dataUrl);
+        if (!form.getFieldValue("title")) form.setFieldValue("title", file.name);
+    };
+
+    const readMediaFile = async (file?: File) => {
+        if (!file || (formKind !== "video" && formKind !== "audio")) return;
+        if (!file.type.startsWith(`${formKind}/`)) {
+            message.error(formKind === "video" ? "请选择视频文件" : "请选择音频文件");
+            return;
+        }
+        const draft = await uploadMediaFile(file, formKind);
+        setMediaDraft(draft);
         if (!form.getFieldValue("title")) form.setFieldValue("title", file.name);
     };
 
@@ -450,7 +477,19 @@ export default function AssetsPage() {
                 <div className="grid gap-6 pt-1 lg:grid-cols-[minmax(0,1fr)_320px]">
                     <Form form={form} layout="vertical" requiredMark={false} initialValues={{ kind: "text", tags: [] }}>
                         <Form.Item name="kind" label="类型">
-                            <Select options={[{ label: "文本", value: "text" }, { label: "图片", value: "image" }]} onChange={(value) => setFormKind(value)} />
+                            <Select
+                                options={[
+                                    { label: "文本", value: "text" },
+                                    { label: "图片", value: "image" },
+                                    { label: "视频", value: "video" },
+                                    { label: "音频", value: "audio" },
+                                ]}
+                                onChange={(value) => {
+                                    setFormKind(value);
+                                    setImageDraft(null);
+                                    setMediaDraft(null);
+                                }}
+                            />
                         </Form.Item>
                         <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
                             <Input size="large" placeholder="给素材起一个容易搜索的名字" />
@@ -472,7 +511,7 @@ export default function AssetsPage() {
                             <Form.Item name="content" label="文本内容" rules={[{ required: true, message: "请输入文本内容" }]}>
                                 <Input.TextArea rows={8} placeholder="保存提示词、说明文案、参考描述等文本素材" />
                             </Form.Item>
-                        ) : (
+                        ) : formKind === "image" ? (
                             <Form.Item label="图片内容" required>
                                 <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
                                     <Button icon={<Upload className="size-4" />} onClick={() => imageInputRef.current?.click()}>选择图片文件</Button>
@@ -481,12 +520,34 @@ export default function AssetsPage() {
                                     </Typography.Text>
                                 </div>
                             </Form.Item>
+                        ) : (
+                            <Form.Item label={formKind === "video" ? "视频内容" : "音频内容"} required>
+                                <div className="rounded-lg border border-dashed border-stone-300 p-4 dark:border-stone-700">
+                                    <Button icon={<Upload className="size-4" />} onClick={() => mediaInputRef.current?.click()}>
+                                        {formKind === "video" ? "选择视频文件" : "选择音频文件"}
+                                    </Button>
+                                    <Typography.Text type="secondary" className="ml-3 text-xs">
+                                        {mediaDraft ? `${formatBytes(mediaDraft.bytes)}${mediaDraft.durationMs ? ` · ${Math.round(mediaDraft.durationMs / 1000)} 秒` : ""}` : formKind === "video" ? "未选择视频" : "未选择音频"}
+                                    </Typography.Text>
+                                </div>
+                            </Form.Item>
                         )}
                     </Form>
                     <div className="rounded-xl border border-stone-200 bg-stone-50 p-4 dark:border-stone-800 dark:bg-stone-950">
                         <Typography.Text strong>预览</Typography.Text>
                         <div className="mt-3 overflow-hidden rounded-lg border border-stone-200 bg-background dark:border-stone-800">
-                            {coverUrl || imageDraft?.dataUrl ? <img src={coverUrl || imageDraft?.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" /> : <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || "暂无封面"}</div>}
+                            {formKind === "video" && mediaDraft?.url ? (
+                                <video src={mediaDraft.url} controls className="aspect-video w-full bg-black object-contain" />
+                            ) : formKind === "audio" && mediaDraft?.url ? (
+                                <div className="flex aspect-[4/3] flex-col items-center justify-center gap-4 bg-stone-100 p-5 dark:bg-stone-900">
+                                    <span className="text-sm text-stone-500">音频素材</span>
+                                    <audio src={mediaDraft.url} controls className="w-full" />
+                                </div>
+                            ) : coverUrl || imageDraft?.dataUrl ? (
+                                <img src={coverUrl || imageDraft?.dataUrl} alt="" className="aspect-[4/3] w-full object-cover" />
+                            ) : (
+                                <div className="flex aspect-[4/3] items-center justify-center bg-stone-100 p-5 text-center text-sm text-stone-500 dark:bg-stone-900">{content || "暂无封面"}</div>
+                            )}
                             <div className="p-4">
                                 <Typography.Text strong ellipsis className="block">{title || "未命名素材"}</Typography.Text>
                                 <div className="mt-2 flex flex-wrap gap-1.5">{tags.length ? tags.map((tag) => <Tag key={tag} className="m-0">{tag}</Tag>) : <Tag className="m-0">未打标签</Tag>}</div>
@@ -496,6 +557,7 @@ export default function AssetsPage() {
                 </div>
                 <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { void readCoverFile(event.target.files?.[0]); event.target.value = ""; }} />
                 <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { void readImageFile(event.target.files?.[0]); event.target.value = ""; }} />
+                <input ref={mediaInputRef} type="file" accept={formKind === "video" ? "video/*" : "audio/*"} className="hidden" onChange={(event) => { void readMediaFile(event.target.files?.[0]); event.target.value = ""; }} />
             </Modal>
 
             <AssetDrawer asset={previewAsset} onClose={() => setPreviewAsset(null)} onCopy={copyAssetText} onDownload={downloadAsset} />
