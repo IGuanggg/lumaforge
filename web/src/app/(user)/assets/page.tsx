@@ -56,6 +56,7 @@ export default function AssetsPage() {
     const [backendAssets, setBackendAssets] = useState<DisplayAsset[]>([]);
     const [mediaStatus, setMediaStatus] = useState<CloudMediaStatus | null>(null);
     const [loadingRemote, setLoadingRemote] = useState(false);
+    const [remoteLoadError, setRemoteLoadError] = useState("");
     const [syncing, setSyncing] = useState("");
     const [keyword, setKeyword] = useState("");
     const [kindFilter, setKindFilter] = useState<AssetKind | "all">("all");
@@ -97,6 +98,11 @@ export default function AssetsPage() {
             const [library, status] = await Promise.all([fetchAssetLibrary({ page: 1, pageSize: 500 }), fetchCloudMediaStatus().catch(() => null)]);
             setBackendAssets(library.items.map(libraryItemToAsset));
             if (status) setMediaStatus(status);
+            setRemoteLoadError("");
+        } catch (error) {
+            setBackendAssets([]);
+            setRemoteLoadError(error instanceof Error ? error.message : "后端素材库暂不可用");
+            console.warn("Asset library unavailable, showing local assets only.", error);
         } finally {
             setLoadingRemote(false);
         }
@@ -393,7 +399,19 @@ export default function AssetsPage() {
                         ))}
                     </section>
 
-                    {!visibleAssets.length ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有找到素材" className="py-20" /> : null}
+                    {!visibleAssets.length ? (
+                        <AssetsEmptyState
+                            hasFilters={Boolean(keyword.trim()) || kindFilter !== "all"}
+                            remoteLoadError={remoteLoadError}
+                            onCreate={openCreate}
+                            onImport={() => assetInputRef.current?.click()}
+                            onClearFilters={() => {
+                                setKeyword("");
+                                setKindFilter("all");
+                                setPage(1);
+                            }}
+                        />
+                    ) : null}
 
                     <div className="flex justify-center">
                         <Pagination
@@ -491,6 +509,30 @@ export default function AssetsPage() {
 
 function SummaryCard({ label, value }: { label: string; value: string | number }) {
     return <div className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900"><div className="text-xs text-stone-500 dark:text-stone-400">{label}</div><div className="mt-2 text-2xl font-semibold text-stone-950 dark:text-stone-100">{value}</div></div>;
+}
+
+function AssetsEmptyState({ hasFilters, remoteLoadError, onCreate, onImport, onClearFilters }: { hasFilters: boolean; remoteLoadError: string; onCreate: () => void; onImport: () => void; onClearFilters: () => void }) {
+    const title = hasFilters ? "没有匹配的素材" : "暂无素材";
+    const description = remoteLoadError
+        ? "后端素材库暂时不可用，当前只显示本地素材。可以先新增或导入本地素材。"
+        : hasFilters
+          ? "当前筛选条件下没有结果，可以清空筛选后再看。"
+          : "新增、导入或从画布保存素材后，这里会统一管理图片、视频、音频和文本。";
+
+    return (
+        <section className="rounded-xl border border-dashed border-stone-200 bg-white px-6 py-14 text-center dark:border-stone-800 dark:bg-stone-900">
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="font-medium text-stone-700 dark:text-stone-200">{title}</span>} />
+            <p className="mx-auto -mt-4 max-w-lg text-sm leading-6 text-stone-500 dark:text-stone-400">{description}</p>
+            {remoteLoadError ? <p className="mx-auto mt-2 max-w-lg text-xs leading-5 text-amber-600 dark:text-amber-300">{remoteLoadError}</p> : null}
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+                {hasFilters ? <Button onClick={onClearFilters}>清空筛选</Button> : null}
+                <Button type="primary" onClick={onCreate}>
+                    新增素材
+                </Button>
+                <Button onClick={onImport}>导入素材</Button>
+            </div>
+        </section>
+    );
 }
 
 function AssetContextMenu({
