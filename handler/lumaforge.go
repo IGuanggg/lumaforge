@@ -560,7 +560,7 @@ func LumaUpdatePreflight(w http.ResponseWriter, r *http.Request) {
 	if proxyLegacy(w, r) {
 		return
 	}
-	writeRawJSON(w, map[string]any{"ok": true, "checks": []map[string]any{{"id": "go_next", "label": "Go + Next 主体", "ok": true, "detail": "2.1.0 runtime"}}})
+	writeRawJSON(w, service.LumaUpdatePreflight())
 }
 
 func LumaUpdateDownload(w http.ResponseWriter, r *http.Request) {
@@ -585,26 +585,49 @@ func LumaUpdateAuto(w http.ResponseWriter, r *http.Request) {
 	}
 	check := service.LumaUpdateCheck()
 	capability := service.LumaUpdateCapability()
+	currentState := service.LumaUpdateState()
+	if check["configured"] == false {
+		message := firstNonEmpty(firstMapString(check, "message"), "Update source is not configured.")
+		writeRawJSON(w, map[string]any{
+			"ok":         false,
+			"updated":    false,
+			"message":    message,
+			"detail":     message,
+			"check":      check,
+			"state":      currentState,
+			"capability": capability,
+		})
+		return
+	}
+	if check["is_newer"] == false {
+		message := "Current version is already up to date."
+		writeRawJSON(w, map[string]any{
+			"ok":               true,
+			"updated":          false,
+			"restart_required": false,
+			"current_version":  check["current_version"],
+			"latest_version":   check["latest_version"],
+			"message":          message,
+			"check":            check,
+			"state":            currentState,
+			"capability":       capability,
+		})
+		return
+	}
 	reason := firstNonEmpty(
 		firstMapString(capability, "reason"),
 		"当前环境没有连接桌面更新器，暂时不能自动升级。请使用桌面版启动后再试，或手动下载安装包。",
 	)
-	state := service.LumaSaveUpdateState(map[string]any{
-		"phase":          "failed",
-		"error":          reason,
-		"latest_version": check["latest_version"],
-		"asset":          check["selected_asset"],
-		"assets":         check["assets"],
-	})
 	writeRawJSON(w, map[string]any{
 		"ok":         false,
 		"updated":    false,
 		"message":    reason,
 		"detail":     reason,
 		"check":      check,
-		"state":      state,
+		"state":      currentState,
 		"capability": capability,
 	})
+	return
 }
 
 func LumaUpdateCleanup(w http.ResponseWriter, r *http.Request) {

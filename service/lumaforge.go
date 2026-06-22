@@ -1386,6 +1386,101 @@ func LumaUpdateCapability() map[string]any {
 	}
 }
 
+func lumaProbeWritableDir(path string, create bool) map[string]any {
+	if create {
+		if err := os.MkdirAll(path, 0755); err != nil {
+			return map[string]any{"ok": false, "path": path, "detail": err.Error()}
+		}
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return map[string]any{"ok": false, "path": path, "detail": err.Error()}
+	}
+	if !info.IsDir() {
+		return map[string]any{"ok": false, "path": path, "detail": "not a directory"}
+	}
+	probe := filepath.Join(path, ".lumaforge-write-test-"+strconv.FormatInt(time.Now().UnixNano(), 36)+".tmp")
+	if err := os.WriteFile(probe, []byte("ok"), 0644); err != nil {
+		return map[string]any{"ok": false, "path": path, "detail": err.Error()}
+	}
+	_ = os.Remove(probe)
+	return map[string]any{"ok": true, "path": path, "detail": "writable"}
+}
+
+func LumaUpdatePreflight() map[string]any {
+	capability := LumaUpdateCapability()
+	mode := stringFromAny(capability["mode"])
+	appDir, _ := os.Getwd()
+	checks := []map[string]any{}
+	add := func(id string, label string, ok bool, detail string, blocking bool) {
+		checks = append(checks, map[string]any{
+			"id":       id,
+			"label":    label,
+			"ok":       ok,
+			"detail":   detail,
+			"blocking": blocking,
+		})
+	}
+	add("version", "Current version", strings.TrimSpace(LumaForgeVersion) != "", LumaForgeVersion+" / "+LumaForgeBuildID, true)
+	add("update_source", "Update source", strings.TrimSpace(config.Cfg.UpdateCheckURL) != "", firstNonEmptyString(strings.TrimSpace(config.Cfg.UpdateCheckURL), "not configured"), true)
+	add("source_mode", "Source mode", mode != "source-mode", firstNonEmptyString(stringFromAny(capability["reason"]), mode), false)
+	add("auto_update", "Auto update capability", boolFromAny(capability["supported"]), firstNonEmptyString(stringFromAny(capability["legacy_api_url"]), stringFromAny(capability["reason"]), mode), mode != "source-mode")
+	add("desktop_updater", "Desktop updater", boolFromAny(capability["supported"]), firstNonEmptyString(stringFromAny(capability["updater_path"]), stringFromAny(capability["legacy_api_url"]), "not connected"), mode != "source-mode")
+
+	paths := map[string]string{
+		"downloads_dir": filepath.Join(lumaPath("updates"), "downloads"),
+		"staging_dir":   filepath.Join(lumaPath("updates"), "staging"),
+		"backups_dir":   filepath.Join(lumaPath("updates"), "backups"),
+		"data_dir":      LumaDataDir(),
+		"assets_dir":    LumaAssetsDir(),
+	}
+	labels := map[string]string{
+		"downloads_dir": "Downloads directory",
+		"staging_dir":   "Staging directory",
+		"backups_dir":   "Backups directory",
+		"data_dir":      "Data directory",
+		"assets_dir":    "Assets directory",
+	}
+	for _, id := range []string{"downloads_dir", "staging_dir", "backups_dir", "data_dir", "assets_dir"} {
+		probe := lumaProbeWritableDir(paths[id], true)
+		add(id, labels[id], boolFromAny(probe["ok"]), stringFromAny(probe["path"])+" - "+stringFromAny(probe["detail"]), true)
+	}
+	blocking := []map[string]any{}
+	warnings := []map[string]any{}
+	for _, check := range checks {
+		if boolFromAny(check["ok"]) {
+			continue
+		}
+		if boolFromAny(check["blocking"]) {
+			blocking = append(blocking, check)
+		} else {
+			warnings = append(warnings, check)
+		}
+	}
+	return map[string]any{
+		"ok":                len(blocking) == 0,
+		"blocking_count":    len(blocking),
+		"warning_count":     len(warnings),
+		"current_version":   LumaForgeVersion,
+		"build_id":          LumaForgeBuildID,
+		"mode":              mode,
+		"source_mode":       mode == "source-mode",
+		"app_dir":           appDir,
+		"runtime_dir":       filepath.Dir(LumaDataDir()),
+		"data_dir":          LumaDataDir(),
+		"assets_dir":        LumaAssetsDir(),
+		"downloads_dir":     paths["downloads_dir"],
+		"staging_dir":       paths["staging_dir"],
+		"backups_dir":       paths["backups_dir"],
+		"update_capability": capability,
+		"update_check_url":  strings.TrimSpace(config.Cfg.UpdateCheckURL),
+		"update_configured": strings.TrimSpace(config.Cfg.UpdateCheckURL) != "",
+		"checks":            checks,
+		"blocking":          blocking,
+		"warnings":          warnings,
+	}
+}
+
 func LumaAppPaths() map[string]string {
 	settings := lumaLoadAppPathSettings()
 	defaults := lumaDefaultAppPaths()
@@ -1639,6 +1734,29 @@ func LumaUpdateCheck() map[string]any {
 	if checkURL == "" {
 		updateCapability := LumaUpdateCapability()
 		autoUpdateReason := stringFromAny(updateCapability["reason"])
+		LumaSaveUpdateState(map[string]any{
+			"phase":            "idle",
+			"current_version":  LumaForgeVersion,
+			"latest_version":   "",
+			"target_version":   "",
+			"version":          "",
+			"asset":            nil,
+			"assets":           []map[string]any{},
+			"selected_asset":   nil,
+			"download":         nil,
+			"filename":         "",
+			"path":             "",
+			"temp_path":        "",
+			"package_size":     0,
+			"total_bytes":      0,
+			"downloaded_bytes": 0,
+			"sha256":           "",
+			"sha256_expected":  "",
+			"sha256_verified":  false,
+			"backup_dir":       "",
+			"notes":            "",
+			"error":            nil,
+		})
 		return map[string]any{
 			"configured":            false,
 			"ok":                    false,
@@ -1697,7 +1815,31 @@ func LumaUpdateCheck() map[string]any {
 			stateAssets = []map[string]any{asset}
 		}
 	}
-	LumaSaveUpdateState(map[string]any{"phase": phase, "latest_version": latest, "asset": stateAsset, "assets": stateAssets, "selected_asset": stateAsset})
+	statePatch := map[string]any{
+		"phase":          phase,
+		"latest_version": latest,
+		"asset":          stateAsset,
+		"assets":         stateAssets,
+		"selected_asset": stateAsset,
+		"error":          nil,
+	}
+	if !isNewer {
+		statePatch["target_version"] = ""
+		statePatch["version"] = ""
+		statePatch["download"] = nil
+		statePatch["filename"] = ""
+		statePatch["path"] = ""
+		statePatch["temp_path"] = ""
+		statePatch["package_size"] = 0
+		statePatch["total_bytes"] = 0
+		statePatch["downloaded_bytes"] = 0
+		statePatch["sha256"] = ""
+		statePatch["sha256_expected"] = ""
+		statePatch["sha256_verified"] = false
+		statePatch["backup_dir"] = ""
+		statePatch["notes"] = ""
+	}
+	LumaSaveUpdateState(statePatch)
 	downloadURL := ""
 	if stateAsset != nil {
 		downloadURL = stringFromAny(asset["url"])

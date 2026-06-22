@@ -4641,12 +4641,21 @@ async def app_update_settings(payload: AppUpdateSettingsRequest):
 async def app_update_check():
     save_update_state({"phase": "checking", "current_version": APP_VERSION, "error": None})
     if not APP_UPDATE_CHECK_URL:
-        save_update_state({"phase": "failed", "current_version": APP_VERSION, "error": "未配置更新检查地址"})
+        save_update_state({
+            "phase": "idle",
+            "current_version": APP_VERSION,
+            "latest_version": "",
+            "target_version": "",
+            "selected_asset": None,
+            "error": None,
+        })
         return {
             "configured": False,
             "current_version": APP_VERSION,
-            "message": "未配置更新检查地址。发布到 GitHub 后可通过 APP_UPDATE_CHECK_URL 指向 release/version JSON。",
-    }
+            "latest_version": "",
+            "is_newer": False,
+            "message": "Update source is not configured.",
+        }
     try:
         async with make_async_client(timeout=8) as client:
             data, normalized = await fetch_update_source_payload(client)
@@ -5203,7 +5212,13 @@ async def run_auto_update_background():
     try:
         check = await app_update_check()
         if not check.get("configured"):
-            save_update_state({"phase": "failed", "current_version": APP_VERSION, "error": check.get("message") or "未配置更新检查地址"})
+            save_update_state({
+                "phase": "idle",
+                "current_version": APP_VERSION,
+                "latest_version": "",
+                "target_version": "",
+                "error": None,
+            })
             return
         if not check.get("is_newer"):
             save_update_state({
@@ -5215,10 +5230,12 @@ async def run_auto_update_background():
             return
         if not check.get("auto_update_supported"):
             save_update_state({
-                "phase": "failed",
+                "phase": "found",
                 "current_version": APP_VERSION,
                 "target_version": check.get("latest_version"),
-                "error": check.get("auto_update_reason") or "当前环境不支持自动升级",
+                "latest_version": check.get("latest_version"),
+                "selected_asset": check.get("selected_asset"),
+                "error": None,
             })
             return
         download = await app_update_download()
@@ -5255,7 +5272,14 @@ async def app_update_auto():
         }
     check = await app_update_check()
     if not check.get("configured"):
-        raise HTTPException(status_code=400, detail=check.get("message") or "未配置更新检查地址")
+        return {
+            "ok": False,
+            "updated": False,
+            "restart_required": False,
+            "check": check,
+            "update_state": update_state_payload(),
+            "message": check.get("message") or "Update source is not configured.",
+        }
     if not check.get("is_newer"):
         return {
             "ok": True,
@@ -5263,10 +5287,21 @@ async def app_update_auto():
             "restart_required": False,
             "current_version": check.get("current_version"),
             "latest_version": check.get("latest_version"),
+            "check": check,
+            "update_state": update_state_payload(),
             "message": f"当前已是最新版本 {check.get('current_version')}",
         }
     if not check.get("auto_update_supported"):
-        raise HTTPException(status_code=400, detail=check.get("auto_update_reason") or "当前环境不支持自动升级")
+        return {
+            "ok": False,
+            "updated": False,
+            "restart_required": False,
+            "current_version": check.get("current_version"),
+            "latest_version": check.get("latest_version"),
+            "check": check,
+            "update_state": update_state_payload(),
+            "message": check.get("auto_update_reason") or "Auto update is not available in this runtime.",
+        }
     save_update_state({
         "phase": "queued",
         "current_version": APP_VERSION,

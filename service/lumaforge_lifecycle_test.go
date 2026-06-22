@@ -92,6 +92,7 @@ func TestLumaReleaseHealthMarksSourceUpdateAsWarning(t *testing.T) {
 
 	t.Setenv("LUMAFORGE_DESKTOP", "")
 	t.Setenv("INFINITE_CANVAS_DESKTOP", "")
+	t.Setenv("APP_ASSETS_DIR", t.TempDir())
 	config.Cfg = config.Config{
 		LumaForgeDataDir: t.TempDir(),
 		UpdateCheckURL:   "https://updates.example.com/releases",
@@ -112,6 +113,39 @@ func TestLumaReleaseHealthMarksSourceUpdateAsWarning(t *testing.T) {
 	}
 }
 
+func TestLumaUpdatePreflightExpandsSourceModeChecks(t *testing.T) {
+	previousConfig := config.Cfg
+	t.Cleanup(func() { config.Cfg = previousConfig })
+
+	t.Setenv("LUMAFORGE_DESKTOP", "")
+	t.Setenv("INFINITE_CANVAS_DESKTOP", "")
+	t.Setenv("APP_ASSETS_DIR", t.TempDir())
+	config.Cfg = config.Config{
+		LumaForgeDataDir: t.TempDir(),
+		UpdateCheckURL:   "https://updates.example.com/releases",
+		Port:             "18082",
+	}
+
+	payload := LumaUpdatePreflight()
+	checks, ok := payload["checks"].([]map[string]any)
+	if !ok {
+		t.Fatalf("preflight checks missing: %#v", payload)
+	}
+	if len(checks) < 8 {
+		t.Fatalf("preflight checks = %#v, want expanded update checks", checks)
+	}
+	if payload["ok"] != true {
+		t.Fatalf("source mode should warn but not block when paths/source are valid: %#v", payload)
+	}
+	sourceMode := updatePreflightCheckByID(t, payload, "source_mode")
+	if sourceMode["ok"] != false || sourceMode["blocking"] != false {
+		t.Fatalf("source mode check = %#v, want non-blocking warning", sourceMode)
+	}
+	for _, id := range []string{"version", "update_source", "downloads_dir", "staging_dir", "backups_dir", "data_dir", "assets_dir", "desktop_updater"} {
+		updatePreflightCheckByID(t, payload, id)
+	}
+}
+
 func releaseHealthCheckByID(t *testing.T, health map[string]any, id string) map[string]any {
 	t.Helper()
 
@@ -125,6 +159,22 @@ func releaseHealthCheckByID(t *testing.T, health map[string]any, id string) map[
 		}
 	}
 	t.Fatalf("release health check %q not found in %#v", id, checks)
+	return nil
+}
+
+func updatePreflightCheckByID(t *testing.T, payload map[string]any, id string) map[string]any {
+	t.Helper()
+
+	checks, ok := payload["checks"].([]map[string]any)
+	if !ok {
+		t.Fatalf("preflight checks missing or malformed: %#v", payload["checks"])
+	}
+	for _, check := range checks {
+		if check["id"] == id {
+			return check
+		}
+	}
+	t.Fatalf("preflight check %q not found in %#v", id, checks)
 	return nil
 }
 

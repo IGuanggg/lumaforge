@@ -1909,9 +1909,9 @@
                 }
             }
             renderUpdateState({
-                phase: data.is_newer ? 'found' : 'done',
+                phase: data.is_newer ? 'found' : 'idle',
                 current_version: current,
-                target_version: latest,
+                target_version: data.is_newer ? latest : '',
                 selected_asset: selected,
                 package_size: selectedSize,
                 notes: data.notes || '',

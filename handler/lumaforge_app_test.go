@@ -242,8 +242,8 @@ func TestLumaUpdateFallbackHandlers(t *testing.T) {
 	recorder = httptest.NewRecorder()
 	LumaUpdatePreflight(recorder, httptest.NewRequest(http.MethodPost, "/api/app/update-preflight", nil))
 	payload = decodeHandlerPayload(t, recorder)
-	if payload["ok"] != true || payload["checks"] == nil {
-		t.Fatalf("preflight payload = %#v", payload)
+	if payload["ok"] != false || payload["checks"] == nil || payload["blocking_count"] == float64(0) {
+		t.Fatalf("preflight payload = %#v, want blocking missing update source", payload)
 	}
 
 	recorder = httptest.NewRecorder()
@@ -258,6 +258,10 @@ func TestLumaUpdateFallbackHandlers(t *testing.T) {
 	payload = decodeHandlerPayload(t, recorder)
 	if payload["ok"] != false || payload["state"] == nil || payload["capability"] == nil {
 		t.Fatalf("auto update payload = %#v", payload)
+	}
+	state, ok := payload["state"].(map[string]any)
+	if !ok || state["phase"] == "failed" {
+		t.Fatalf("auto update state = %#v, want non-failed state", payload["state"])
 	}
 
 	updatesDir := filepath.Join(config.Cfg.LumaForgeDataDir, "updates", "downloads")
@@ -302,6 +306,44 @@ func TestLumaUpdateDownloadFallbackWritesFailedState(t *testing.T) {
 	state, ok := payload["state"].(map[string]any)
 	if !ok || state["phase"] != "failed" || strings.TrimSpace(fmt.Sprint(state["error"])) == "" {
 		t.Fatalf("state = %#v, want failed state with error", payload["state"])
+	}
+}
+
+func TestLumaUpdateAutoSourceModeDoesNotWriteFailedState(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{
+				"tag_name":   "v2.1.16",
+				"draft":      false,
+				"prerelease": false,
+				"assets": []map[string]any{
+					{"name": "LumaForge-2.1.16-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	withTempHandlerLumaConfig(t, func(cfg *config.Config) {
+		cfg.LumaForgeLegacyAPI = ""
+		cfg.UpdateCheckURL = server.URL
+	})
+
+	recorder := httptest.NewRecorder()
+	LumaUpdateAuto(recorder, httptest.NewRequest(http.MethodPost, "/api/app/update-auto", nil))
+	payload := decodeHandlerPayload(t, recorder)
+	if payload["ok"] != false || payload["updated"] != false {
+		t.Fatalf("auto update payload = %#v, want unsupported source-mode response", payload)
+	}
+	state, ok := payload["state"].(map[string]any)
+	if !ok {
+		t.Fatalf("state missing from payload: %#v", payload)
+	}
+	if state["phase"] == "failed" {
+		t.Fatalf("source mode auto update wrote failed state: %#v", state)
+	}
+	if state["phase"] != "found" || state["latest_version"] != "2.1.16" {
+		t.Fatalf("state = %#v, want found 2.1.16", state)
 	}
 }
 
