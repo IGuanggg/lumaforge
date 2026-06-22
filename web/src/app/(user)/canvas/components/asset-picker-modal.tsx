@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { App, Empty, Input, Modal, Pagination, Spin, Tabs, Tag } from "antd";
+import { App, Button, Empty, Input, Modal, Pagination, Spin, Tabs, Tag } from "antd";
 import { Search } from "lucide-react";
 import axios from "axios";
 
@@ -19,9 +19,11 @@ type Props = {
     defaultTab?: AssetPickerTab;
     onInsert: (payload: InsertAssetPayload) => void;
     onClose: () => void;
+    onUpload?: () => void;
+    onOpenAssetsPage?: () => void;
 };
 
-export function AssetPickerModal({ open, defaultTab = "my-assets", onInsert, onClose }: Props) {
+export function AssetPickerModal({ open, defaultTab = "my-assets", onInsert, onClose, onUpload, onOpenAssetsPage }: Props) {
     const [activeTab, setActiveTab] = useState<AssetPickerTab>(defaultTab);
 
     useEffect(() => {
@@ -34,8 +36,8 @@ export function AssetPickerModal({ open, defaultTab = "my-assets", onInsert, onC
                 activeKey={activeTab}
                 onChange={(key) => setActiveTab(key as AssetPickerTab)}
                 items={[
-                    { key: "my-assets", label: "我的素材", children: <MyAssetsTab onInsert={onInsert} /> },
-                    { key: "library", label: "素材库", children: <LibraryTab onInsert={onInsert} /> },
+                    { key: "my-assets", label: "我的素材", children: <MyAssetsTab onInsert={onInsert} onUpload={onUpload} onOpenAssetsPage={onOpenAssetsPage} /> },
+                    { key: "library", label: "素材库", children: <LibraryTab onInsert={onInsert} onUpload={onUpload} onOpenAssetsPage={onOpenAssetsPage} /> },
                 ]}
             />
         </Modal>
@@ -52,7 +54,7 @@ const kindOptions = [
     { label: "音频", value: "audio" },
 ];
 
-function LibraryTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => void }) {
+function LibraryTab({ onInsert, onUpload, onOpenAssetsPage }: { onInsert: (payload: InsertAssetPayload) => void; onUpload?: () => void; onOpenAssetsPage?: () => void }) {
     const { message } = App.useApp();
     const [keyword, setKeyword] = useState("");
     const [kindFilter, setKindFilter] = useState("");
@@ -136,8 +138,20 @@ function LibraryTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => v
                         <PickerCard key={asset.id} title={asset.title} kind={asset.type} cover={asset.coverUrl} loading={inserting === asset.id} onClick={() => void handleInsert(asset)} />
                     ))}
                 </div>
+            ) : query.isError ? (
+                <AssetPickerEmptyState
+                    title="素材库暂不可用"
+                    description="后端素材库没有返回数据，可以先上传本地素材，或到素材页检查同步状态。"
+                    onUpload={onUpload}
+                    onOpenAssetsPage={onOpenAssetsPage}
+                />
             ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有素材" className="py-12" />
+                <AssetPickerEmptyState
+                    title="素材库没有素材"
+                    description="生成或上传素材后，这里会显示可插入画布的图片、视频、音频和文本。"
+                    onUpload={onUpload}
+                    onOpenAssetsPage={onOpenAssetsPage}
+                />
             )}
 
             {total > PAGE_SIZE && (
@@ -189,7 +203,7 @@ async function remoteImageToDataUrl(url: string) {
     });
 }
 
-function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => void }) {
+function MyAssetsTab({ onInsert, onUpload, onOpenAssetsPage }: { onInsert: (payload: InsertAssetPayload) => void; onUpload?: () => void; onOpenAssetsPage?: () => void }) {
     const { message } = App.useApp();
     const assets = useAssetStore((state) => state.assets);
     const [keyword, setKeyword] = useState("");
@@ -311,8 +325,20 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
                         )
                     ))}
                 </div>
+            ) : backendQuery.isError ? (
+                <AssetPickerEmptyState
+                    title="本地暂无素材"
+                    description="后端素材库暂时不可用，本地上传或画布生成后保存的素材仍会出现在这里。"
+                    onUpload={onUpload}
+                    onOpenAssetsPage={onOpenAssetsPage}
+                />
             ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有素材" className="py-12" />
+                <AssetPickerEmptyState
+                    title="本地暂无素材"
+                    description="上传素材，或在画布生成结果后加入我的素材，就能从这里插入。"
+                    onUpload={onUpload}
+                    onOpenAssetsPage={onOpenAssetsPage}
+                />
             )}
 
             {totalCount > PAGE_SIZE && (
@@ -320,6 +346,23 @@ function MyAssetsTab({ onInsert }: { onInsert: (payload: InsertAssetPayload) => 
                     <Pagination size="small" current={page} pageSize={PAGE_SIZE} total={totalCount} onChange={setPage} showSizeChanger={false} />
                 </div>
             )}
+        </div>
+    );
+}
+
+function AssetPickerEmptyState({ title, description, onUpload, onOpenAssetsPage }: { title: string; description: string; onUpload?: () => void; onOpenAssetsPage?: () => void }) {
+    return (
+        <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50/70 px-4 py-10 text-center dark:border-stone-800 dark:bg-stone-950/60">
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="font-medium text-stone-700 dark:text-stone-200">{title}</span>} />
+            <p className="mx-auto -mt-4 max-w-md text-sm leading-6 text-stone-500 dark:text-stone-400">{description}</p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {onUpload ? (
+                    <Button type="primary" onClick={onUpload}>
+                        上传素材
+                    </Button>
+                ) : null}
+                {onOpenAssetsPage ? <Button onClick={onOpenAssetsPage}>打开素材页</Button> : null}
+            </div>
         </div>
     );
 }

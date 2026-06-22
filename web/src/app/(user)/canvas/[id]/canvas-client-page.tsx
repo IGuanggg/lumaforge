@@ -3496,6 +3496,15 @@ function InfiniteCanvasPage() {
                     open={assetPickerOpen}
                     defaultTab={assetPickerTab}
                     onInsert={handleAssetInsert}
+                    onUpload={() => {
+                        setAssetPickerOpen(false);
+                        setPendingReferenceReplace(null);
+                        handleUploadRequest();
+                    }}
+                    onOpenAssetsPage={() => {
+                        setAssetPickerOpen(false);
+                        window.location.assign("/assets");
+                    }}
                     onClose={() => {
                         setAssetPickerOpen(false);
                         setPendingReferenceReplace(null);
