@@ -11,6 +11,9 @@ type AppInfo = {
     version?: string;
     backend_port?: number;
     mode?: string;
+    entry?: {
+        api_port?: string;
+    };
 };
 
 export default function AppSettingsPage() {
@@ -20,6 +23,7 @@ export default function AppSettingsPage() {
     const [statusError, setStatusError] = useState("");
     const [checking, setChecking] = useState(false);
     const [isSourceMode, setIsSourceMode] = useState(true);
+    const backendPort = backendInfo?.backend_port || backendInfo?.entry?.api_port;
     const iframeSrc = useMemo(() => {
         const params = new URLSearchParams({ embedded: "1", theme });
         if (section) params.set("section", section);
@@ -61,7 +65,7 @@ export default function AppSettingsPage() {
                     <strong>{isSourceMode ? "3001 源码测试模式" : "桌面运行模式"}</strong>
                     <Tag className="m-0">前端 {APP_VERSION}</Tag>
                     {backendInfo?.version ? <Tag className="m-0">后端 {backendInfo.version}</Tag> : null}
-                    <Tag className="m-0" color={backendInfo ? "green" : "warning"}>{backendInfo ? `本地服务已连接${backendInfo.backend_port ? ` · ${backendInfo.backend_port}` : ""}` : "本地服务未连接"}</Tag>
+                    <Tag className="m-0" color={backendInfo ? "green" : "warning"}>{backendInfo ? `本地服务已连接${backendPort ? ` · ${backendPort}` : ""}` : "本地服务未连接"}</Tag>
                 </div>
                 <Button size="small" icon={<RefreshCcw className={checking ? "size-3.5 animate-spin" : "size-3.5"} />} loading={checking} onClick={() => void checkBackend()}>重试检测</Button>
             </section>
