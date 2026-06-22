@@ -153,7 +153,7 @@ export default function ApiSettingsPage() {
         const provider: ProviderDraft = normalizeDraft({
             id,
             name: "新 API 平台",
-            base_url: "https://",
+            base_url: "",
             protocol: "openai",
             protocol_override: "auto",
             enabled: true,
@@ -202,8 +202,9 @@ export default function ApiSettingsPage() {
 
     const runConnectionTest = async () => {
         if (!selected) return;
-        if (!selected.base_url.trim()) {
-            message.warning("请先填写 Base URL");
+        const baseUrlError = getProviderBaseUrlError(selected);
+        if (baseUrlError) {
+            message.warning(baseUrlError);
             return;
         }
         setAction("test");
@@ -227,8 +228,9 @@ export default function ApiSettingsPage() {
 
     const runProtocolProbe = async () => {
         if (!selected) return;
-        if (!selected.base_url.trim()) {
-            message.warning("请先填写 Base URL");
+        const baseUrlError = getProviderBaseUrlError(selected);
+        if (baseUrlError) {
+            message.warning(baseUrlError);
             return;
         }
         setAction("probe");
@@ -254,12 +256,18 @@ export default function ApiSettingsPage() {
 
     const runFetchModels = async () => {
         if (!selected) return;
+        const baseUrlError = getProviderBaseUrlError(selected);
+        if (baseUrlError) {
+            message.warning(baseUrlError);
+            return;
+        }
         setAction("fetch");
         try {
             const data = await fetchProviderModelsDraft(selected);
             const classified = classifyFetchedModels(data);
             setCheckResult(data);
-            modal.confirm({
+            let confirmRef: ReturnType<typeof modal.confirm> | null = null;
+            confirmRef = modal.confirm({
                 title: data.fallback ? "上游模型接口不可用" : "应用拉取到的模型列表？",
                 content: (
                     <div className="space-y-2 text-sm">
@@ -282,7 +290,14 @@ export default function ApiSettingsPage() {
                 footer: (_, { CancelBtn, OkBtn }) => (
                     <div className="flex justify-end gap-2">
                         <CancelBtn />
-                        <Button onClick={() => updateSelected({ image_models: classified.image, chat_models: classified.chat, video_models: classified.video })}>覆盖</Button>
+                        <Button
+                            onClick={() => {
+                                updateSelected({ image_models: classified.image, chat_models: classified.chat, video_models: classified.video });
+                                confirmRef?.destroy();
+                            }}
+                        >
+                            覆盖
+                        </Button>
                         <OkBtn />
                     </div>
                 ),
@@ -789,9 +804,24 @@ function validateProviders(providers: ProviderDraft[]) {
         if (!PROVIDER_ID_RE.test(provider.id)) return `平台 ID 不合法：${provider.id || "-"}`;
         if (seen.has(provider.id)) return `平台 ID 重复：${provider.id}`;
         seen.add(provider.id);
-        if (!provider.base_url.trim()) return `${provider.name || provider.id} 缺少 Base URL`;
+        const baseUrlError = getProviderBaseUrlError(provider);
+        if (baseUrlError) return `${provider.name || provider.id}：${baseUrlError}`;
     }
     return "";
+}
+
+function getProviderBaseUrlError(provider: Pick<ProviderDraft, "base_url">) {
+    const value = provider.base_url.trim();
+    if (!value) return "请先填写 Base URL";
+    if (value === "https://" || value === "http://") return "请填写完整 Base URL，不要只保留协议头";
+    try {
+        const url = new URL(value);
+        if (url.protocol !== "http:" && url.protocol !== "https:") return "Base URL 只支持 http 或 https";
+        if (!url.hostname.includes(".") && url.hostname !== "localhost" && url.hostname !== "127.0.0.1") return "Base URL 看起来不完整";
+        return "";
+    } catch {
+        return "Base URL 格式不正确";
+    }
 }
 
 function normalizeProviderId(value: string) {
