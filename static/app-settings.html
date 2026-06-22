@@ -1033,15 +1033,16 @@
             const phase = state.phase || '';
             const card = document.getElementById('update-progress-card');
             if(!card) return;
-            if(!phase && !state.target_version && !state.filename) {
+            const selectedAsset = state.selected_asset || state.download?.selected_asset || {};
+            const filename = state.filename || selectedAsset.name || (state.path ? String(state.path).split(/[\\/]/).pop() : '');
+            const cleanIdle = (!phase || phase === 'idle' || phase === 'done') && !state.target_version && !filename && !state.error && !state.can_cleanup;
+            if(cleanIdle) {
                 card.classList.remove('show');
                 renderUpdatePostState(state);
                 return;
             }
             card.classList.add('show');
             const capability = payload?.update_capability || appInfo?.update_capability || {};
-            const selectedAsset = state.selected_asset || state.download?.selected_asset || {};
-            const filename = state.filename || selectedAsset.name || (state.path ? String(state.path).split(/[\\/]/).pop() : '');
             const total = Number(state.total_bytes || state.package_size || state.size || selectedAsset.size || 0);
             const downloaded = Number(state.downloaded_bytes || 0);
             const pct = Number(state.download_progress || 0) || phasePercent(state);

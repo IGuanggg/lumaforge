@@ -4206,8 +4206,40 @@ def save_update_state(state: dict):
         with open(UPDATE_STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False, indent=2)
 
+def normalize_update_state_for_current_version(state: dict):
+    normalized = dict(state or {})
+    known_version = normalize_lumaforge_version(
+        normalized.get("latest_version") or normalized.get("target_version") or normalized.get("version") or ""
+    )
+    if not known_version or version_tuple(known_version) > version_tuple(APP_VERSION):
+        return normalized
+    normalized.update({
+        "phase": "idle",
+        "current_version": APP_VERSION,
+        "latest_version": APP_VERSION,
+        "target_version": "",
+        "version": "",
+        "asset": None,
+        "assets": [],
+        "selected_asset": None,
+        "download": None,
+        "filename": "",
+        "path": "",
+        "temp_path": "",
+        "package_size": 0,
+        "total_bytes": 0,
+        "downloaded_bytes": 0,
+        "sha256": "",
+        "sha256_expected": "",
+        "sha256_verified": False,
+        "error": None,
+        "backup_dir": "",
+        "notes": "",
+    })
+    return normalized
+
 def update_state_payload():
-    state = load_update_state()
+    state = normalize_update_state_for_current_version(load_update_state())
     capability = desktop_update_capability()
     downloaded = int(state.get("downloaded_bytes") or 0)
     total = int(state.get("total_bytes") or state.get("package_size") or 0)
@@ -4626,15 +4658,15 @@ async def app_update_check():
     preflight = app_update_preflight_payload()
     auto_update_supported = bool(capability.get("supported"))
     reason = str(capability.get("reason") or "")
-    selected = normalized.get("selected_asset")
+    selected = normalized.get("selected_asset") if is_newer else None
     save_update_state({
-        "phase": "found" if is_newer else "done",
+        "phase": "found" if is_newer else "idle",
         "current_version": APP_VERSION,
-        "target_version": latest,
+        "target_version": latest if is_newer else "",
         "latest_version": latest,
         "selected_asset": selected,
         "package_size": (selected or {}).get("size", 0),
-        "notes": normalized["notes"],
+        "notes": normalized["notes"] if is_newer else "",
         "source_url": APP_UPDATE_CHECK_URL,
         "error": None,
     })

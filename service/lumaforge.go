@@ -1514,12 +1514,8 @@ func LumaUpdateState() map[string]any {
 	if state["phase"] == nil {
 		state["phase"] = "idle"
 	}
-	if latest := stringFromAny(state["latest_version"]); latest != "" && compareVersion(latest, LumaForgeVersion) <= 0 {
-		state["phase"] = "idle"
-		state["latest_version"] = LumaForgeVersion
-		state["target_version"] = ""
-		state["asset"] = nil
-		state["assets"] = []map[string]any{}
+	if latest := firstNonEmptyString(stringFromAny(state["latest_version"]), stringFromAny(state["target_version"]), stringFromAny(state["version"])); latest != "" && compareVersion(latest, LumaForgeVersion) <= 0 {
+		clearLumaCurrentUpdateState(state)
 	}
 	state["current_version"] = LumaForgeVersion
 	state["build_id"] = LumaForgeBuildID
@@ -1554,6 +1550,29 @@ func LumaUpdateState() map[string]any {
 	state["can_cleanup"] = canCleanup
 	state["update_capability"] = LumaUpdateCapability()
 	return state
+}
+
+func clearLumaCurrentUpdateState(state map[string]any) {
+	state["phase"] = "idle"
+	state["latest_version"] = LumaForgeVersion
+	state["target_version"] = ""
+	state["version"] = ""
+	state["asset"] = nil
+	state["assets"] = []map[string]any{}
+	state["selected_asset"] = nil
+	state["download"] = nil
+	state["filename"] = ""
+	state["path"] = ""
+	state["temp_path"] = ""
+	state["package_size"] = 0
+	state["total_bytes"] = 0
+	state["downloaded_bytes"] = 0
+	state["sha256"] = ""
+	state["sha256_expected"] = ""
+	state["sha256_verified"] = false
+	state["error"] = nil
+	state["backup_dir"] = ""
+	state["notes"] = ""
 }
 
 func LumaSaveUpdateState(patch map[string]any) map[string]any {
@@ -1678,7 +1697,7 @@ func LumaUpdateCheck() map[string]any {
 			stateAssets = []map[string]any{asset}
 		}
 	}
-	LumaSaveUpdateState(map[string]any{"phase": phase, "latest_version": latest, "asset": stateAsset, "assets": stateAssets})
+	LumaSaveUpdateState(map[string]any{"phase": phase, "latest_version": latest, "asset": stateAsset, "assets": stateAssets, "selected_asset": stateAsset})
 	downloadURL := ""
 	if stateAsset != nil {
 		downloadURL = stringFromAny(asset["url"])

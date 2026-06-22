@@ -155,6 +155,30 @@ func TestLumaUpdateStateMarksStalledDownloads(t *testing.T) {
 	}
 }
 
+func TestLumaUpdateStateClearsArtifactsForCurrentVersion(t *testing.T) {
+	previousDataDir := config.Cfg.LumaForgeDataDir
+	t.Cleanup(func() { config.Cfg.LumaForgeDataDir = previousDataDir })
+	config.Cfg.LumaForgeDataDir = t.TempDir()
+
+	state := LumaSaveUpdateState(map[string]any{
+		"phase":           "failed",
+		"latest_version":  "",
+		"target_version":  LumaForgeVersion,
+		"selected_asset":  map[string]any{"name": "LumaForge-2.0.30-desktop.zip"},
+		"filename":        "LumaForge-2.0.30-desktop.zip",
+		"path":            filepath.Join(config.Cfg.LumaForgeDataDir, "updates", "downloads", "old.zip"),
+		"package_size":    123,
+		"sha256_expected": "old-sha",
+		"error":           "old failure",
+	})
+	if state["phase"] != "idle" || state["selected_asset"] != nil || state["filename"] != "" || state["path"] != "" {
+		t.Fatalf("stale update artifacts were not cleared: %#v", state)
+	}
+	if state["can_cleanup"] != false || state["error"] != nil {
+		t.Fatalf("stale cleanup/error state remained: %#v", state)
+	}
+}
+
 func TestLumaCleanupUpdatePackageOnlyRemovesDownloadArtifacts(t *testing.T) {
 	previousDataDir := config.Cfg.LumaForgeDataDir
 	t.Cleanup(func() {
