@@ -3,7 +3,7 @@
 import { AlertCircle, CheckCircle2, CircleDashed, Copy, DatabaseZap, EyeOff, KeyRound, LoaderCircle, Plus, RefreshCcw, Save, Settings, ShieldCheck, SlidersHorizontal, Trash2, UserCog, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, App, Button, Empty, Input, Popconfirm, Select, Space, Spin, Switch, Tag, Tooltip, Typography } from "antd";
+import { Alert, App, Button, Checkbox, Empty, Input, Modal, Popconfirm, Select, Space, Spin, Switch, Tag, Tooltip, Typography } from "antd";
 
 import {
     clearKeyDiagnostics,
@@ -25,6 +25,17 @@ type ProviderDraft = LumaProvider & {
     draft_new?: boolean;
 };
 
+type ModelListKey = "image_models" | "chat_models" | "video_models";
+
+type FetchedModelSelection = Record<ModelListKey, string[]>;
+
+type FetchedModelPickerState = {
+    fallback: boolean;
+    classified: ReturnType<typeof classifyFetchedModels>;
+    selected: FetchedModelSelection;
+    query: string;
+};
+
 type ActionKey = "save" | "refresh" | "test" | "probe" | "fetch" | "clear-key" | "diagnostics" | "recover" | "";
 
 const PROVIDER_ID_RE = /^[a-z0-9][a-z0-9_-]{1,48}$/;
@@ -35,11 +46,12 @@ const MODEL_SECTIONS = [
 ] as const;
 
 export default function ApiSettingsPage() {
-    const { message, modal } = App.useApp();
+    const { message } = App.useApp();
     const [providers, setProviders] = useState<ProviderDraft[]>([]);
     const [selectedId, setSelectedId] = useState("");
     const [diagnostics, setDiagnostics] = useState<ProviderKeyDiagnostics | null>(null);
     const [checkResult, setCheckResult] = useState<ProviderModelsResponse | null>(null);
+    const [modelPicker, setModelPicker] = useState<FetchedModelPickerState | null>(null);
     const [action, setAction] = useState<ActionKey>("refresh");
     const [loadError, setLoadError] = useState("");
     const autoRecoverRef = useRef(false);
@@ -310,6 +322,23 @@ export default function ApiSettingsPage() {
         }
     };
 
+    const applyPickedModels = (mode: "append" | "replace") => {
+        if (!selected || !modelPicker) return;
+        const picked = modelPicker.selected;
+        const pickedCount = countSelectedModels(picked);
+        if (!pickedCount) {
+            message.warning("请先选择至少一个模型");
+            return;
+        }
+        updateSelected({
+            image_models: mode === "replace" ? normalizeModels(picked.image_models) : mergeModels(selected.image_models, picked.image_models),
+            chat_models: mode === "replace" ? normalizeModels(picked.chat_models) : mergeModels(selected.chat_models, picked.chat_models),
+            video_models: mode === "replace" ? normalizeModels(picked.video_models) : mergeModels(selected.video_models, picked.video_models),
+        });
+        setModelPicker(null);
+        message.success(`${mode === "replace" ? "已覆盖为" : "已追加"} ${pickedCount} 个已选模型，记得保存设置`);
+    };
+
     const runFetchModels = async () => {
         if (!selected) return;
         const baseUrlError = getProviderBaseUrlError(selected);
@@ -322,41 +351,11 @@ export default function ApiSettingsPage() {
             const data = await fetchProviderModelsDraft(selected);
             const classified = classifyFetchedModels(data);
             setCheckResult(data);
-            let confirmRef: ReturnType<typeof modal.confirm> | null = null;
-            confirmRef = modal.confirm({
-                title: data.fallback ? "上游模型接口不可用" : "应用拉取到的模型列表？",
-                content: (
-                    <div className="space-y-2 text-sm">
-                        <p className="m-0 text-stone-600">{data.fallback ? "当前展示的是已保存的手动模型，建议保留现有配置。" : `共识别 ${classified.all.length} 个模型，默认追加到当前平台，不会覆盖手填模型。`}</p>
-                        <div className="flex flex-wrap gap-2">
-                            <Tag color="blue">生图 {classified.image.length}</Tag>
-                            <Tag color="green">聊天 {classified.chat.length}</Tag>
-                            <Tag color="purple">视频 {classified.video.length}</Tag>
-                        </div>
-                    </div>
-                ),
-                okText: "追加",
-                cancelText: "只查看",
-                onOk: () =>
-                    updateSelected({
-                        image_models: mergeModels(selected.image_models, classified.image),
-                        chat_models: mergeModels(selected.chat_models, classified.chat),
-                        video_models: mergeModels(selected.video_models, classified.video),
-                    }),
-                footer: (_, { CancelBtn, OkBtn }) => (
-                    <div className="flex justify-end gap-2">
-                        <CancelBtn />
-                        <Button
-                            onClick={() => {
-                                updateSelected({ image_models: classified.image, chat_models: classified.chat, video_models: classified.video });
-                                confirmRef?.destroy();
-                            }}
-                        >
-                            覆盖
-                        </Button>
-                        <OkBtn />
-                    </div>
-                ),
+            setModelPicker({
+                fallback: data.fallback === true,
+                classified,
+                selected: selectionFromClassified(classified),
+                query: "",
             });
         } catch (error) {
             message.error(error instanceof Error ? error.message : "模型拉取失败");
@@ -668,6 +667,18 @@ export default function ApiSettingsPage() {
                     )}
                 </section>
             </div>
+            <FetchedModelsPicker
+                state={modelPicker}
+                existing={{
+                    image_models: selected?.image_models || [],
+                    chat_models: selected?.chat_models || [],
+                    video_models: selected?.video_models || [],
+                }}
+                onChange={setModelPicker}
+                onCancel={() => setModelPicker(null)}
+                onAppend={() => applyPickedModels("append")}
+                onReplace={() => applyPickedModels("replace")}
+            />
         </main>
     );
 }
@@ -794,6 +805,152 @@ function CheckResult({ result }: { result: ProviderModelsResponse }) {
     );
 }
 
+function FetchedModelsPicker({
+    state,
+    existing,
+    onChange,
+    onCancel,
+    onAppend,
+    onReplace,
+}: {
+    state: FetchedModelPickerState | null;
+    existing: FetchedModelSelection;
+    onChange: (next: FetchedModelPickerState | null) => void;
+    onCancel: () => void;
+    onAppend: () => void;
+    onReplace: () => void;
+}) {
+    if (!state) return null;
+    const selectedCount = countSelectedModels(state.selected);
+    const totalCount = state.classified.all.length;
+    const normalizedQuery = state.query.trim().toLowerCase();
+
+    const updateSelection = (key: ModelListKey, models: string[]) => {
+        onChange({ ...state, selected: { ...state.selected, [key]: normalizeModels(models) } });
+    };
+
+    return (
+        <Modal
+            title={state.fallback ? "上游模型接口不可用" : "选择要添加的模型"}
+            open
+            width={880}
+            centered
+            onCancel={onCancel}
+            footer={[
+                <Button key="cancel" onClick={onCancel}>
+                    只查看
+                </Button>,
+                <Button key="replace" disabled={!selectedCount} onClick={onReplace}>
+                    覆盖为已选
+                </Button>,
+                <Button key="append" type="primary" disabled={!selectedCount} onClick={onAppend}>
+                    追加已选
+                </Button>,
+            ]}
+        >
+            <div className="space-y-4">
+                <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-stone-800 dark:bg-stone-950">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="min-w-0">
+                            <p className="m-0 text-sm font-medium text-stone-900 dark:text-stone-100">
+                                {state.fallback ? "当前展示的是已保存的手动模型，建议保留现有配置。" : `共识别 ${totalCount} 个模型，默认已全选，可按需取消。`}
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                <Tag color="blue">生图 {state.classified.image.length}</Tag>
+                                <Tag color="green">聊天 {state.classified.chat.length}</Tag>
+                                <Tag color="purple">视频 {state.classified.video.length}</Tag>
+                                <Tag>已选 {selectedCount}</Tag>
+                            </div>
+                        </div>
+                        <Input
+                            allowClear
+                            className="w-full md:max-w-[260px]"
+                            placeholder="搜索模型名称"
+                            value={state.query}
+                            onChange={(event) => onChange({ ...state, query: event.target.value })}
+                        />
+                    </div>
+                </div>
+
+                <div className="grid max-h-[52vh] gap-3 overflow-y-auto pr-1 lg:grid-cols-3">
+                    {MODEL_SECTIONS.map((section) => {
+                        const models = modelsForSection(state.classified, section.key).filter((model) => !normalizedQuery || model.toLowerCase().includes(normalizedQuery));
+                        return (
+                            <FetchedModelSection
+                                key={section.key}
+                                title={section.label}
+                                tag={section.tag}
+                                models={models}
+                                selected={state.selected[section.key]}
+                                existing={existing[section.key]}
+                                onChange={(models) => updateSelection(section.key, models)}
+                            />
+                        );
+                    })}
+                </div>
+            </div>
+        </Modal>
+    );
+}
+
+function FetchedModelSection({
+    title,
+    tag,
+    models,
+    selected,
+    existing,
+    onChange,
+}: {
+    title: string;
+    tag: string;
+    models: string[];
+    selected: string[];
+    existing: string[];
+    onChange: (models: string[]) => void;
+}) {
+    const selectedSet = new Set(selected);
+    const existingSet = new Set(existing);
+    const allVisibleSelected = models.length > 0 && models.every((model) => selectedSet.has(model));
+    const toggleVisible = () => {
+        const next = new Set(selected);
+        if (allVisibleSelected) models.forEach((model) => next.delete(model));
+        else models.forEach((model) => next.add(model));
+        onChange([...next]);
+    };
+
+    return (
+        <section className="min-h-[220px] rounded-lg border border-stone-200 bg-background p-3 dark:border-stone-800">
+            <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate text-sm font-semibold">{title}</span>
+                    <Tag className="m-0">{models.length}</Tag>
+                </div>
+                <Button size="small" disabled={!models.length} onClick={toggleVisible}>
+                    {allVisibleSelected ? "清空" : "全选"}
+                </Button>
+            </div>
+            <div className="space-y-2">
+                {models.length ? (
+                    models.map((model) => (
+                        <label
+                            key={`${tag}-${model}`}
+                            className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md border border-stone-200 px-2.5 py-2 text-sm transition hover:border-stone-300 hover:bg-stone-50 dark:border-stone-800 dark:hover:border-stone-700 dark:hover:bg-stone-900/70"
+                        >
+                            <Checkbox checked={selectedSet.has(model)} onChange={(event) => onChange(toggleModel(selected, model, event.target.checked))} />
+                            <span className="min-w-0 flex-1 break-all text-stone-700 dark:text-stone-200">{model}</span>
+                            {existingSet.has(model) ? <Tag className="m-0 shrink-0">已存在</Tag> : null}
+                        </label>
+                    ))
+                ) : (
+                    <div className="flex min-h-28 items-center justify-center rounded-md border border-dashed border-stone-200 px-3 text-center text-sm text-stone-500 dark:border-stone-800 dark:text-stone-400">
+                        没有匹配的模型
+                    </div>
+                )}
+            </div>
+        </section>
+    );
+}
+
 function normalizeDraft(provider: Partial<ProviderDraft>): ProviderDraft {
     return {
         id: normalizeProviderId(provider.id || ""),
@@ -864,6 +1021,31 @@ function providerFingerprint(providers: ProviderDraft[]) {
 
 function mergeModels(current: string[], incoming: string[]) {
     return normalizeModels([...current, ...incoming]);
+}
+
+function selectionFromClassified(classified: ReturnType<typeof classifyFetchedModels>): FetchedModelSelection {
+    return {
+        image_models: classified.image,
+        chat_models: classified.chat,
+        video_models: classified.video,
+    };
+}
+
+function countSelectedModels(selection: FetchedModelSelection) {
+    return normalizeModels([...selection.image_models, ...selection.chat_models, ...selection.video_models]).length;
+}
+
+function modelsForSection(classified: ReturnType<typeof classifyFetchedModels>, key: ModelListKey) {
+    if (key === "image_models") return classified.image;
+    if (key === "video_models") return classified.video;
+    return classified.chat;
+}
+
+function toggleModel(models: string[], model: string, checked: boolean) {
+    const next = new Set(models);
+    if (checked) next.add(model);
+    else next.delete(model);
+    return [...next];
 }
 
 function repairProviderDisplayName(provider: Pick<ProviderDraft, "id" | "name" | "base_url">) {
