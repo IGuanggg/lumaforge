@@ -17,6 +17,10 @@ function getReleaseTitle(version: string) {
     return version === "Unreleased" ? "未发布" : version;
 }
 
+function normalizeReleaseVersion(version: string) {
+    return version.trim().replace(/^v/i, "");
+}
+
 type VersionReleaseModalProps = {
     className?: string;
     style?: CSSProperties;
@@ -103,8 +107,8 @@ export function VersionReleaseModal({ className, style }: VersionReleaseModalPro
                                         <span className="text-sm font-semibold text-stone-950 dark:text-stone-100">{getReleaseTitle(release.version)}</span>
                                         <span className="text-xs text-stone-500 dark:text-stone-400">{release.date}</span>
                                         <div className="flex min-w-0 items-center gap-1.5">
-                                            {release.version === latestVersion ? <Tag color="green">最新</Tag> : null}
-                                            {release.version === APP_VERSION ? <Tag>当前</Tag> : null}
+                                            {normalizeReleaseVersion(release.version) === normalizeReleaseVersion(latestVersion) ? <Tag color="green">最新</Tag> : null}
+                                            {normalizeReleaseVersion(release.version) === normalizeReleaseVersion(APP_VERSION) ? <Tag>当前</Tag> : null}
                                         </div>
                                     </div>
                                     <div className="mt-2 space-y-1.5">
