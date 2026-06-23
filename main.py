@@ -32,8 +32,8 @@ logger = logging.getLogger("lumaforge")
 APP_DISPLAY_NAME = os.getenv("APP_DISPLAY_NAME", "光绘工坊").strip() or "光绘工坊"
 APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "LumaForge").strip() or "LumaForge"
 APP_REPOSITORY_NAME = os.getenv("APP_REPOSITORY_NAME", "lumaforge").strip() or "lumaforge"
-APP_VERSION = os.getenv("APP_VERSION", "2.1.15")
-APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260617-v2115-desktop-info-hotfix")
+APP_VERSION = os.getenv("APP_VERSION", "2.1.16")
+APP_BUILD_ID = os.getenv("APP_BUILD_ID", "20260623-v2116-product-closure1")
 APP_UPDATE_CHECK_URL = os.getenv("APP_UPDATE_CHECK_URL", "https://api.github.com/repos/IGuanggg/lumaforge/releases").strip()
 LUMAFORGE_LEGACY_API_URL = os.getenv("LUMAFORGE_LEGACY_API_URL", "http://127.0.0.1:8090").strip()
 API_LIVENESS_TIMEOUT = max(1.0, float(os.getenv("API_LIVENESS_TIMEOUT", "3") or 3))
@@ -4350,6 +4350,103 @@ def _is_zip_download_url(url: str) -> bool:
     path = urllib.parse.unquote(parsed.path or "").lower()
     return path.endswith(".zip")
 
+def _download_asset_url(asset: Dict[str, Any]):
+    return str(asset.get("browser_download_url") or asset.get("url") or "").strip()
+
+def _asset_sha256(asset: Dict[str, Any]):
+    raw_digest = str(asset.get("digest") or "")
+    if raw_digest.lower().startswith("sha256:"):
+        return raw_digest.split(":", 1)[1].strip()
+    return str(asset.get("sha256") or "").strip()
+
+def _classify_release_asset(name: str, url: str):
+    lower = f"{name} {url}".lower()
+    if lower.endswith(".sha256.txt") or ".sha256" in lower:
+        return "sha256"
+    if "setup" in lower and lower.endswith(".exe"):
+        return "windows_installer"
+    if "macos" in lower and lower.endswith(".zip"):
+        return "macos_zip"
+    if "desktop" in lower and lower.endswith(".zip"):
+        return "desktop_zip"
+    if lower.endswith(".zip"):
+        return "zip"
+    if lower.endswith(".exe"):
+        return "windows_exe"
+    return "other"
+
+def _release_asset_manifest(raw_assets: Any):
+    manifest = {
+        "windows_installer": None,
+        "desktop_zip": None,
+        "macos_zip": None,
+        "sha256_files": [],
+        "all": [],
+    }
+    if not isinstance(raw_assets, list):
+        return manifest
+    for asset in raw_assets:
+        if not isinstance(asset, dict):
+            continue
+        name = str(asset.get("name") or "").strip()
+        url = _download_asset_url(asset)
+        if not name and not url:
+            continue
+        kind = _classify_release_asset(name, url)
+        item = {
+            "name": name,
+            "url": url,
+            "type": kind,
+            "size": asset.get("size", 0),
+            "sha256": _asset_sha256(asset),
+        }
+        manifest["all"].append(item)
+        if kind == "windows_installer" and not manifest["windows_installer"]:
+            manifest["windows_installer"] = item
+        elif kind == "desktop_zip" and not manifest["desktop_zip"]:
+            manifest["desktop_zip"] = item
+        elif kind == "macos_zip" and not manifest["macos_zip"]:
+            manifest["macos_zip"] = item
+        elif kind == "sha256":
+            manifest["sha256_files"].append(item)
+    return manifest
+
+def update_preflight_with_release_assets(preflight: dict, normalized: dict):
+    release_assets = normalized.get("release_assets") or {}
+    sha_files = release_assets.get("sha256_files") or []
+    checks = list(preflight.get("checks") or [])
+    def add_asset_check(check_id: str, label: str, value: Any, blocking: bool):
+        name = (value or {}).get("name") if isinstance(value, dict) else ""
+        checks.append({
+            "id": check_id,
+            "label": label,
+            "ok": bool(value),
+            "detail": name or "Release asset missing",
+            "blocking": blocking,
+        })
+    add_asset_check("release_windows_installer", "Windows installer asset", release_assets.get("windows_installer"), False)
+    add_asset_check("release_desktop_zip", "Desktop zip asset", release_assets.get("desktop_zip"), True)
+    add_asset_check("release_macos_zip", "macOS zip asset", release_assets.get("macos_zip"), False)
+    checks.append({
+        "id": "release_sha256",
+        "label": "Release sha256 assets",
+        "ok": bool(sha_files),
+        "detail": ", ".join(item.get("name", "") for item in sha_files) or "Release sha256 missing",
+        "blocking": False,
+    })
+    blocking = [item for item in checks if item.get("blocking") and not item.get("ok")]
+    warnings = [item for item in checks if not item.get("blocking") and not item.get("ok")]
+    return {
+        **preflight,
+        "ok": not blocking,
+        "blocking_count": len(blocking),
+        "warning_count": len(warnings),
+        "checks": checks,
+        "blocking": blocking,
+        "warnings": warnings,
+        "release_assets": release_assets,
+    }
+
 
 def update_payload_version(data: Dict[str, Any]):
     return normalize_lumaforge_version(data.get("version") or data.get("latest_version") or data.get("tag_name") or "")
@@ -4378,12 +4475,13 @@ def normalize_update_payload(data: Any):
         data = {}
     latest = update_payload_version(data)
     raw_assets = data.get("assets") or []
+    release_assets = _release_asset_manifest(raw_assets)
     parsed_assets = []
     if isinstance(raw_assets, list):
         for asset in raw_assets:
             if not isinstance(asset, dict):
                 continue
-            raw_url = str(asset.get("browser_download_url") or asset.get("url") or "")
+            raw_url = _download_asset_url(asset)
             if not raw_url:
                 continue
             # Only assets whose URL is a zip download can be auto-update targets
@@ -4392,19 +4490,15 @@ def normalize_update_payload(data: Any):
             name = str(asset.get("name") or "")
             name_lower = name.lower()
             atype = "unknown"
-            if "desktop" in name_lower:
+            if "macos" in name_lower:
+                atype = "macos"
+            elif "desktop" in name_lower:
                 atype = "desktop"
             elif "browser" in name_lower:
                 atype = "browser"
             elif name_lower.endswith(".zip"):
                 atype = "zip"
-            # Extract sha256 from various formats
-            sha256_val = ""
-            raw_digest = str(asset.get("digest") or "")
-            if raw_digest.startswith("sha256:"):
-                sha256_val = raw_digest.split(":", 1)[1]
-            if not sha256_val:
-                sha256_val = str(asset.get("sha256") or "")
+            sha256_val = _asset_sha256(asset)
             parsed_assets.append({"name": name, "url": raw_url, "type": atype, "size": asset.get("size", 0), "sha256": sha256_val})
     # Select best asset for auto-update
     is_desktop = os.getenv("LUMAFORGE_DESKTOP") == "1" or os.getenv("INFINITE_CANVAS_DESKTOP") == "1"
@@ -4445,6 +4539,7 @@ def normalize_update_payload(data: Any):
         "notes": data.get("notes") or data.get("changelog") or data.get("body") or "",
         "assets": parsed_assets,
         "selected_asset": selected,
+        "release_assets": release_assets,
     }
 
 async def fetch_update_source_payload(client: httpx.AsyncClient):
@@ -4664,7 +4759,7 @@ async def app_update_check():
     latest = normalized["latest_version"]
     is_newer = bool(latest and version_tuple(latest) > version_tuple(APP_VERSION))
     capability = desktop_update_capability()
-    preflight = app_update_preflight_payload()
+    preflight = update_preflight_with_release_assets(app_update_preflight_payload(), normalized)
     auto_update_supported = bool(capability.get("supported"))
     reason = str(capability.get("reason") or "")
     selected = normalized.get("selected_asset") if is_newer else None
@@ -4689,6 +4784,7 @@ async def app_update_check():
         "source_url": APP_UPDATE_CHECK_URL,
         "assets": normalized.get("assets", []),
         "selected_asset": selected,
+        "release_assets": normalized.get("release_assets", {}),
         "auto_update_supported": auto_update_supported,
         "auto_update_reason": reason,
         "update_mode": capability.get("mode"),
@@ -4704,7 +4800,33 @@ async def app_update_state():
 
 @app.get("/api/app/update-preflight")
 async def app_update_preflight():
-    return app_update_preflight_payload()
+    preflight = app_update_preflight_payload()
+    if not APP_UPDATE_CHECK_URL:
+        return preflight
+    try:
+        async with make_async_client(timeout=8) as client:
+            _, normalized = await fetch_update_source_payload(client)
+        return update_preflight_with_release_assets(preflight, normalized)
+    except Exception as exc:
+        checks = list(preflight.get("checks") or [])
+        checks.append({
+            "id": "release_assets",
+            "label": "Release assets",
+            "ok": False,
+            "detail": f"Unable to inspect Release assets: {exc}",
+            "blocking": False,
+        })
+        warnings = [item for item in checks if not item.get("blocking") and not item.get("ok")]
+        blocking = [item for item in checks if item.get("blocking") and not item.get("ok")]
+        return {
+            **preflight,
+            "ok": not blocking,
+            "blocking_count": len(blocking),
+            "warning_count": len(warnings),
+            "checks": checks,
+            "blocking": blocking,
+            "warnings": warnings,
+        }
 
 
 def _safe_extract_zip(zip_path: str, dest_dir: str):

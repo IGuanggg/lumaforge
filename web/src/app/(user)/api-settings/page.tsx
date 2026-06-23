@@ -354,7 +354,7 @@ export default function ApiSettingsPage() {
             setModelPicker({
                 fallback: data.fallback === true,
                 classified,
-                selected: selectionFromClassified(classified),
+                selected: recommendedSelectionFromClassified(classified),
                 query: "",
             });
         } catch (error) {
@@ -457,7 +457,14 @@ export default function ApiSettingsPage() {
                                 action={<Button size="small" icon={<RefreshCcw className="size-3.5" />} onClick={() => void loadProviders()}>重试</Button>}
                             />
                         ) : null}
-                        {!providers.length && action !== "refresh" && !loadError ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 API 平台" /> : null}
+                        {!providers.length && action !== "refresh" && !loadError ? (
+                            <Empty
+                                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                description="暂无 API 平台"
+                            >
+                                <Button size="small" type="primary" icon={<Plus className="size-3.5" />} onClick={addProvider}>添加第一个平台</Button>
+                            </Empty>
+                        ) : null}
                         {action === "refresh" && !providers.length ? <Spin className="flex justify-center py-10" /> : null}
                     </div>
 
@@ -585,6 +592,15 @@ export default function ApiSettingsPage() {
                                         </Button>
                                     }
                                 >
+                                    {!modelCount ? (
+                                        <Alert
+                                            className="mb-3"
+                                            type="info"
+                                            showIcon
+                                            message="还没有可用模型"
+                                            description="可以先点击“拉取模型”从当前平台读取，也可以在下方手动添加常用模型。拉取结果会先进入选择面板，不会直接覆盖手填内容。"
+                                        />
+                                    ) : null}
                                     <div className="grid gap-3 xl:grid-cols-3">
                                         {MODEL_SECTIONS.map((section) => (
                                             <ModelSection
@@ -853,7 +869,7 @@ function FetchedModelsPicker({
                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div className="min-w-0">
                             <p className="m-0 text-sm font-medium text-stone-900 dark:text-stone-100">
-                                {state.fallback ? "当前展示的是已保存的手动模型，建议保留现有配置。" : `共识别 ${totalCount} 个模型，默认已全选，可按需取消。`}
+                                {state.fallback ? "当前展示的是已保存的手动模型，建议保留现有配置。" : `共识别 ${totalCount} 个模型，已按常用能力推荐选择 ${selectedCount} 个，可继续勾选调整。`}
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2">
                                 <Tag color="blue">生图 {state.classified.image.length}</Tag>
@@ -1023,12 +1039,28 @@ function mergeModels(current: string[], incoming: string[]) {
     return normalizeModels([...current, ...incoming]);
 }
 
-function selectionFromClassified(classified: ReturnType<typeof classifyFetchedModels>): FetchedModelSelection {
-    return {
-        image_models: classified.image,
-        chat_models: classified.chat,
-        video_models: classified.video,
+function recommendedSelectionFromClassified(classified: ReturnType<typeof classifyFetchedModels>): FetchedModelSelection {
+    const pickRecommended = (models: string[], capability: ModelListKey) => {
+        const preferred = models.filter((model) => isRecommendedFetchedModel(model, capability));
+        if (preferred.length) return preferred;
+        return models.length <= 12 ? models : models.slice(0, 12);
     };
+    return {
+        image_models: pickRecommended(classified.image, "image_models"),
+        chat_models: pickRecommended(classified.chat, "chat_models"),
+        video_models: pickRecommended(classified.video, "video_models"),
+    };
+}
+
+function isRecommendedFetchedModel(model: string, capability: ModelListKey) {
+    const value = model.toLowerCase();
+    if (capability === "image_models") {
+        return /(gpt-image|dall-e|nano-banana|imagen|flux|qwen-image|image)/.test(value);
+    }
+    if (capability === "video_models") {
+        return /(sora|seedance|veo|video|wan|hailuo|kling)/.test(value);
+    }
+    return /(gpt-5|gpt-4|claude|gemini|deepseek|qwen|kimi|chat|o[134])/.test(value);
 }
 
 function countSelectedModels(selection: FetchedModelSelection) {

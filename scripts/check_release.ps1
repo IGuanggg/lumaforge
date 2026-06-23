@@ -1,6 +1,6 @@
 param(
-    [string]$Version = "2.1.15",
-    [string]$BuildId = "20260617-v2115-desktop-info-hotfix",
+    [string]$Version = "2.1.16",
+    [string]$BuildId = "20260623-v2116-product-closure1",
     [string]$ToolRoot = $(Join-Path $env:LOCALAPPDATA "LumaForgeDevTools")
 )
 
@@ -104,6 +104,7 @@ Assert-Contains "main.py" "IMAGE_MODEL = os.getenv(`"IMAGE_MODEL`", `"gpt-image-
 Assert-Contains "main.py" 'IMAGE_MODELS = model_list("IMAGE_MODELS", IMAGE_MODEL, ["gpt-image-2", "nano-banana-pro"])'
 Assert-Contains "web/src/stores/use-config-store.ts" "imageModel: `"gpt-image-2-vip`""
 Assert-Contains "web/src/hooks/use-version-check.ts" "/api/app/update-check"
+Assert-Contains "web/src/hooks/use-version-check.ts" "release_assets"
 Assert-NotContains "web/src/hooks/use-version-check.ts" "https://raw.githubusercontent.com/IGuanggg/lumaforge/main/VERSION"
 Assert-Contains "web/src/components/layout/github-link.tsx" "https://github.com/IGuanggg/lumaforge"
 Assert-Contains "web/src/constant/env.ts" "https://github.com/IGuanggg/lumaforge#readme"
@@ -124,6 +125,12 @@ Assert-Contains "web/src/components/layout/client-root-init.tsx" "lumaforge:v21_
 Assert-Contains "middleware/admin.go" "service.LumaCurrentAuthUser(token)"
 Assert-Contains "config/config.go" "LumaForgeCloudURL"
 Assert-Contains "RELEASE_NOTES_v$Version.md" "LumaForge v$Version"
+Assert-Contains "README.md" "LumaForge-Setup-$Version.exe"
+Assert-Contains "README.md" "LumaForge-$Version-desktop.zip"
+Assert-Contains "README.md" "LumaForge-$Version-macos.zip"
+Assert-Contains "scripts/build_macos_release.sh" 'LumaForge-${VERSION}-macos.zip'
+Assert-Contains ".github/workflows/build-macos.yml" "Setup Go"
+Assert-Contains ".github/workflows/build-macos.yml" "Setup Bun"
 Assert-Contains "docs/HANDOFF.md" "Old-version compatibility requirements"
 Assert-Contains "desktop_updater.py" "PROTECT_NAMES"
 Assert-Contains "desktop_updater.py" "`"data`""
@@ -150,7 +157,8 @@ $staleBuildIds = @(
     "20260604-v2026-wheel-link-hotfix1",
     "20260605-v2027-resolution-cache-hotfix1",
     "20260605-v2028-cache-nav-hotfix1",
-    "20260605-v2029-remove-comfyui-content1"
+    "20260605-v2029-remove-comfyui-content1",
+    "20260617-v2115-desktop-info-hotfix"
 )
 $staticFiles = Get-ChildItem -LiteralPath "static" -Recurse -File | Where-Object { $_.Extension -in ".html", ".js", ".css" }
 foreach ($file in $staticFiles) {

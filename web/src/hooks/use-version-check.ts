@@ -23,6 +23,14 @@ function isNewerVersion(latestVersion: string, currentVersion: string) {
     return latest.some((value, index) => value > current[index] && latest.slice(0, index).every((part, prevIndex) => part === current[prevIndex]));
 }
 
+export type UpdateAsset = {
+    name?: string;
+    type?: string;
+    url?: string;
+    size?: number;
+    sha256?: string;
+};
+
 export type UpdateCheckResult = {
     configured?: boolean;
     ok?: boolean;
@@ -33,9 +41,20 @@ export type UpdateCheckResult = {
     download_url?: string;
     release_notes?: string;
     notes?: string;
+    source_url?: string;
+    assets?: UpdateAsset[];
+    selected_asset?: UpdateAsset | null;
+    release_assets?: {
+        windows_installer?: UpdateAsset | null;
+        desktop_zip?: UpdateAsset | null;
+        macos_zip?: UpdateAsset | null;
+        sha256_files?: UpdateAsset[];
+        all?: UpdateAsset[];
+    };
     auto_update_supported?: boolean;
     auto_update_reason?: string;
     update_mode?: string;
+    checked_at?: string;
 };
 
 async function fetchUpdateCheck() {
@@ -50,29 +69,37 @@ export function useVersionCheck() {
     const localReleases = useMemo(readLocalReleases, []);
     const [latestVersion, setLatestVersion] = useState(currentVersion);
     const [releases, setReleases] = useState<ReleaseInfo[]>(localReleases);
+    const [latestCheck, setLatestCheck] = useState<UpdateCheckResult | null>(null);
     const [checking, setChecking] = useState(false);
     const [open, setOpen] = useState(false);
     const hasNewVersion = isNewerVersion(latestVersion, currentVersion);
 
+    const applyCheckResult = useCallback(
+        (data: UpdateCheckResult) => {
+            const checked = { ...data, checked_at: new Date().toISOString() };
+            const version = data.is_newer ? data.latest_version?.trim() : data.latest_version?.trim() || currentVersion;
+            setLatestVersion(version || currentVersion);
+            setLatestCheck(checked);
+            setReleases(localReleases);
+            return checked;
+        },
+        [currentVersion, localReleases],
+    );
+
     const checkLatestVersion = useCallback(async () => {
         try {
-            const data = await fetchUpdateCheck();
-            const version = data.is_newer ? data.latest_version?.trim() : currentVersion;
-            setLatestVersion(version || currentVersion);
+            applyCheckResult(await fetchUpdateCheck());
             return true;
         } catch {
             return false;
         }
-    }, [currentVersion]);
+    }, [applyCheckResult]);
 
     const checkLatestRelease = useCallback(
         async (showMessage = false) => {
             setChecking(true);
             try {
-                const data = await fetchUpdateCheck();
-                const version = data.is_newer ? data.latest_version?.trim() : currentVersion;
-                setLatestVersion(version || currentVersion);
-                setReleases(localReleases);
+                const data = applyCheckResult(await fetchUpdateCheck());
                 if (showMessage) message.success("已获取最新版本信息");
                 return data;
             } catch {
@@ -84,7 +111,7 @@ export function useVersionCheck() {
                 setChecking(false);
             }
         },
-        [currentVersion, localReleases, message],
+        [applyCheckResult, currentVersion, localReleases, message],
     );
 
     useEffect(() => {
@@ -101,6 +128,7 @@ export function useVersionCheck() {
         setOpen,
         openReleaseModal,
         latestVersion,
+        latestCheck,
         releases,
         checking,
         hasNewVersion,

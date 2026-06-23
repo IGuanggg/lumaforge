@@ -313,11 +313,11 @@ func TestLumaUpdateAutoSourceModeDoesNotWriteFailedState(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode([]map[string]any{
 			{
-				"tag_name":   "v2.1.16",
+				"tag_name":   "v2.1.17",
 				"draft":      false,
 				"prerelease": false,
 				"assets": []map[string]any{
-					{"name": "LumaForge-2.1.16-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
+					{"name": "LumaForge-2.1.17-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
 				},
 			},
 		})
@@ -342,8 +342,8 @@ func TestLumaUpdateAutoSourceModeDoesNotWriteFailedState(t *testing.T) {
 	if state["phase"] == "failed" {
 		t.Fatalf("source mode auto update wrote failed state: %#v", state)
 	}
-	if state["phase"] != "found" || state["latest_version"] != "2.1.16" {
-		t.Fatalf("state = %#v, want found 2.1.16", state)
+	if state["phase"] != "found" || state["latest_version"] != "2.1.17" {
+		t.Fatalf("state = %#v, want found 2.1.17", state)
 	}
 }
 

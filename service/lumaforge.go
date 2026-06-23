@@ -21,8 +21,8 @@ import (
 	"github.com/IGuanggg/lumaforge/model"
 )
 
-const LumaForgeVersion = "2.1.15"
-const LumaForgeBuildID = "20260617-v2115-desktop-info-hotfix"
+const LumaForgeVersion = "2.1.16"
+const LumaForgeBuildID = "20260623-v2116-product-closure1"
 const lumaUpdateDownloadStallSeconds = 45
 
 var (
@@ -1451,6 +1451,20 @@ func LumaUpdatePreflight() map[string]any {
 		probe := lumaProbeWritableDir(paths[id], true)
 		add(id, labels[id], boolFromAny(probe["ok"]), stringFromAny(probe["path"])+" - "+stringFromAny(probe["detail"]), true)
 	}
+	releaseAssetSummary := map[string]any{}
+	if strings.TrimSpace(config.Cfg.UpdateCheckURL) != "" {
+		_, _, _, summary, _, err := fetchLatestGitHubRelease(config.Cfg.UpdateCheckURL)
+		if err != nil {
+			add("release_assets", "Release assets", false, err.Error(), false)
+		} else {
+			releaseAssetSummary = summary
+			add("release_windows_installer", "Windows installer asset", summary["windows_installer"] != nil, stringFromAny(firstNonNil(mapValue(summary["windows_installer"], "name"), "Release asset missing")), false)
+			add("release_desktop_zip", "Desktop zip asset", summary["desktop_zip"] != nil, stringFromAny(firstNonNil(mapValue(summary["desktop_zip"], "name"), "Release asset missing")), true)
+			add("release_macos_zip", "macOS zip asset", summary["macos_zip"] != nil, stringFromAny(firstNonNil(mapValue(summary["macos_zip"], "name"), "Release asset missing")), false)
+			shaFiles, _ := summary["sha256_files"].([]map[string]any)
+			add("release_sha256", "Release sha256 assets", len(shaFiles) > 0, fmt.Sprintf("%d sha256 file(s)", len(shaFiles)), false)
+		}
+	}
 	blocking := []map[string]any{}
 	warnings := []map[string]any{}
 	for _, check := range checks {
@@ -1481,6 +1495,7 @@ func LumaUpdatePreflight() map[string]any {
 		"update_capability": capability,
 		"update_check_url":  strings.TrimSpace(config.Cfg.UpdateCheckURL),
 		"update_configured": strings.TrimSpace(config.Cfg.UpdateCheckURL) != "",
+		"release_assets":    releaseAssetSummary,
 		"checks":            checks,
 		"blocking":          blocking,
 		"warnings":          warnings,
@@ -1783,7 +1798,7 @@ func LumaUpdateCheck() map[string]any {
 		}
 	}
 	LumaSaveUpdateState(map[string]any{"phase": "checking", "error": nil})
-	latest, asset, notes, err := fetchLatestGitHubRelease(checkURL)
+	latest, asset, releaseAssets, releaseAssetSummary, notes, err := fetchLatestGitHubRelease(checkURL)
 	if err != nil {
 		LumaSaveUpdateState(map[string]any{"phase": "failed", "error": err.Error()})
 		updateCapability := LumaUpdateCapability()
@@ -1795,6 +1810,7 @@ func LumaUpdateCheck() map[string]any {
 			"is_newer":              false,
 			"asset":                 nil,
 			"assets":                []map[string]any{},
+			"release_assets":        map[string]any{},
 			"selected_asset":        nil,
 			"download_url":          "",
 			"release_notes":         "",
@@ -1857,8 +1873,10 @@ func LumaUpdateCheck() map[string]any {
 		"latest_version":        latest,
 		"is_newer":              isNewer,
 		"asset":                 stateAsset,
-		"assets":                stateAssets,
+		"assets":                releaseAssets,
+		"update_assets":         stateAssets,
 		"selected_asset":        stateAsset,
+		"release_assets":        releaseAssetSummary,
 		"download_url":          downloadURL,
 		"release_notes":         notes,
 		"notes":                 notes,
@@ -1870,33 +1888,33 @@ func LumaUpdateCheck() map[string]any {
 	}
 }
 
-func fetchLatestGitHubRelease(checkURL string) (string, map[string]any, string, error) {
+func fetchLatestGitHubRelease(checkURL string) (string, map[string]any, []map[string]any, map[string]any, string, error) {
 	request, err := http.NewRequest(http.MethodGet, checkURL, nil)
 	if err != nil {
-		return "", nil, "", err
+		return "", nil, nil, nil, "", err
 	}
 	request.Header.Set("Accept", "application/vnd.github+json")
 	request.Header.Set("User-Agent", "LumaForge/"+LumaForgeVersion)
 	response, err := lumaHTTPClient.Do(request)
 	if err != nil {
-		return "", nil, "", err
+		return "", nil, nil, nil, "", err
 	}
 	defer response.Body.Close()
 	data, _ := io.ReadAll(io.LimitReader(response.Body, 4<<20))
 	if response.StatusCode >= 400 {
-		return "", nil, "", fmt.Errorf("更新检查失败：HTTP %d", response.StatusCode)
+		return "", nil, nil, nil, "", fmt.Errorf("update check failed: HTTP %d", response.StatusCode)
 	}
 	var releases []map[string]any
 	if strings.HasSuffix(strings.TrimRight(checkURL, "/"), "/latest") {
 		var single map[string]any
 		if err := json.Unmarshal(data, &single); err != nil {
-			return "", nil, "", err
+			return "", nil, nil, nil, "", err
 		}
 		releases = []map[string]any{single}
 	} else if err := json.Unmarshal(data, &releases); err != nil {
 		var single map[string]any
 		if err2 := json.Unmarshal(data, &single); err2 != nil {
-			return "", nil, "", err
+			return "", nil, nil, nil, "", err
 		}
 		releases = []map[string]any{single}
 	}
@@ -1912,9 +1930,10 @@ func fetchLatestGitHubRelease(checkURL string) (string, map[string]any, string, 
 			continue
 		}
 		asset := selectDesktopZipAsset(release)
-		return version, asset, stringFromAny(release["body"]), nil
+		assets, summary := releaseAssetsForRelease(release)
+		return version, asset, assets, summary, stringFromAny(release["body"]), nil
 	}
-	return "", nil, "", errors.New("没有找到可用的 2.x GitHub Release")
+	return "", nil, nil, nil, "", errors.New("no usable 2.x GitHub Release found")
 }
 
 func releaseVersion(release map[string]any) string {
@@ -1924,6 +1943,87 @@ func releaseVersion(release map[string]any) string {
 		value = "2.0." + strings.TrimPrefix(value, "20.0.")
 	}
 	return value
+}
+
+func releaseAssetType(name string, url string) string {
+	lower := strings.ToLower(strings.TrimSpace(name) + " " + strings.TrimSpace(url))
+	if strings.Contains(lower, ".sha256") || strings.HasSuffix(lower, ".sha256.txt") {
+		return "sha256"
+	}
+	if strings.Contains(lower, "setup") && strings.Contains(lower, ".exe") {
+		return "windows_installer"
+	}
+	if strings.Contains(lower, "macos") && strings.Contains(lower, ".zip") {
+		return "macos_zip"
+	}
+	if strings.Contains(lower, "desktop") && strings.Contains(lower, ".zip") {
+		return "desktop_zip"
+	}
+	if strings.Contains(lower, ".zip") {
+		return "zip"
+	}
+	if strings.Contains(lower, ".exe") {
+		return "windows_exe"
+	}
+	return "other"
+}
+
+func releaseAssetsForRelease(release map[string]any) ([]map[string]any, map[string]any) {
+	rawAssets, _ := release["assets"].([]any)
+	items := []map[string]any{}
+	sha256Files := []map[string]any{}
+	summary := map[string]any{
+		"windows_installer": nil,
+		"desktop_zip":       nil,
+		"macos_zip":         nil,
+		"sha256_files":      sha256Files,
+		"all":               items,
+	}
+	for _, raw := range rawAssets {
+		asset, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		name := stringFromAny(asset["name"])
+		url := firstNonEmptyString(stringFromAny(asset["browser_download_url"]), stringFromAny(asset["url"]))
+		if strings.TrimSpace(name) == "" && strings.TrimSpace(url) == "" {
+			continue
+		}
+		sha256 := ""
+		if digest := stringFromAny(asset["digest"]); strings.HasPrefix(strings.ToLower(digest), "sha256:") {
+			sha256 = strings.TrimSpace(strings.SplitN(digest, ":", 2)[1])
+		}
+		if sha256 == "" {
+			sha256 = strings.TrimSpace(stringFromAny(asset["sha256"]))
+		}
+		item := map[string]any{
+			"name":   name,
+			"url":    url,
+			"size":   asset["size"],
+			"sha256": sha256,
+			"type":   releaseAssetType(name, url),
+		}
+		items = append(items, item)
+		switch item["type"] {
+		case "windows_installer":
+			if summary["windows_installer"] == nil {
+				summary["windows_installer"] = item
+			}
+		case "desktop_zip":
+			if summary["desktop_zip"] == nil {
+				summary["desktop_zip"] = item
+			}
+		case "macos_zip":
+			if summary["macos_zip"] == nil {
+				summary["macos_zip"] = item
+			}
+		case "sha256":
+			sha256Files = append(sha256Files, item)
+		}
+	}
+	summary["sha256_files"] = sha256Files
+	summary["all"] = items
+	return items, summary
 }
 
 func selectDesktopZipAsset(release map[string]any) map[string]any {
@@ -2028,6 +2128,13 @@ func firstNonNil(values ...any) any {
 		if value != nil {
 			return value
 		}
+	}
+	return nil
+}
+
+func mapValue(value any, key string) any {
+	if item, ok := value.(map[string]any); ok {
+		return item[key]
 	}
 	return nil
 }
