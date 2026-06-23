@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/basketikun/infinite-canvas/config"
+	"github.com/IGuanggg/lumaforge/config"
 )
 
 func TestLumaAppActionCapabilityUsesLegacyBridge(t *testing.T) {

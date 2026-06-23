@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/basketikun/infinite-canvas/model"
-	"github.com/basketikun/infinite-canvas/service"
+	"github.com/IGuanggg/lumaforge/model"
+	"github.com/IGuanggg/lumaforge/service"
 )
 
 var errLegacyAssetUnavailable = fmt.Errorf("旧素材库兼容接口需要 legacy compatibility API")

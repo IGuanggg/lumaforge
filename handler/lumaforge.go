@@ -12,8 +12,8 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/basketikun/infinite-canvas/config"
-	"github.com/basketikun/infinite-canvas/service"
+	"github.com/IGuanggg/lumaforge/config"
+	"github.com/IGuanggg/lumaforge/service"
 )
 
 const lumaAuthCookieName = "lumaforge_auth_token"
@@ -553,6 +553,14 @@ func LumaUpdateCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func LumaUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		var payload struct {
+			UpdateCheckURL string `json:"update_check_url"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err == nil {
+			config.Cfg.UpdateCheckURL = strings.TrimSpace(payload.UpdateCheckURL)
+		}
+	}
 	writeRawJSON(w, map[string]any{"ok": true, "current_version": service.LumaForgeVersion, "update_check_url": config.Cfg.UpdateCheckURL, "update_check_configured": config.Cfg.UpdateCheckURL != ""})
 }
 

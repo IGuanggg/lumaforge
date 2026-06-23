@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, CircleDashed, Copy, DatabaseZap, ExternalLink, EyeOff, KeyRound, LoaderCircle, Plus, RefreshCcw, Save, Settings, ShieldCheck, SlidersHorizontal, Trash2, UserCog, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, CircleDashed, Copy, DatabaseZap, EyeOff, KeyRound, LoaderCircle, Plus, RefreshCcw, Save, Settings, ShieldCheck, SlidersHorizontal, Trash2, UserCog, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, App, Button, Empty, Input, Popconfirm, Select, Space, Spin, Switch, Tag, Tooltip, Typography } from "antd";
@@ -465,7 +465,6 @@ export default function ApiSettingsPage() {
                     <div className="grid gap-2 border-t border-stone-200 p-3 dark:border-stone-800">
                         <Button icon={<Plus className="size-4" />} onClick={addProvider}>添加平台</Button>
                         <Button icon={<RefreshCcw className="size-4" />} disabled={!providers.length} onClick={() => void repairProviderNames()}>修复显示名称</Button>
-                        <Button icon={<ExternalLink className="size-4" />} href="/static/api-settings.html?embedded=1" target="_blank">打开旧版备用页</Button>
                     </div>
                 </aside>
 

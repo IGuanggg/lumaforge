@@ -3,7 +3,7 @@ package repository
 import (
 	"encoding/json"
 
-	"github.com/basketikun/infinite-canvas/model"
+	"github.com/IGuanggg/lumaforge/model"
 	"gorm.io/gorm/clause"
 )
 

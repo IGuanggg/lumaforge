@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/basketikun/infinite-canvas/config"
-	"github.com/basketikun/infinite-canvas/model"
+	"github.com/IGuanggg/lumaforge/config"
+	"github.com/IGuanggg/lumaforge/model"
 )
 
 func TestFetchAdminChannelModelsParsesOpenAIModels(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"log"
 	"sync"
 
-	"github.com/basketikun/infinite-canvas/model"
-	"github.com/basketikun/infinite-canvas/repository"
+	"github.com/IGuanggg/lumaforge/model"
+	"github.com/IGuanggg/lumaforge/repository"
 	"github.com/robfig/cron/v3"
 )
 

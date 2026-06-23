@@ -6,8 +6,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/basketikun/infinite-canvas/model"
-	"github.com/basketikun/infinite-canvas/service"
+	"github.com/IGuanggg/lumaforge/model"
+	"github.com/IGuanggg/lumaforge/service"
 )
 
 type loginRequest struct {

@@ -4,6 +4,7 @@ import { persist, type PersistStorage, type StorageValue } from "zustand/middlew
 import { nanoid } from "nanoid";
 import { localForageStorage } from "@/lib/localforage-storage";
 import type { CanvasBackgroundMode } from "@/lib/canvas-theme";
+import { queueCanvasCloudDelete, queueCanvasCloudSave } from "@/services/canvas-cloud-sync";
 import type { CanvasAssistantSession, CanvasConnection, CanvasNodeData, ViewportTransform } from "../types";
 
 export type CanvasProject = {
@@ -29,6 +30,7 @@ export type CanvasProject = {
 type CanvasStore = {
     hydrated: boolean;
     projects: CanvasProject[];
+    pendingCloudDeletes: string[];
     createProject: (title?: string) => string;
     importProject: (project: Partial<CanvasProject>) => string;
     openProject: (id: string) => CanvasProject | null;
@@ -38,8 +40,8 @@ type CanvasStore = {
 };
 
 const initialViewport: ViewportTransform = { x: 0, y: 0, k: 1 };
-const CANVAS_STORE_KEY = "infinite-canvas:canvas_store";
-type PersistedCanvasState = Pick<CanvasStore, "projects">;
+const CANVAS_STORE_KEY = "lumaforge:canvas_store";
+type PersistedCanvasState = Pick<CanvasStore, "projects" | "pendingCloudDeletes">;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 let queuedPersistState: PersistedCanvasState | null = null;
 
@@ -69,6 +71,7 @@ export const useCanvasStore = create<CanvasStore>()(
         (set, get) => ({
             hydrated: false,
             projects: [],
+            pendingCloudDeletes: [],
             createProject: (title = "未命名画布") => {
                 const now = new Date().toISOString();
                 const id = nanoid();
@@ -87,6 +90,7 @@ export const useCanvasStore = create<CanvasStore>()(
                     metadata: { source: "v2.1" },
                 };
                 set((state) => ({ projects: [project, ...state.projects] }));
+                queueCanvasCloudSave(project);
                 return id;
             },
             importProject: (source) => {
@@ -106,24 +110,41 @@ export const useCanvasStore = create<CanvasStore>()(
                     metadata: source.metadata || {},
                 };
                 set((state) => ({ projects: [project, ...state.projects] }));
+                queueCanvasCloudSave(project);
                 return project.id;
             },
             openProject: (id) => {
                 return get().projects.find((item) => item.id === id) || null;
             },
             renameProject: (id, title) =>
-                set((state) => ({
-                    projects: state.projects.map((project) => (project.id === id ? { ...project, title: title.trim() || project.title, updatedAt: new Date().toISOString() } : project)),
-                })),
+                set((state) => {
+                    let updated: CanvasProject | null = null;
+                    const projects = state.projects.map((project) => {
+                        if (project.id !== id) return project;
+                        updated = { ...project, title: title.trim() || project.title, updatedAt: new Date().toISOString() };
+                        return updated;
+                    });
+                    if (updated) queueCanvasCloudSave(updated);
+                    return { projects };
+                }),
             deleteProjects: (ids) =>
                 set((state) => {
                     const projects = state.projects.filter((project) => !ids.includes(project.id));
-                    return { projects };
+                    const pendingCloudDeletes = Array.from(new Set([...state.pendingCloudDeletes, ...ids]));
+                    queueCanvasCloudDelete(ids);
+                    return { projects, pendingCloudDeletes };
                 }),
             updateProject: (id, patch) =>
-                set((state) => ({
-                    projects: state.projects.map((project) => (project.id === id ? { ...project, ...patch, updatedAt: new Date().toISOString() } : project)),
-                })),
+                set((state) => {
+                    let updated: CanvasProject | null = null;
+                    const projects = state.projects.map((project) => {
+                        if (project.id !== id) return project;
+                        updated = { ...project, ...patch, updatedAt: new Date().toISOString() };
+                        return updated;
+                    });
+                    if (updated) queueCanvasCloudSave(updated);
+                    return { projects };
+                }),
         }),
         {
             name: CANVAS_STORE_KEY,
@@ -131,9 +152,10 @@ export const useCanvasStore = create<CanvasStore>()(
             partialize: (state) =>
                 ({
                     projects: state.projects,
+                    pendingCloudDeletes: state.pendingCloudDeletes,
                 }) as StorageValue<CanvasStore>["state"],
             onRehydrateStorage: () => () => {
-                useCanvasStore.setState({ hydrated: true });
+                useCanvasStore.setState((state) => ({ hydrated: true, pendingCloudDeletes: state.pendingCloudDeletes || [] }));
             },
         },
     ),

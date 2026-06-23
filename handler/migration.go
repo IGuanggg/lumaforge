@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/basketikun/infinite-canvas/service"
+	"github.com/IGuanggg/lumaforge/service"
 )
 
 func LumaMigrationStatus(w http.ResponseWriter, r *http.Request) {

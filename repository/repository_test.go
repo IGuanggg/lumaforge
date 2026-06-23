@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/basketikun/infinite-canvas/config"
+	"github.com/IGuanggg/lumaforge/config"
 )
 
 func useTempRepositoryDB(t *testing.T) {

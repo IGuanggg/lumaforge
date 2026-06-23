@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/basketikun/infinite-canvas/model"
-	"github.com/basketikun/infinite-canvas/repository"
+	"github.com/IGuanggg/lumaforge/model"
+	"github.com/IGuanggg/lumaforge/repository"
 )
 
 const (

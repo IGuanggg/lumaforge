@@ -1,4 +1,5 @@
 import axios from "axios";
+import { ApiError } from "@/lib/api-error";
 
 export type ApiParams = Record<string, string | string[] | number | number[] | undefined>;
 
@@ -6,6 +7,8 @@ type ApiResponse<T> = {
     code: number;
     data: T;
     msg: string;
+    errorCode?: string;
+    action?: string;
 };
 
 export function compactApiParams(params: ApiParams) {
@@ -63,18 +66,21 @@ async function apiRequest<T>(config: { url: string; method: "GET" | "POST" | "DE
             headers: config.headers,
             validateStatus: () => true,
         });
-    } catch {
-        throw new Error("接口连接失败，请确认后端服务已启动");
+    } catch (error) {
+        if (axios.isAxiosError(error) && error.code === "ECONNABORTED") {
+            throw new ApiError("本地服务响应超时，请稍后重试", { code: "LOCAL_SERVICE_TIMEOUT", action: "重试" });
+        }
+        throw new ApiError("无法连接 LumaForge 本地服务，请确认应用已启动后重试", { code: "LOCAL_SERVICE_UNAVAILABLE", action: "检查本地服务" });
     }
 
     const result = response.data;
     if (!result || typeof result !== "object") {
-        throw new Error(response.status === 404 ? "接口不存在，请确认后端服务已启动" : "接口返回异常，请稍后重试");
+        throw new ApiError(response.status === 404 ? "当前版本不支持此操作，请更新 LumaForge 后重试" : "本地服务返回了无法识别的数据，请重试", { status: response.status });
     }
 
     const payload = result as ApiResponse<T>;
     if (response.status < 200 || response.status >= 300 || payload.code !== 0) {
-        throw new Error(payload.msg || "请求失败");
+        throw new ApiError(payload.msg || "操作失败，请稍后重试", { code: payload.errorCode, action: payload.action, status: response.status });
     }
 
     return payload.data;

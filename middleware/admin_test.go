@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/basketikun/infinite-canvas/config"
-	"github.com/basketikun/infinite-canvas/model"
-	"github.com/basketikun/infinite-canvas/service"
+	"github.com/IGuanggg/lumaforge/config"
+	"github.com/IGuanggg/lumaforge/model"
+	"github.com/IGuanggg/lumaforge/service"
 	"github.com/gin-gonic/gin"
 )
 

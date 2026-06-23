@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/basketikun/infinite-canvas/service"
+	"github.com/IGuanggg/lumaforge/service"
 )
 
 func AIImagesGenerations(w http.ResponseWriter, r *http.Request) {
@@ -51,13 +51,13 @@ func proxyAIGetRequest(w http.ResponseWriter, r *http.Request, path string) {
 	channel, err := service.SelectModelChannel(modelName)
 	if err != nil {
 		log.Printf("AI proxy select channel failed: model=%s err=%v", modelName, err)
-		Fail(w, "AI 接口请求失败")
+		FailUser(w, ErrProviderUnavailable)
 		return
 	}
 	path = resolveAIProxyPath(channel.BaseURL, rawModelName, path)
 	request, err := http.NewRequest(http.MethodGet, service.BuildModelChannelURL(channel, path), nil)
 	if err != nil {
-		Fail(w, "AI 接口请求失败")
+		FailUser(w, ErrProviderUnavailable)
 		return
 	}
 	request.Header.Set("Authorization", "Bearer "+channel.APIKey)
@@ -68,39 +68,39 @@ func proxyAIRequest(w http.ResponseWriter, r *http.Request, path string) {
 	body, contentType, modelName, err := readAIRequest(r)
 	if err != nil {
 		log.Printf("AI proxy request read failed: %v", err)
-		Fail(w, "AI 接口请求失败")
+		FailUser(w, ErrProviderUnavailable)
 		return
 	}
 	rawModelName := service.LumaRawModelName(modelName)
 	body, contentType, err = rewriteAIRequestModel(body, contentType, rawModelName)
 	if err != nil {
 		log.Printf("AI proxy request normalize model failed: %v", err)
-		Fail(w, "AI 接口请求失败")
+		FailUser(w, ErrProviderUnavailable)
 		return
 	}
 	user, ok := service.UserFromContext(r.Context())
 	if !ok {
-		Fail(w, "未登录或权限不足")
+		FailUser(w, ErrLoginRequired)
 		return
 	}
 	credits, err := service.ModelCost(modelName)
 	if err != nil {
 		log.Printf("AI proxy read model cost failed: model=%s err=%v", modelName, err)
-		Fail(w, "AI 接口请求失败")
+		FailUser(w, ErrProviderUnavailable)
 		return
 	}
 	credits *= readAIRequestCount(body, contentType)
 	channel, err := service.SelectModelChannel(modelName)
 	if err != nil {
 		log.Printf("AI proxy select channel failed: model=%s err=%v", modelName, err)
-		Fail(w, "AI 接口请求失败")
+		FailUser(w, ErrProviderUnavailable)
 		return
 	}
 	path = resolveAIProxyPath(channel.BaseURL, rawModelName, path)
 	request, err := http.NewRequest(http.MethodPost, service.BuildModelChannelURL(channel, path), bytes.NewReader(body))
 	if err != nil {
 		log.Printf("AI proxy build request failed: url=%s err=%v", service.BuildModelChannelURL(channel, path), err)
-		Fail(w, "AI 接口请求失败")
+		FailUser(w, ErrProviderUnavailable)
 		return
 	}
 	request.Header.Set("Authorization", "Bearer "+channel.APIKey)
@@ -125,7 +125,7 @@ func copyAIResponse(w http.ResponseWriter, request *http.Request, onFailure func
 		if onFailure != nil {
 			onFailure()
 		}
-		Fail(w, "AI 接口请求失败")
+		FailUser(w, ErrProviderUnavailable)
 		return
 	}
 	defer response.Body.Close()

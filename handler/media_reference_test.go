@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/basketikun/infinite-canvas/config"
+	"github.com/IGuanggg/lumaforge/config"
 )
 
 func TestUploadAndServeReferenceMedia(t *testing.T) {
@@ -183,7 +183,7 @@ func TestReferenceMediaDirUsesAbsoluteSQLiteDataDir(t *testing.T) {
 	previous := config.Cfg
 	t.Cleanup(func() { config.Cfg = previous })
 	root := t.TempDir()
-	config.Cfg = config.Config{StorageDriver: "sqlite", DatabaseDSN: filepath.Join(root, "infinite-canvas.db")}
+	config.Cfg = config.Config{StorageDriver: "sqlite", DatabaseDSN: filepath.Join(root, "lumaforge.db")}
 
 	if got := referenceMediaDir(); got != filepath.Join(root, "reference-media") {
 		t.Fatalf("referenceMediaDir = %q", got)

@@ -14,7 +14,8 @@ export type UploadedImage = {
     mimeType: string;
 };
 
-const store = localforage.createInstance({ name: "infinite-canvas", storeName: "image_files" });
+const store = localforage.createInstance({ name: "lumaforge", storeName: "image_files" });
+const legacyStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_files" });
 const objectUrls = new Map<string, string>();
 
 export async function uploadImage(input: string | Blob): Promise<UploadedImage> {
@@ -31,7 +32,14 @@ export async function resolveImageUrl(storageKey?: string, fallback = "") {
     if (!storageKey) return fallback;
     const cached = objectUrls.get(storageKey);
     if (cached) return cached;
-    const blob = await store.getItem<Blob>(storageKey);
+    let blob = await store.getItem<Blob>(storageKey);
+    if (!blob) {
+        blob = await legacyStore.getItem<Blob>(storageKey);
+        if (blob) {
+            await store.setItem(storageKey, blob);
+            await legacyStore.removeItem(storageKey);
+        }
+    }
     if (!blob) return fallback;
     const url = URL.createObjectURL(blob);
     objectUrls.set(storageKey, url);
@@ -39,7 +47,14 @@ export async function resolveImageUrl(storageKey?: string, fallback = "") {
 }
 
 export async function getImageBlob(storageKey: string) {
-    return store.getItem<Blob>(storageKey);
+    const current = await store.getItem<Blob>(storageKey);
+    if (current) return current;
+    const legacy = await legacyStore.getItem<Blob>(storageKey);
+    if (legacy) {
+        await store.setItem(storageKey, legacy);
+        await legacyStore.removeItem(storageKey);
+    }
+    return legacy;
 }
 
 export async function setImageBlob(storageKey: string, blob: Blob) {
@@ -62,6 +77,7 @@ export async function deleteStoredImages(keys: Iterable<string>) {
             if (url) URL.revokeObjectURL(url);
             objectUrls.delete(key);
             await store.removeItem(key);
+            await legacyStore.removeItem(key);
         }),
     );
 }

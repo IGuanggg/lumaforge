@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/basketikun/infinite-canvas/config"
+	"github.com/IGuanggg/lumaforge/config"
 )
 
 const LumaMigrationReportName = "migration-2.1.0.json"

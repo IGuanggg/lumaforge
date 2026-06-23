@@ -6,13 +6,15 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/basketikun/infinite-canvas/model"
+	"github.com/IGuanggg/lumaforge/model"
 )
 
 type response struct {
-	Code int    `json:"code"`
-	Data any    `json:"data"`
-	Msg  string `json:"msg"`
+	Code      int    `json:"code"`
+	Data      any    `json:"data"`
+	Msg       string `json:"msg"`
+	ErrorCode string `json:"errorCode,omitempty"`
+	Action    string `json:"action,omitempty"`
 }
 
 func OK(w http.ResponseWriter, data any) {
@@ -23,13 +25,25 @@ func Fail(w http.ResponseWriter, msg string) {
 	writeJSON(w, response{Code: 1, Data: nil, Msg: msg})
 }
 
+func FailUser(w http.ResponseWriter, err *UserError) {
+	if err == nil {
+		Fail(w, "操作失败，请稍后重试")
+		return
+	}
+	writeJSON(w, response{Code: 1, Data: nil, Msg: err.Message, ErrorCode: err.Code, Action: err.Action})
+}
+
 func FailError(w http.ResponseWriter, err error) {
 	log.Printf("request failed: %v", err)
+	if userErr, ok := err.(*UserError); ok {
+		FailUser(w, userErr)
+		return
+	}
 	if safe, ok := err.(interface{ SafeMessage() string }); ok {
 		Fail(w, safe.SafeMessage())
 		return
 	}
-	Fail(w, "操作失败")
+	Fail(w, "操作失败，请稍后重试")
 }
 
 func writeJSON(w http.ResponseWriter, value any) {

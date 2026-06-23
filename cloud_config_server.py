@@ -13,6 +13,7 @@ import sqlite3
 import tempfile
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from email.message import EmailMessage
 from typing import Dict, Any
 
@@ -51,6 +52,7 @@ ADMIN_SESSION_TTL_SECONDS = int(os.getenv("CLOUD_ADMIN_SESSION_TTL_SECONDS", str
 INITIAL_ADMIN_USERNAME = os.getenv("CLOUD_ADMIN_USERNAME", "admin").strip() or "admin"
 INITIAL_ADMIN_PASSWORD = os.getenv("CLOUD_ADMIN_PASSWORD", "admin")
 CONFIG_MAX_BYTES = int(os.getenv("CLOUD_CONFIG_MAX_BYTES", str(10 * 1024 * 1024)))
+CANVAS_MAX_BYTES = int(os.getenv("CLOUD_CANVAS_MAX_BYTES", str(16 * 1024 * 1024)))
 RATE_LIMIT_BUCKETS = {}
 BACKUP_PROVIDER_IDS = {"custom_s3", "cloudflare_r2", "aliyun_oss", "aws_s3", "minio"}
 BACKUP_ADDRESSING_STYLES = {"auto", "path", "virtual"}
@@ -95,6 +97,23 @@ class AuthPayload(BaseModel):
 
 class ConfigPayload(BaseModel):
     config: Dict[str, Any]
+
+
+class CanvasPayload(BaseModel):
+    id: str = Field(min_length=1, max_length=160)
+    title: str = Field(default="Untitled canvas", max_length=300)
+    nodes: list[Any] = Field(default_factory=list)
+    connections: list[Any] = Field(default_factory=list)
+    chatSessions: list[Any] = Field(default_factory=list)
+    activeChatId: str = Field(default="", max_length=160)
+    backgroundMode: str = Field(default="lines", max_length=40)
+    showImageInfo: bool = False
+    viewport: Dict[str, Any] = Field(default_factory=lambda: {"x": 0, "y": 0, "k": 1})
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    clientUpdatedAt: str = Field(default="", max_length=80)
+    version: int = Field(default=0, ge=0)
+    createdAt: str = Field(default="", max_length=80)
+    updatedAt: str = Field(default="", max_length=80)
 
 
 class ProfilePayload(BaseModel):
@@ -421,6 +440,32 @@ def init_db():
         )
         conn.execute("CREATE INDEX IF NOT EXISTS idx_user_media_user_updated ON user_media(user_id, updated_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_user_media_user_sha ON user_media(user_id, sha256)")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_canvases (
+                id TEXT NOT NULL,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL DEFAULT '',
+                nodes_json TEXT NOT NULL DEFAULT '[]',
+                connections_json TEXT NOT NULL DEFAULT '[]',
+                chat_sessions_json TEXT NOT NULL DEFAULT '[]',
+                active_chat_id TEXT NOT NULL DEFAULT '',
+                background_mode TEXT NOT NULL DEFAULT 'lines',
+                show_image_info INTEGER NOT NULL DEFAULT 0,
+                viewport_json TEXT NOT NULL DEFAULT '{}',
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                client_updated_at TEXT NOT NULL,
+                version INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                deleted_at TEXT,
+                PRIMARY KEY (user_id, id),
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_user_canvases_updated ON user_canvases(user_id, updated_at DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_user_canvases_deleted ON user_canvases(user_id, deleted_at)")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS app_settings (
@@ -2725,6 +2770,50 @@ def current_user(authorization: str = Header(default="")):
     }
 
 
+def iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def parse_iso_time(value: str) -> float:
+    raw = (value or "").strip()
+    if not raw:
+        return 0
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0
+
+
+def canvas_json(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def canvas_row_to_dict(row: sqlite3.Row) -> Dict[str, Any]:
+    def load_json(column: str, fallback: Any):
+        try:
+            return json.loads(row[column])
+        except (TypeError, ValueError):
+            return fallback
+
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "nodes": load_json("nodes_json", []),
+        "connections": load_json("connections_json", []),
+        "chatSessions": load_json("chat_sessions_json", []),
+        "activeChatId": row["active_chat_id"],
+        "backgroundMode": row["background_mode"],
+        "showImageInfo": bool(row["show_image_info"]),
+        "viewport": load_json("viewport_json", {"x": 0, "y": 0, "k": 1}),
+        "metadata": load_json("metadata_json", {}),
+        "clientUpdatedAt": row["client_updated_at"],
+        "version": int(row["version"]),
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+        "deletedAt": row["deleted_at"],
+    }
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "version": CLOUD_APP_VERSION}
@@ -2859,6 +2948,124 @@ def put_config(payload: ConfigPayload, user=Depends(current_user)):
             (user["id"], config_json, ts),
         )
     return {"ok": True, "updated_at": ts}
+
+
+@app.get("/api/canvases")
+def list_canvases(
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=200, ge=1, le=500),
+    include_deleted: bool = Query(default=False),
+    user=Depends(current_user),
+):
+    where = "user_id = ?" if include_deleted else "user_id = ? AND deleted_at IS NULL"
+    with db() as conn:
+        total = conn.execute(f"SELECT COUNT(*) AS c FROM user_canvases WHERE {where}", (user["id"],)).fetchone()["c"]
+        rows = conn.execute(
+            f"SELECT * FROM user_canvases WHERE {where} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            (user["id"], limit, offset),
+        ).fetchall()
+    return {"items": [canvas_row_to_dict(row) for row in rows], "total": int(total)}
+
+
+@app.get("/api/canvases/{canvas_id}")
+def get_canvas(canvas_id: str, user=Depends(current_user)):
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM user_canvases WHERE user_id = ? AND id = ?",
+            (user["id"], canvas_id),
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Canvas not found")
+    return canvas_row_to_dict(row)
+
+
+@app.post("/api/canvases")
+def save_canvas(payload: CanvasPayload, user=Depends(current_user)):
+    nodes_json = canvas_json(payload.nodes)
+    connections_json = canvas_json(payload.connections)
+    chats_json = canvas_json(payload.chatSessions)
+    viewport_json = canvas_json(payload.viewport)
+    metadata_json = canvas_json(payload.metadata)
+    payload_size = sum(len(value.encode("utf-8")) for value in (
+        nodes_json, connections_json, chats_json, viewport_json, metadata_json
+    ))
+    if payload_size > CANVAS_MAX_BYTES:
+        raise HTTPException(status_code=413, detail=f"Canvas is too large; maximum is {CANVAS_MAX_BYTES} bytes")
+
+    now = iso_now()
+    client_updated_at = (payload.clientUpdatedAt or payload.updatedAt or now).strip()
+    if not parse_iso_time(client_updated_at):
+        client_updated_at = now
+    with db() as conn:
+        existing = conn.execute(
+            "SELECT * FROM user_canvases WHERE user_id = ? AND id = ?",
+            (user["id"], payload.id),
+        ).fetchone()
+        if existing and parse_iso_time(client_updated_at) <= parse_iso_time(existing["client_updated_at"]):
+            return canvas_row_to_dict(existing)
+
+        created_at = existing["created_at"] if existing else ((payload.createdAt or now).strip() or now)
+        version = int(existing["version"]) + 1 if existing else 1
+        conn.execute(
+            """
+            INSERT INTO user_canvases (
+                id, user_id, title, nodes_json, connections_json, chat_sessions_json,
+                active_chat_id, background_mode, show_image_info, viewport_json,
+                metadata_json, client_updated_at, version, created_at, updated_at, deleted_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            ON CONFLICT(user_id, id) DO UPDATE SET
+                title = excluded.title,
+                nodes_json = excluded.nodes_json,
+                connections_json = excluded.connections_json,
+                chat_sessions_json = excluded.chat_sessions_json,
+                active_chat_id = excluded.active_chat_id,
+                background_mode = excluded.background_mode,
+                show_image_info = excluded.show_image_info,
+                viewport_json = excluded.viewport_json,
+                metadata_json = excluded.metadata_json,
+                client_updated_at = excluded.client_updated_at,
+                version = excluded.version,
+                updated_at = excluded.updated_at,
+                deleted_at = NULL
+            """,
+            (
+                payload.id, user["id"], payload.title.strip() or "Untitled canvas", nodes_json,
+                connections_json, chats_json, payload.activeChatId.strip(),
+                payload.backgroundMode.strip() or "lines", int(payload.showImageInfo), viewport_json,
+                metadata_json, client_updated_at, version, created_at, now,
+            ),
+        )
+        row = conn.execute(
+            "SELECT * FROM user_canvases WHERE user_id = ? AND id = ?",
+            (user["id"], payload.id),
+        ).fetchone()
+    return canvas_row_to_dict(row)
+
+
+@app.delete("/api/canvases/{canvas_id}")
+def delete_canvas(canvas_id: str, user=Depends(current_user)):
+    now = iso_now()
+    with db() as conn:
+        row = conn.execute(
+            "SELECT * FROM user_canvases WHERE user_id = ? AND id = ?",
+            (user["id"], canvas_id),
+        ).fetchone()
+        if not row:
+            return {"ok": True, "id": canvas_id}
+        if not row["deleted_at"]:
+            conn.execute(
+                """
+                UPDATE user_canvases
+                SET deleted_at = ?, client_updated_at = ?, updated_at = ?, version = version + 1
+                WHERE user_id = ? AND id = ?
+                """,
+                (now, now, now, user["id"], canvas_id),
+            )
+        row = conn.execute(
+            "SELECT * FROM user_canvases WHERE user_id = ? AND id = ?",
+            (user["id"], canvas_id),
+        ).fetchone()
+    return canvas_row_to_dict(row)
 
 
 @app.get("/api/media/status")

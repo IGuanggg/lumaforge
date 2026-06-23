@@ -3,8 +3,8 @@ package router
 import (
 	"net/http"
 
-	"github.com/basketikun/infinite-canvas/handler"
-	"github.com/basketikun/infinite-canvas/middleware"
+	"github.com/IGuanggg/lumaforge/handler"
+	"github.com/IGuanggg/lumaforge/middleware"
 	"github.com/gin-gonic/gin"
 )
 
@@ -129,6 +129,15 @@ func New() *gin.Engine {
 	})
 	api.GET("/prompts", middleware.OptionalAuth, gin.WrapF(handler.Prompts))
 	api.GET("/assets", middleware.OptionalAuth, gin.WrapF(handler.Assets))
+	canvases := api.Group("/canvases", middleware.UserAuth)
+	canvases.GET("", gin.WrapF(handler.Canvases))
+	canvases.POST("", gin.WrapF(handler.SaveCanvas))
+	canvases.GET("/:id", func(c *gin.Context) {
+		handler.Canvas(c.Writer, c.Request, c.Param("id"))
+	})
+	canvases.DELETE("/:id", func(c *gin.Context) {
+		handler.DeleteCanvas(c.Writer, c.Request, c.Param("id"))
+	})
 	api.POST("/admin/login", gin.WrapF(handler.AdminLogin))
 
 	admin := api.Group("/admin", middleware.AdminAuth)

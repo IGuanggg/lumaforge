@@ -9,8 +9,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/basketikun/infinite-canvas/config"
-	"github.com/basketikun/infinite-canvas/model"
+	"github.com/IGuanggg/lumaforge/config"
+	"github.com/IGuanggg/lumaforge/model"
 	"github.com/glebarez/sqlite"
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/jackc/pgx/v5"
@@ -69,6 +69,7 @@ func DB() (*gorm.DB, error) {
 			&model.Prompt{},
 			&model.Asset{},
 			&model.Setting{},
+			&model.CanvasProject{},
 		)
 	})
 	return db, dbErr

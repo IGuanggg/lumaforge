@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/basketikun/infinite-canvas/config"
-	"github.com/basketikun/infinite-canvas/service"
+	"github.com/IGuanggg/lumaforge/config"
+	"github.com/IGuanggg/lumaforge/service"
 )
 
 func TestLumaMeRawUsesCloudSessionShape(t *testing.T) {

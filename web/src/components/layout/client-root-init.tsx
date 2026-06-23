@@ -1,11 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { App } from "antd";
 
 import { importV21LegacyData } from "@/services/api/migration";
+import { hydrateCanvasCloudBackup } from "@/services/canvas-cloud-hydration";
 import { useCanvasStore } from "@/app/(user)/canvas/stores/use-canvas-store";
 import { useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
@@ -15,8 +16,11 @@ const V21_MIGRATION_MARKER = "lumaforge:v21_migration_done:full-canvas-v2";
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
+    const [legacyMigrationReady, setLegacyMigrationReady] = useState(false);
     const pathname = usePathname();
     const hydrateUser = useUserStore((state) => state.hydrateUser);
+    const userReady = useUserStore((state) => state.isReady);
+    const user = useUserStore((state) => state.user);
     const canvasHydrated = useCanvasStore((state) => state.hydrated);
     const importProject = useCanvasStore((state) => state.importProject);
     const loadPublicSettings = useConfigStore((state) => state.loadPublicSettings);
@@ -57,7 +61,10 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         if (!canvasHydrated || isLoginPage) return;
-        if (window.localStorage.getItem(V21_MIGRATION_MARKER)) return;
+        if (window.localStorage.getItem(V21_MIGRATION_MARKER)) {
+            setLegacyMigrationReady(true);
+            return;
+        }
         let cancelled = false;
         void importV21LegacyData()
             .then((data) => {
@@ -103,16 +110,23 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
                 }
                 window.localStorage.setItem(V21_MIGRATION_MARKER, new Date().toISOString());
                 if (imported > 0) message.success(`已导入 ${imported} 个旧版画布`);
+                setLegacyMigrationReady(true);
             })
             .catch((error) => {
                 if (cancelled) return;
                 window.localStorage.setItem(`${V21_MIGRATION_MARKER}:last_error`, error instanceof Error ? error.message : String(error));
                 console.warn("LumaForge v2.1 migration skipped", error);
+                setLegacyMigrationReady(true);
             });
         return () => {
             cancelled = true;
         };
     }, [canvasHydrated, importProject, isLoginPage, message]);
+
+    useEffect(() => {
+        if (!canvasHydrated || !legacyMigrationReady || !userReady || !user || isLoginPage) return;
+        void hydrateCanvasCloudBackup().catch((error) => console.warn("Canvas cloud backup sync skipped", error));
+    }, [canvasHydrated, isLoginPage, legacyMigrationReady, user, userReady]);
 
     useEffect(() => {
         if (handledConfigParams.current) return;

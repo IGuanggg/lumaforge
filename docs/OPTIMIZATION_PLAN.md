@@ -211,7 +211,7 @@ package handler
 import (
     "encoding/json"
     "net/http"
-    "github.com/basketikun/infinite-canvas/model"
+    "github.com/IGuanggg/lumaforge/model"
 )
 
 func WriteJSON(w http.ResponseWriter, code int, data any) {
@@ -454,8 +454,8 @@ mkdir -p service/lifecycle
 package service
 
 import (
-    "github.com/basketikun/infinite-canvas/service/provider"
-    "github.com/basketikun/infinite-canvas/service/lifecycle"
+    "github.com/IGuanggg/lumaforge/service/provider"
+    "github.com/IGuanggg/lumaforge/service/lifecycle"
 )
 
 // 保持向后兼容

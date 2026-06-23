@@ -67,9 +67,9 @@ type GenerationLogConfig = Pick<AiConfig, "model" | "imageModel" | "quality" | "
 
 type UpdateAiConfig = <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
 
-const LOG_STORE_KEY = "infinite-canvas:image_generation_logs";
 const RESULT_ACTION_BUTTON_CLASS = "min-w-0 px-1.5 [&_.ant-btn-icon]:shrink-0 [&>span:last-child]:min-w-0 [&>span:last-child]:truncate";
-const logStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_generation_logs" });
+const logStore = localforage.createInstance({ name: "lumaforge", storeName: "image_generation_logs" });
+const legacyLogStore = localforage.createInstance({ name: "infinite-canvas", storeName: "image_generation_logs" });
 
 export default function ImagePage() {
     const { message } = App.useApp();
@@ -760,6 +760,7 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
 async function readStoredLogs() {
     if (typeof window === "undefined") return [];
     try {
+        await migrateLegacyLogs();
         const values: GenerationLog[] = [];
         await logStore.iterate<GenerationLog, void>((value) => {
             values.push(value);
@@ -769,6 +770,17 @@ async function readStoredLogs() {
     } catch {
         return [];
     }
+}
+
+async function migrateLegacyLogs() {
+    const entries: Array<[string, GenerationLog]> = [];
+    await legacyLogStore.iterate<GenerationLog, void>((value, key) => {
+        entries.push([key, value]);
+    });
+    await Promise.all(entries.map(async ([key, value]) => {
+        if (!(await logStore.getItem(key))) await logStore.setItem(key, value);
+        await legacyLogStore.removeItem(key);
+    }));
 }
 
 async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog> {

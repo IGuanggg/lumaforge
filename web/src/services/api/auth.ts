@@ -1,6 +1,6 @@
 import { apiGet, apiPost } from "@/services/api/request";
 
-export const AUTH_TOKEN_KEY = "infinite-canvas-auth-token-v1";
+export const AUTH_TOKEN_KEY = "lumaforge:auth-token:v1";
 
 export type UserRole = "guest" | "user" | "admin";
 

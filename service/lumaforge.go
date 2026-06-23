@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/basketikun/infinite-canvas/config"
-	"github.com/basketikun/infinite-canvas/model"
+	"github.com/IGuanggg/lumaforge/config"
+	"github.com/IGuanggg/lumaforge/model"
 )
 
 const LumaForgeVersion = "2.1.15"
@@ -437,7 +437,7 @@ func LumaApplyCloudConfig(configMap map[string]any) (map[string]any, error) {
 					keys[id] = key
 				}
 			}
-			if err := writeJSONFile(lumaPath("api_provider_keys.json"), keys); err != nil {
+			if err := lumaSaveProviderKeys(keys); err != nil {
 				return result, err
 			}
 			result["keys"] = true
@@ -530,7 +530,7 @@ func LumaSaveProviders(providers []LumaAPIProvider) ([]LumaAPIProvider, error) {
 			cleaned[i].Primary = i == primaryIndex
 		}
 	}
-	if err := writeJSONFile(lumaPath("api_provider_keys.json"), keys); err != nil {
+	if err := lumaSaveProviderKeys(keys); err != nil {
 		return nil, err
 	}
 	if err := writeJSONFile(lumaPath("api_providers.json"), cleaned); err != nil {
@@ -672,6 +672,10 @@ func lumaLoadProviderKeyFile() map[string]string {
 	return keys
 }
 
+func lumaSaveProviderKeys(keys map[string]string) error {
+	return writeJSONFile(lumaPath("api_provider_keys.json"), keys)
+}
+
 func LumaProviderKeyDiagnostics() map[string]any {
 	providers := LumaPublicProviders(LumaLoadProviders())
 	providerIDs := map[string]bool{}
@@ -702,6 +706,8 @@ func LumaProviderKeyDiagnostics() map[string]any {
 		"orphan_count":            len(orphanKeys),
 		"has_environment_keys":    hasProviderEnvironmentKeys(providers),
 		"local_key_file_exists":   statErr == nil,
+		"key_storage_mode":        "plaintext-json",
+		"key_storage_secure":      false,
 		"cloud_config_available":  cloudAvailable,
 		"recoverable_from_cloud":  recoverableCount > 0,
 		"recoverable_key_count":   recoverableCount,
@@ -771,7 +777,7 @@ func LumaClearOrphanProviderKeys() map[string]any {
 		}
 	}
 	sort.Strings(removed)
-	_ = writeJSONFile(lumaPath("api_provider_keys.json"), keys)
+	_ = lumaSaveProviderKeys(keys)
 	diagnostics := LumaProviderKeyDiagnostics()
 	diagnostics["removed"] = removed
 	diagnostics["removed_count"] = len(removed)

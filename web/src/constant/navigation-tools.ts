@@ -1,4 +1,4 @@
-import { FileText, ImagePlus, Images, Maximize2, SlidersHorizontal, Video } from "lucide-react";
+import { FileText, ImagePlus, Images, LayoutTemplate, Maximize2, SlidersHorizontal, Video } from "lucide-react";
 
 export const navigationTools = [
     {
@@ -10,6 +10,11 @@ export const navigationTools = [
         slug: "image",
         label: "生图工作台",
         icon: ImagePlus,
+    },
+    {
+        slug: "templates",
+        label: "画布模板",
+        icon: LayoutTemplate,
     },
     {
         slug: "video",

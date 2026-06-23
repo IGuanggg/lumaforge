@@ -14,11 +14,11 @@ import (
 type Config struct {
 	Port                string `env:"PORT" envDefault:"8080"`
 	AdminUsername       string `env:"ADMIN_USERNAME" envDefault:"admin"`
-	AdminPassword       string `env:"ADMIN_PASSWORD" envDefault:"infinite-canvas"`
-	JWTSecret           string `env:"JWT_SECRET" envDefault:"infinite-canvas"`
+	AdminPassword       string `env:"ADMIN_PASSWORD" envDefault:"lumaforge-admin"`
+	JWTSecret           string `env:"JWT_SECRET" envDefault:"lumaforge-secret"`
 	JWTExpireHours      int    `env:"JWT_EXPIRE_HOURS" envDefault:"168"`
 	StorageDriver       string `env:"STORAGE_DRIVER" envDefault:"sqlite"`
-	DatabaseDSN         string `env:"DATABASE_DSN" envDefault:"data/infinite-canvas.db"`
+	DatabaseDSN         string `env:"DATABASE_DSN" envDefault:"data/lumaforge.db"`
 	LumaForgeDataDir    string `env:"LUMAFORGE_DATA_DIR"`
 	LumaForgeCloudURL   string `env:"LUMAFORGE_CLOUD_URL" envDefault:"https://image-cloud.0909106.xyz"`
 	LumaForgeLegacyAPI  string `env:"LUMAFORGE_LEGACY_API_URL"`
@@ -37,7 +37,8 @@ func Load() error {
 		return err
 	}
 	normalizeDockerSQLiteDSN("/app/data")
-	if strings.TrimSpace(Cfg.JWTSecret) == "" || Cfg.JWTSecret == "infinite-canvas" {
+	adoptLegacySQLiteDatabase()
+	if strings.TrimSpace(Cfg.JWTSecret) == "" || Cfg.JWTSecret == "infinite-canvas" || Cfg.JWTSecret == "lumaforge-secret" {
 		secret, err := persistentOrRandomSecret()
 		if err != nil {
 			return err
@@ -45,6 +46,38 @@ func Load() error {
 		Cfg.JWTSecret = secret
 	}
 	return nil
+}
+
+func adoptLegacySQLiteDatabase() {
+	if _, explicitlyConfigured := os.LookupEnv("DATABASE_DSN"); explicitlyConfigured {
+		return
+	}
+	dsn := strings.TrimSpace(Cfg.DatabaseDSN)
+	pathPart, suffix := dsn, ""
+	if index := strings.Index(dsn, "?"); index >= 0 {
+		pathPart, suffix = dsn[:index], dsn[index:]
+	}
+	if filepath.Base(pathPart) != "lumaforge.db" {
+		return
+	}
+	legacyPath := filepath.Join(filepath.Dir(pathPart), "infinite-canvas.db")
+	legacyInfo, legacyErr := os.Stat(legacyPath)
+	if legacyErr != nil {
+		return
+	}
+	if currentInfo, err := os.Stat(pathPart); err == nil {
+		if currentInfo.Size() > 0 || legacyInfo.Size() == 0 {
+			return
+		}
+		_ = os.Rename(pathPart, pathPart+".empty")
+	}
+	if err := os.Rename(legacyPath, pathPart); err != nil {
+		Cfg.DatabaseDSN = legacyPath + suffix
+		return
+	}
+	for _, extension := range []string{"-wal", "-shm"} {
+		_ = os.Rename(legacyPath+extension, pathPart+extension)
+	}
 }
 
 func persistentOrRandomSecret() (string, error) {

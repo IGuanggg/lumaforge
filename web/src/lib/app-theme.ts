@@ -42,7 +42,7 @@ export function getAntThemeConfig(dark: boolean): ThemeConfig {
 
     return {
         algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-        cssVar: { key: dark ? "infinite-canvas-dark" : "infinite-canvas-light" },
+        cssVar: { key: dark ? "lumaforge-dark" : "lumaforge-light" },
         token: {
             colorPrimary: color.primary,
             colorInfo: color.primary,

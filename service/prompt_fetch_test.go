@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/basketikun/infinite-canvas/model"
+	"github.com/IGuanggg/lumaforge/model"
 )
 
 func TestPromptMarkdownHelpers(t *testing.T) {

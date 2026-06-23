@@ -3,7 +3,7 @@ package repository
 import (
 	"testing"
 
-	"github.com/basketikun/infinite-canvas/model"
+	"github.com/IGuanggg/lumaforge/model"
 )
 
 func TestSaveSettingsRoundTripsPublicAndPrivateRows(t *testing.T) {

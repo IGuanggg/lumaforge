@@ -68,8 +68,8 @@ type GenerationLogConfig = Pick<AiConfig, "model" | "videoModel" | "size" | "vqu
 
 type UpdateAiConfig = <K extends keyof AiConfig>(key: K, value: AiConfig[K]) => void;
 
-const LOG_STORE_KEY = "infinite-canvas:video_generation_logs";
-const logStore = localforage.createInstance({ name: "infinite-canvas", storeName: "video_generation_logs" });
+const logStore = localforage.createInstance({ name: "lumaforge", storeName: "video_generation_logs" });
+const legacyLogStore = localforage.createInstance({ name: "infinite-canvas", storeName: "video_generation_logs" });
 
 export default function VideoPage() {
     const { message } = App.useApp();
@@ -679,6 +679,7 @@ function LogCard({ log, selected, active, onSelectedChange, onClick }: { log: Ge
 async function readStoredLogs() {
     if (typeof window === "undefined") return [];
     try {
+        await migrateLegacyLogs();
         const logs: GenerationLog[] = [];
         await logStore.iterate<GenerationLog, void>((value) => {
             logs.push(value);
@@ -687,6 +688,17 @@ async function readStoredLogs() {
     } catch {
         return [];
     }
+}
+
+async function migrateLegacyLogs() {
+    const entries: Array<[string, GenerationLog]> = [];
+    await legacyLogStore.iterate<GenerationLog, void>((value, key) => {
+        entries.push([key, value]);
+    });
+    await Promise.all(entries.map(async ([key, value]) => {
+        if (!(await logStore.getItem(key))) await logStore.setItem(key, value);
+        await legacyLogStore.removeItem(key);
+    }));
 }
 
 async function normalizeLog(log: Partial<GenerationLog>): Promise<GenerationLog> {
