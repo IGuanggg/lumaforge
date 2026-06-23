@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, Circle, X } from "lucide-react";
+import { ArrowRight, FileUp, ImagePlus, LayoutTemplate, Maximize2, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { App, Button, Image, Tag } from "antd";
 
@@ -8,10 +8,6 @@ import { fetchPromptsWithCache, type Prompt } from "@/services/api/prompts";
 import { navigationTools } from "@/constant/navigation-tools";
 import { cn } from "@/lib/utils";
 import { isUsablePromptCover, PromptCover } from "@/components/prompts/prompt-cover";
-import { fetchProviders } from "@/services/api/providers";
-import { dismissOnboardingChecklist, getOnboardingState, markOnboardingMilestone, ONBOARDING_EVENT } from "@/services/onboarding";
-import { useAssetStore } from "@/stores/use-asset-store";
-import { useCanvasStore } from "@/app/(user)/canvas/stores/use-canvas-store";
 
 function Highlighter({ action, color, children }: { action: "highlight" | "underline"; color: string; children: ReactNode }) {
     return (
@@ -29,6 +25,12 @@ function Highlighter({ action, color, children }: { action: "highlight" | "under
 const SHOWCASE_SIZE = 12;
 const SHOWCASE_POOL_SIZE = 80;
 const SHOWCASE_RANDOM_PAGE_COUNT = 4;
+const quickStarts: Array<{ title: string; description: string; href: string; icon: LucideIcon; primary?: boolean }> = [
+    { title: "从模板开始", description: "套用已有节点结构，再替换提示词和参考图。", href: "/templates", icon: LayoutTemplate, primary: true },
+    { title: "新建空白画布", description: "直接进入画布库，创建自己的自由工作台。", href: "/canvas", icon: Maximize2 },
+    { title: "打开生图工作台", description: "只想先试一张图时，从这里最快。", href: "/image", icon: ImagePlus },
+    { title: "导入画布或素材", description: "已有 zip 或素材时，到画布库和素材库继续整理。", href: "/canvas", icon: FileUp },
+];
 
 function shuffleArray<T>(items: T[]) {
     const result = [...items];
@@ -69,9 +71,6 @@ export default function IndexPage() {
     const [previewOpen, setPreviewOpen] = useState(false);
     const [showcaseError, setShowcaseError] = useState("");
     const [showcaseReloadKey, setShowcaseReloadKey] = useState(0);
-    const assets = useAssetStore((state) => state.assets);
-    const projects = useCanvasStore((state) => state.projects);
-    const [onboardingState, setOnboardingState] = useState({ dismissed: false, milestones: {} } as ReturnType<typeof getOnboardingState>);
     const previewImages = useMemo(() => promptShowcase.filter((item) => isUsablePromptCover(item.coverUrl) && !failedCoverIds.has(item.id)), [failedCoverIds, promptShowcase]);
 
     useEffect(() => {
@@ -87,27 +86,6 @@ export default function IndexPage() {
                 setShowcaseError(errorMessage);
             });
     }, [showcaseReloadKey]);
-
-    useEffect(() => {
-        const refresh = () => setOnboardingState(getOnboardingState());
-        refresh();
-        window.addEventListener(ONBOARDING_EVENT, refresh);
-        void fetchProviders()
-            .then((providers) => {
-                const configured = providers.some((provider) => provider.enabled && provider.has_key && [...provider.image_models, ...provider.chat_models, ...provider.video_models].length > 0);
-                if (configured) markOnboardingMilestone("api");
-            })
-            .catch(() => undefined);
-        return () => window.removeEventListener(ONBOARDING_EVENT, refresh);
-    }, []);
-
-    const checklist = [
-        { key: "api", label: "配置可用的 API", href: "/api-settings", done: Boolean(onboardingState.milestones.api) },
-        { key: "generated", label: "完成首次生成", href: "/image", done: Boolean(onboardingState.milestones.generated) },
-        { key: "asset", label: "保存首个素材", href: "/assets", done: assets.length > 0 },
-        { key: "canvas", label: "创建或进入画布", href: "/canvas", done: projects.length > 0 },
-    ];
-    const completedSteps = checklist.filter((item) => item.done).length;
 
     return (
         <main className="relative h-full overflow-y-auto bg-background bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:16px_16px] text-stone-950 dark:bg-[radial-gradient(rgba(245,245,244,.18)_1px,transparent_1px)] dark:text-stone-100">
@@ -138,21 +116,38 @@ export default function IndexPage() {
                     </div>
                 </div>
 
-                {!onboardingState.dismissed ? (
-                    <section className="relative mx-auto mb-12 w-full max-w-6xl border-y border-stone-200 py-5 dark:border-stone-800">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                            <div><h2 className="text-base font-semibold">开始使用 LumaForge</h2><p className="mt-1 text-sm text-stone-500">已完成 {completedSteps}/4，按自己的节奏继续。</p></div>
-                            <Button type="text" size="small" icon={<X className="size-4" />} onClick={() => dismissOnboardingChecklist()}>永久隐藏</Button>
+                <section className="relative mx-auto mb-12 w-full max-w-6xl border-y border-stone-200 py-5 dark:border-stone-800">
+                    <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                        <div>
+                            <h2 className="text-base font-semibold">常用入口</h2>
+                            <p className="mt-1 text-sm text-stone-500">不需要按顺序完成，想从哪里开始都可以。</p>
                         </div>
-                        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                            {checklist.map((item, index) => (
-                                <Button key={item.key} href={item.href} className="!flex !h-auto !items-center !justify-start !gap-2 !px-3 !py-3" icon={item.done ? <Check className="size-4 text-emerald-600" /> : <Circle className="size-4 text-stone-400" />}>
-                                    <span className={item.done ? "text-stone-500 line-through" : ""}>{index + 1}. {item.label}</span>
-                                </Button>
-                            ))}
-                        </div>
-                    </section>
-                ) : null}
+                        <Button href="/api-settings" size="small" icon={<SlidersHorizontal className="size-3.5" />}>
+                            API 设置
+                        </Button>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        {quickStarts.map((item) => {
+                            const Icon = item.icon;
+                            return (
+                                <a
+                                    key={item.title}
+                                    href={item.href}
+                                    className="group min-h-[112px] rounded-lg border border-stone-200 bg-white/75 p-4 text-left transition hover:-translate-y-0.5 hover:border-stone-300 hover:bg-white hover:shadow-sm dark:border-stone-800 dark:bg-stone-900/70 dark:hover:border-stone-700"
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <span className="flex size-9 items-center justify-center rounded-md bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-200">
+                                            <Icon className="size-4" />
+                                        </span>
+                                        {item.primary ? <Tag className="m-0">推荐</Tag> : null}
+                                    </div>
+                                    <div className="mt-3 text-sm font-semibold text-stone-950 dark:text-stone-100">{item.title}</div>
+                                    <p className="m-0 mt-1 text-xs leading-5 text-stone-500 dark:text-stone-400">{item.description}</p>
+                                </a>
+                            );
+                        })}
+                    </div>
+                </section>
 
                 <section className="relative mx-auto mb-20 max-w-6xl border-t border-stone-200 pt-12 dark:border-stone-800">
                     <div className="mb-8 grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-start">

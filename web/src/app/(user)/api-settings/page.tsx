@@ -270,9 +270,9 @@ export default function ApiSettingsPage() {
 
     const runConnectionTest = async () => {
         if (!selected) return;
-        const baseUrlError = getProviderBaseUrlError(selected);
-        if (baseUrlError) {
-            message.warning(baseUrlError);
+        const setupError = getProviderActionError(selected);
+        if (setupError) {
+            message.warning(setupError);
             return;
         }
         setAction("test");
@@ -296,9 +296,9 @@ export default function ApiSettingsPage() {
 
     const runProtocolProbe = async () => {
         if (!selected) return;
-        const baseUrlError = getProviderBaseUrlError(selected);
-        if (baseUrlError) {
-            message.warning(baseUrlError);
+        const setupError = getProviderActionError(selected, { allowMissingKey: true });
+        if (setupError) {
+            message.warning(setupError);
             return;
         }
         setAction("probe");
@@ -341,9 +341,9 @@ export default function ApiSettingsPage() {
 
     const runFetchModels = async () => {
         if (!selected) return;
-        const baseUrlError = getProviderBaseUrlError(selected);
-        if (baseUrlError) {
-            message.warning(baseUrlError);
+        const setupError = getProviderActionError(selected);
+        if (setupError) {
+            message.warning(setupError);
             return;
         }
         setAction("fetch");
@@ -481,7 +481,7 @@ export default function ApiSettingsPage() {
                                 <div className="min-w-0">
                                     <div className="font-semibold">检测到云端有可恢复的 API Key</div>
                                     <div className="mt-0.5 text-xs opacity-80">
-                                        本地当前没有保存 Key，可从云端配置恢复 {diagnostics.recoverable_key_count || 0} 个 Key。恢复过程不会显示明文，也不会清空本地已有 Key。
+                                        本地当前没有保存 Key，可从云端配置恢复 {diagnostics.recoverable_key_count || 0} 个 Key。恢复过程不会展示 Key 内容，也不会清空本地已有 Key。
                                     </div>
                                 </div>
                                 <Button size="small" type="primary" icon={<RefreshCcw className="size-4" />} loading={action === "recover"} onClick={() => void recoverCloudKeys(false)}>
@@ -670,9 +670,9 @@ export default function ApiSettingsPage() {
                                 <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-xs leading-6 text-stone-600 dark:border-stone-800 dark:bg-stone-950 dark:text-stone-300">
                                     <div className="mb-1 flex items-center gap-2 font-semibold text-stone-900 dark:text-stone-100">
                                         <UserCog className="size-4" />
-                                        用户偏好
+                                        普通用户本机配置
                                     </div>
-                                    默认走本地 API 平台；内置云端渠道单独配置，当前不会覆盖多平台 providers。
+                                    这里就是正常使用入口，不区分管理员角色。平台、模型和 Key 只按当前本机配置生效；保存前的改动不会影响生成。
                                 </div>
                             </aside>
                         </div>
@@ -1129,6 +1129,13 @@ function getProviderBaseUrlError(provider: Pick<ProviderDraft, "base_url">) {
     } catch {
         return "Base URL 格式不正确";
     }
+}
+
+function getProviderActionError(provider: Pick<ProviderDraft, "base_url" | "api_key" | "has_key">, options: { allowMissingKey?: boolean } = {}) {
+    const baseUrlError = getProviderBaseUrlError(provider);
+    if (baseUrlError) return `${baseUrlError}；也可以先只保存手动模型。`;
+    if (!options.allowMissingKey && !provider.has_key && !provider.api_key?.trim()) return "当前平台还没有 API Key。请先粘贴 Key 并保存，或只维护手动模型。";
+    return "";
 }
 
 function normalizeProviderId(value: string) {

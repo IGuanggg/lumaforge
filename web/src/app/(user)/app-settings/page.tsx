@@ -165,6 +165,7 @@ export default function AppSettingsPage() {
                             </div>
 
                             <ReleaseAssetStrip releaseAssets={releaseAssets} />
+                            <ReleaseIntegrityNotice releaseAssets={releaseAssets} checked={Boolean(updateCheck || preflight)} />
 
                             {isSourceMode ? (
                                 <Alert
@@ -250,6 +251,28 @@ function ReleaseAssetStrip({ releaseAssets }: { releaseAssets: ReleaseAssetManif
                 </div>
             ))}
         </div>
+    );
+}
+
+function ReleaseIntegrityNotice({ releaseAssets, checked }: { releaseAssets: ReleaseAssetManifest; checked: boolean }) {
+    if (!checked) return null;
+    const missing = [
+        releaseAssets.windows_installer ? "" : "Windows 安装器",
+        releaseAssets.desktop_zip ? "" : "桌面 zip",
+        releaseAssets.macos_zip ? "" : "macOS zip",
+        releaseAssets.sha256_files?.length ? "" : "SHA256 校验文件",
+    ].filter(Boolean);
+    if (!missing.length) {
+        return <Alert className="mt-4" type="success" showIcon message="发布资产完整" description="Windows 安装器、桌面 zip、macOS zip 和 SHA256 校验文件都已在 Release 中识别到。" />;
+    }
+    return (
+        <Alert
+            className="mt-4"
+            type="warning"
+            showIcon
+            message="Release 资产还不完整"
+            description={`缺少：${missing.join("、")}。可以先查看更新信息，但正式发布前建议补齐这些文件。`}
+        />
     );
 }
 
