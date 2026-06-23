@@ -1,28 +1,33 @@
-﻿# 光绘工坊 / LumaForge
+# 光绘工坊 / LumaForge
 
-LumaForge 是一个本地优先的 AI 创作工作台，核心是智能画布、素材库、Agent 创作、GPT 对话、图像增强、视频生成和云同步。
+LumaForge 是一个本地优先的 AI 创作工作台，围绕“智能画布 + 素材库 + 多模型生成 + 云同步”组织创作流程。桌面端优先保障本地数据安全，云端用于账户、配置、媒体和画布项目同步。
 
-当前版本：`2.1.0`
+当前版本：`2.1.15`
 
-v2.1.0 是源码主线重构版：以 Go + Next.js 画布主体作为新的智能画布创作界面，同时保留 LumaForge 原有云端账户同步、API 设置、设置页自动检测更新/更新模块、桌面 EXE 与自动更新基础。桌面模式会同步启动 legacy FastAPI 兼容服务，确保自动更新、备份、诊断和深度素材维护能力在迁移期继续可用。
+## 现在的状态
 
-> v2.1.0 引入了 `new新的infinite-canvas-0.2.4-copy.zip` 的 Go/Next 主体能力，并保留原项目 AGPL 授权文件 `LICENSE.infinite-canvas-AGPL`。LumaForge 云端账户与同步仍以现有 Python `cloud_config_server.py` 为权威服务，不迁移云端数据库结构。
+v2.1.x 已经从早期 Python 单体逐步迁到 Go + Next.js 主体：
+
+- Go API 服务负责账户、设置、素材、生成代理、更新检查、画布项目接口和本地数据维护。
+- Next.js 前端负责智能画布、模板、素材库、图像、视频、API 设置和应用设置页。
+- Python 桌面壳和兼容服务仍保留，用于桌面启动、打包、旧功能兼容和迁移期兜底。
+- LumaForge Cloud 继续作为云端权威服务，当前支持账户、配置、媒体和画布项目同步。
+
+> 本项目包含来自 infinite-canvas 的历史授权文件 `LICENSE.infinite-canvas-AGPL`，相关历史变更见 `CHANGELOG.infinite-canvas.md`。
 
 ## 核心功能
 
-- 智能画布：输出节点等待/失败/空结果状态明确显示；任务中心可查看运行中、失败和最近完成节点，支持定位、失败重试、批量重试、手动从素材库匹配结果、批量匹配和缺失文件检查；缺失图片可在节点内尝试匹配素材或临时忽略；节点角标显示运行中、失败、缺失、完成、历史、锁定等状态；历史结果可恢复到原节点；图片选中浮动工具条（高清、去背景、画笔、画同款、下载）；支持 `/` 快捷模板菜单、故事脚本生成、角色三视图、产品三视图、脚本视图拆分角色卡与出图节点和选中节点批量运行；左键选择/框选，空格+左键或中键拖动画布，右键属性，普通滚轮滚动，Ctrl/Alt+滚轮缩放，Ctrl+A 全选节点；支持节点/组命名、打组/解组、批量移动、提示词草稿持久化、生成输入框放大；返回列表会进入智能画布列表视角。
-- 智能画布：节点式创作、拖拽连线、LLM/API/Output 节点、Agent 自动规划。
-- Agent 创作：把自然语言目标拆成可编辑节点，支持尺寸、比例、张数和模型参数落地。
-- GPT 对话：支持聊天和生图模式，聊天可上传临时参考图，参考图不会进入素材库；智能画布支持发送参考图到 GPT 对话。
-- 文生图/在线生图：统一调用 API 平台，API 生图支持 n 张并发提交，生成结果优先保存到本地，再进入素材库。
-- 素材库：图片/视频归档、预览、下载另存为、加入智能画布、云端素材同步；详情页显示生成参数，支持复用 prompt、模型、尺寸等参数重新生成；资产库支持分类、添加、重命名、删除；缩略图布局优化。
-- 画同款：创建可编辑图片节点并继承提示词，不自动提交生成。
-- 图像增强：本地 API 增强，提供 2K / 4K 两档质量。
-- API 设置：只读平台 ID 展示与复制、百炼/DashScope 快捷预设、Key 诊断与孤儿 Key 清理、首页 API 状态面板手动检测与点击跳转。
-- 云端账户：邮箱验证、配置自动同步、头像、密码、云端媒体同步。
-- 云后端：`LumaForge Cloud`，提供账户、配置同步、媒体同步和加密数据库备份。
-- 画布数据安全：保存增加备份目录，避免异常空画布覆盖已有节点；云端导入过滤无效连线。
-- 应用维护：应用设置页提供本地轻量备份/恢复、启动诊断、素材库丢失文件检查、缩略图重建、更新欢迎卡、诊断结果分组、更新后状态提示和新版本弹窗提醒。
+- 智能画布：节点式创作、拖拽连线、框选、多选、撤销/重做、画布模板、节点状态、历史结果恢复、图片节点工具条和缺失文件提示。
+- 画布云同步：本地画布项目可同步到 LumaForge Cloud，支持按用户隔离、增量更新、软删除和启动时云端补水。
+- 画布模板：内置角色三视图、产品三视图、分镜脚本等模板，可从模板创建新画布。
+- Agent 创作：将自然语言目标拆成可编辑节点，并落地尺寸、比例、张数、模型等参数。
+- GPT 对话：支持聊天和生图模式，支持临时参考图；智能画布可把参考图发送到对话。
+- 文生图/在线生图：统一调用配置的 API 平台，结果优先落本地，再进入素材库。
+- 素材库：图片/视频归档、预览、下载、加入画布、云端媒体同步、缩略图维护和缺失文件检查。
+- 图像增强：提供高清增强、去背景、画同款、参考图复用等创作辅助。
+- API 设置：平台配置、Key 诊断、模型拉取、连接测试和快捷预设。按当前项目偏好，API Key 使用本地明文 JSON 存储。
+- 应用设置：版本检查、源码模式预检、轻量备份、诊断、备份列表、桌面动作和本地数据健康检查。
+- 云后端：`LumaForge Cloud` 提供账户、配置同步、媒体同步、画布同步和启动前数据库安全快照。
 
 ## 项目命名
 
@@ -32,66 +37,107 @@ v2.1.0 是源码主线重构版：以 Go + Next.js 画布主体作为新的智�
 | 英文品牌 | LumaForge |
 | GitHub 仓库 | lumaforge |
 | 前端包名 | lumaforge |
+| Go 模块 | github.com/IGuanggg/lumaforge |
 | 后端服务名 | lumaforge-cloud |
 | Docker 镜像 | iguang9881/lumaforge-cloud |
 | Docker 容器名 | lumaforge-cloud |
 | 云端数据目录 | /opt/lumaforge-cloud |
-| 后端标题 | LumaForge Cloud |
-| EXE 名称 | LumaForge.exe |
+| 桌面程序 | LumaForge.exe |
 
-## 本地运行
+## 本地开发
 
-### 2.1.0 Go + Next 主体
+推荐本地测试入口统一使用 `http://127.0.0.1:3001`。
+
+### 1. 启动 Go API
 
 ```powershell
 go run .
-cd web
-bun install
-bun run dev
 ```
 
-Next 默认代理到 `http://127.0.0.1:8080` 的 Go API。旧 API 设置和应用设置页面保留在：
+默认监听：
 
-- `http://localhost:3000/api-settings`
-- `http://localhost:3000/app-settings`
+```text
+http://127.0.0.1:8080
+```
 
-### 2.0.x 兼容 Python 本地服务
+### 2. 启动 Next.js 前端
+
+```powershell
+cd web
+bun install
+bunx next dev --webpack -H 0.0.0.0 -p 3001
+```
+
+常用页面：
+
+- `http://127.0.0.1:3001/canvas`
+- `http://127.0.0.1:3001/templates`
+- `http://127.0.0.1:3001/assets`
+- `http://127.0.0.1:3001/api-settings`
+- `http://127.0.0.1:3001/app-settings`
+
+Next API 路由会代理到 `http://127.0.0.1:8080`。
+
+### 3. 旧 Python 本地服务
+
+迁移期仍保留旧入口：
 
 ```powershell
 pip install -r requirements.txt
 python launcher.py
 ```
 
-默认只监听本机，启动后自动打开浏览器。开发时也可以直接运行：
+开发调试也可以直接运行：
 
 ```powershell
 python main.py
 ```
 
+## 质量检查
+
+推荐发布前跑统一脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\check_quality.ps1
+```
+
+脚本覆盖：
+
+- Go 测试
+- Python cloud server 单元测试
+- 前端 TypeScript 检查
+
+也可以分开运行：
+
+```powershell
+go test ./...
+python -m unittest cloud_config_server_test.py
+cd web
+bun run typecheck
+```
+
 ## 桌面版构建
 
-v2.1.0 桌面版需要先构建 Go API、Next standalone，并把 Node runtime 一起放进 EXE 目录。Windows 构建机需要：
+Windows 桌面包需要：
 
 - Go 1.25+
 - Bun
 - Node.js
 - Python 3.10+
 - PyInstaller
-- 可选：Inno Setup 6（用于一键安装器）
+- 可选：Inno Setup 6
 
 ```powershell
 .\build_desktop.bat
 ```
 
-输出：
+常见输出：
 
 ```text
 dist\LumaForge\LumaForge.exe
-releases\LumaForge-2.1.0-desktop.zip
-releases\LumaForge-Setup-2.1.0.exe
+releases\LumaForge-2.1.15-desktop.zip
+releases\LumaForge-Setup-2.1.15.exe
 ```
-
-说明：`LumaForge.exe` 会优先启动 v2.1.0 的 Go + Next 主体；如果发布包里缺少 `v21/server.exe`、`web/server.js` 或 `node/node.exe`，才会回退到旧 Python 本地服务。
 
 桌面版默认数据目录：
 
@@ -113,81 +159,96 @@ dist\LumaForge Browser\LumaForge.exe
 
 浏览器版会启动本地服务并打开系统浏览器，运行数据保存在 EXE 旁边的 `userdata/`。
 
-## macOS 版本构建
+## macOS 构建
 
-macOS 不能在 Windows 上交叉构建，必须在 Mac 机器或 GitHub Actions `macos-*` runner 上执行。建议使用 Python 3.12：
+macOS 包必须在 Mac 或 GitHub Actions macOS runner 上构建：
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install --upgrade pip
-VERSION=2.1.0 bash scripts/build_macos_release.sh
+VERSION=2.1.15 bash scripts/build_macos_release.sh
 ```
 
-也可以在 GitHub Actions 里手动运行 `Build macOS Release` workflow，或推送 `v2.1.0` tag 后让 macOS runner 自动构建并上传 macOS 包。
+GitHub Actions 工作流：
+
+```text
+.github/workflows/build-macos.yml
+```
+
+手动触发 `Build macOS Release` 会上传 Actions artifact。推送 `v*` tag 时，workflow 还会把 macOS zip 和 sha256 上传到对应 GitHub Release。
 
 输出：
 
 ```text
-releases/LumaForge-2.1.0-macos.zip
-releases/LumaForge-2.1.0-macos.sha256.txt
+releases/LumaForge-2.1.15-macos.zip
+releases/LumaForge-2.1.15-macos.sha256.txt
 ```
 
-说明：
-
-- macOS 产物需要在 macOS 上构建，Windows 本机无法生成真实 `.app`。
-- 未配置 Apple Developer 证书时，脚本只打包未签名版本；正式分发建议后续接入 `codesign` 和 `xcrun notarytool`。
-- 如果遇到 Gatekeeper 提示，可先在本机测试环境通过“系统设置 → 隐私与安全性”允许运行；正式发布应使用签名与公证。
+未配置 Apple Developer 证书时，产物是未签名版本；正式公开分发建议接入 `codesign` 和 `notarytool`。
 
 ## 云后端 Docker
 
-多架构镜像：
+构建镜像：
+
+```bash
+docker build -f Dockerfile.cloud -t iguang9881/lumaforge-cloud:2.1.15 .
+```
+
+多架构推送：
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f Dockerfile.cloud \
-  -t iguang9881/lumaforge-cloud:2.1.0 \
+  -t iguang9881/lumaforge-cloud:2.1.15 \
   -t iguang9881/lumaforge-cloud:latest \
   --push .
 ```
 
-服务器升级部署：
+首次部署：
 
 ```bash
 mkdir -p /opt/lumaforge-cloud/cloud-data
-cd /opt/lumaforge-cloud
-
-docker pull iguang9881/lumaforge-cloud:2.1.0
-docker stop lumaforge-cloud || true
-docker rm lumaforge-cloud || true
 
 docker run -d \
   --name lumaforge-cloud \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
-  -e CLOUD_APP_VERSION=2.1.0 \
-  -p 127.0.0.1:8787:8787 \
+  -e CLOUD_CONFIG_PORT=8787 \
+  -e CLOUD_APP_VERSION=2.1.15 \
+  -p 8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.1.0
+  iguang9881/lumaforge-cloud:2.1.15
 ```
 
-不要删除 `/opt/lumaforge-cloud/cloud-data`，否则云端账户、SMTP、配置同步和备份记录会丢失。
+升级已有服务时，先备份 `/opt/lumaforge-cloud/cloud-data`，再替换容器。不要删除数据目录。新版本启动时会为已有数据库创建 `cloud_config.db.before-upgrade-<version>` 安全快照。
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:8787/health
+curl http://127.0.0.1:8787/version
+```
 
 ## 发布检查
 
-发布前运行：
+发布前：
 
 ```powershell
-.\scripts\check_release.ps1 -Version 2.1.0
+.\scripts\check_release.ps1 -Version 2.1.15
 ```
 
-GitHub Release 建议同时上传：
+GitHub Release 建议上传：
 
-- `releases/LumaForge-Setup-2.1.0.exe` 安装器
-- `releases/LumaForge-2.1.0-desktop.zip` 桌面自动更新包
-- `releases/LumaForge-2.1.0-macos.zip` macOS 包（在 macOS 上构建）
-- 对应 SHA256 校验信息
+- `releases/LumaForge-Setup-2.1.15.exe`
+- `releases/LumaForge-2.1.15-desktop.zip`
+- `releases/LumaForge-2.1.15-macos.zip`
+- 对应 SHA256 校验文件
 
-发布流程和人工回归项见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。
+更多发布流程和人工回归项见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。
 
-API 和数据边界见 [docs/API_CONTRACT.md](docs/API_CONTRACT.md)。
+## 任务与文档
+
+- 技术改进索引：[LUMAFORGE_TECH_IMPROVEMENTS.md](LUMAFORGE_TECH_IMPROVEMENTS.md)
+- 旧静态页面迁移审计：[docs/LEGACY_MIGRATION_AUDIT.md](docs/LEGACY_MIGRATION_AUDIT.md)
+- API 和数据边界：[docs/API_CONTRACT.md](docs/API_CONTRACT.md)
+- 打包说明：[APP_PACKAGING.md](APP_PACKAGING.md)
+
+当前 Claude 改进任务已按 `task-01-canvas-data-backup.md` 到 `task-08-canvas-enhancements.md` 跟踪。
