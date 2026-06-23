@@ -8,6 +8,22 @@ Set-Location $root
 
 $Version = "2.1.16"
 
+function Write-Sha256File {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        return $null
+    }
+
+    $item = Get-Item $Path
+    $hash = (Get-FileHash $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $line = "$hash  $($item.Name)"
+    Set-Content -Path "$($item.FullName).sha256.txt" -Value $line -Encoding ascii
+    return $line
+}
+
 Write-Host "[1/10] Cleaning dist and build..."
 Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
@@ -110,12 +126,23 @@ if ($iscc) {
 Write-Host "[10/10] Attempting code signing for installer..."
 & "$PSScriptRoot\sign_windows.ps1" -Version $Version -Files @("releases\LumaForge-Setup-$Version.exe")
 
+Write-Host "Writing SHA256 files..."
+$shaLines = @()
+$zipSha = Write-Sha256File -Path $zipName
+if ($zipSha) { $shaLines += $zipSha }
+$installerSha = Write-Sha256File -Path "releases\LumaForge-Setup-$Version.exe"
+if ($installerSha) { $shaLines += $installerSha }
+if ($shaLines.Count -gt 0) {
+    Set-Content -Path "releases\LumaForge-$Version-SHA256.txt" -Value $shaLines -Encoding ascii
+    Write-Host "  OK: releases\LumaForge-$Version-SHA256.txt"
+}
+
 Write-Host "Build summary:"
 Write-Host ""
 Get-ChildItem dist\LumaForge\LumaForge*.exe | ForEach-Object {
     Write-Host "  EXE: $($_.FullName) ($([math]::Round($_.Length/1MB, 1)) MB)"
 }
-Get-ChildItem releases\LumaForge* | ForEach-Object {
+Get-ChildItem releases\LumaForge* | Where-Object { $_.Extension -in @(".zip", ".exe") } | ForEach-Object {
     $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash
     Write-Host "  Release: $($_.Name) ($([math]::Round($_.Length/1MB, 1)) MB)"
     Write-Host "    SHA256: $hash"
