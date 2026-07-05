@@ -94,6 +94,8 @@ func New() *gin.Engine {
 	api.POST("/app/cleanup-run", gin.WrapF(handler.LumaBackupNoop))
 	api.POST("/app/open-path", gin.WrapF(handler.LumaAppOpenPath))
 	api.POST("/app/select-path", gin.WrapF(handler.LumaAppSelectPath))
+	api.POST("/app/update-path", gin.WrapF(handler.LumaAppUpdatePath))
+	api.POST("/app/save-as", gin.WrapF(handler.LumaAppSaveAs))
 	api.POST("/app/open-url", gin.WrapF(handler.LumaAppOpenURL))
 	api.POST("/app/restart", gin.WrapF(handler.LumaAppRestart))
 	api.POST("/app/exit", gin.WrapF(handler.LumaAppExit))

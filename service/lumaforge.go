@@ -3,10 +3,12 @@ package service
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -60,6 +62,19 @@ type LumaAPIProvider struct {
 	ClearKey          bool             `json:"clear_key,omitempty"`
 	HasKey            bool             `json:"has_key"`
 	KeyPreview        string           `json:"key_preview"`
+}
+
+type LumaPathTransferResult struct {
+	OK           bool              `json:"ok"`
+	Target       string            `json:"target"`
+	OldPath      string            `json:"old_path"`
+	Path         string            `json:"path"`
+	TransferMode string            `json:"transfer_mode"`
+	Copied       int               `json:"copied"`
+	Moved        int               `json:"moved"`
+	Skipped      int               `json:"skipped"`
+	Failed       []string          `json:"failed"`
+	Paths        map[string]string `json:"paths"`
 }
 
 func LumaDataDir() string {
@@ -568,7 +583,7 @@ func normalizeLumaProvider(provider LumaAPIProvider) (LumaAPIProvider, error) {
 	if provider.Name == "" {
 		provider.Name = provider.ID
 	}
-	provider.BaseURL = strings.TrimRight(strings.TrimSpace(provider.BaseURL), "/")
+	provider.BaseURL = normalizeLumaProviderBaseURL(provider.BaseURL)
 	provider.Name = repairLumaProviderName(provider.Name, provider.ID, provider.BaseURL)
 	if provider.BaseURL != "" {
 		parsed, err := url.Parse(provider.BaseURL)
@@ -586,6 +601,47 @@ func normalizeLumaProvider(provider LumaAPIProvider) (LumaAPIProvider, error) {
 	provider.ChatModels = uniqueStrings(provider.ChatModels)
 	provider.VideoModels = uniqueStrings(provider.VideoModels)
 	return provider, nil
+}
+
+func normalizeLumaProviderBaseURL(value string) string {
+	value = strings.TrimRight(strings.TrimSpace(value), "/")
+	if value == "" {
+		return ""
+	}
+	if strings.HasPrefix(value, "//") {
+		value = "https:" + value
+	} else if !strings.Contains(value, "://") {
+		value = defaultLumaProviderBaseURLScheme(value) + "://" + value
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return value
+	}
+	parsed.Path = strings.TrimRight(parsed.Path, "/")
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	return strings.TrimRight(parsed.String(), "/")
+}
+
+func defaultLumaProviderBaseURLScheme(value string) string {
+	host := strings.SplitN(value, "/", 2)[0]
+	host = strings.SplitN(host, "?", 2)[0]
+	host = strings.SplitN(host, "#", 2)[0]
+	host = strings.TrimPrefix(host, "[")
+	if end := strings.Index(host, "]"); end >= 0 {
+		host = host[:end]
+	} else if colon := strings.LastIndex(host, ":"); colon >= 0 {
+		host = host[:colon]
+	}
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "localhost" || host == "::1" {
+		return "http"
+	}
+	ip := net.ParseIP(host)
+	if ip != nil && (ip.IsLoopback() || ip.IsPrivate()) {
+		return "http"
+	}
+	return "https"
 }
 
 func repairLumaProviderName(name string, id string, baseURL string) string {
@@ -918,6 +974,7 @@ func stringInSlice(value string, values []string) bool {
 }
 
 func LumaFetchProviderModels(provider LumaAPIProvider, apiKey string) (map[string]any, error) {
+	provider.BaseURL = normalizeLumaProviderBaseURL(provider.BaseURL)
 	models, status, message, err := fetchOpenAIModels(provider.BaseURL, firstNonEmptyString(apiKey, provider.APIKey))
 	if err != nil {
 		if len(provider.ImageModels)+len(provider.ChatModels)+len(provider.VideoModels) > 0 {
@@ -937,7 +994,7 @@ func LumaFetchProviderModels(provider LumaAPIProvider, apiKey string) (map[strin
 }
 
 func LumaProbeProviderProtocol(provider LumaAPIProvider, apiKey string) map[string]any {
-	baseURL := strings.TrimRight(strings.TrimSpace(provider.BaseURL), "/")
+	baseURL := normalizeLumaProviderBaseURL(provider.BaseURL)
 	if baseURL == "" {
 		return map[string]any{
 			"ok":         false,
@@ -1020,7 +1077,7 @@ func LumaProbeProviderProtocol(provider LumaAPIProvider, apiKey string) map[stri
 }
 
 func fetchOpenAIModels(baseURL string, apiKey string) ([]string, int, string, error) {
-	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	baseURL = normalizeLumaProviderBaseURL(baseURL)
 	if baseURL == "" {
 		return nil, 0, "Base URL 为空", errors.New("Base URL 为空")
 	}
@@ -1528,20 +1585,50 @@ func LumaAppPaths() map[string]string {
 }
 
 func LumaSaveAppPath(target string, rawPath string) (map[string]string, error) {
-	target = strings.ToLower(strings.TrimSpace(target))
-	if !lumaValidAppPathTarget(target) || target == "data" {
-		return nil, fmt.Errorf("不支持修改该目录")
-	}
-	path := strings.TrimSpace(rawPath)
-	if path == "" {
-		return nil, fmt.Errorf("目录不能为空")
-	}
-	absPath, err := filepath.Abs(path)
+	result, err := LumaSaveAppPathWithTransfer(target, rawPath, "keep")
 	if err != nil {
 		return nil, err
 	}
+	return result.Paths, nil
+}
+
+func LumaSaveAppPathWithTransfer(target string, rawPath string, transferMode string) (LumaPathTransferResult, error) {
+	target = strings.ToLower(strings.TrimSpace(target))
+	if !lumaValidAppPathTarget(target) || target == "data" {
+		return LumaPathTransferResult{}, fmt.Errorf("不支持修改该目录")
+	}
+	path := strings.TrimSpace(rawPath)
+	if path == "" {
+		return LumaPathTransferResult{}, fmt.Errorf("目录不能为空")
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return LumaPathTransferResult{}, err
+	}
 	if err := os.MkdirAll(absPath, 0755); err != nil {
-		return nil, err
+		return LumaPathTransferResult{}, err
+	}
+	if err := lumaEnsureWritableDir(absPath); err != nil {
+		return LumaPathTransferResult{}, err
+	}
+	mode := lumaNormalizePathTransferMode(transferMode)
+	oldPaths := LumaAppPaths()
+	oldPath, _ := filepath.Abs(strings.TrimSpace(oldPaths[target]))
+	result := LumaPathTransferResult{
+		OK:           true,
+		Target:       target,
+		OldPath:      oldPath,
+		Path:         absPath,
+		TransferMode: mode,
+		Failed:       []string{},
+	}
+	if mode != "keep" && oldPath != "" && !lumaSamePath(oldPath, absPath) {
+		if lumaPathOverlaps(oldPath, absPath) {
+			return LumaPathTransferResult{}, fmt.Errorf("新旧目录不能互相嵌套，请选择一个独立目录")
+		}
+		if err := lumaTransferDirectoryContents(oldPath, absPath, mode, &result); err != nil {
+			return LumaPathTransferResult{}, err
+		}
 	}
 	settings := lumaLoadAppPathSettings()
 	settings[target] = absPath
@@ -1553,9 +1640,266 @@ func LumaSaveAppPath(target string, rawPath string) (map[string]string, error) {
 		}
 	}
 	if err := writeJSONFile(lumaPath("app_paths.json"), settings); err != nil {
+		return LumaPathTransferResult{}, err
+	}
+	result.Paths = LumaAppPaths()
+	result.Path = result.Paths[target]
+	return result, nil
+}
+
+func lumaNormalizePathTransferMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "copy", "move":
+		return strings.ToLower(strings.TrimSpace(mode))
+	default:
+		return "keep"
+	}
+}
+
+func lumaEnsureWritableDir(path string) error {
+	probe := filepath.Join(path, fmt.Sprintf(".lumaforge-write-test-%d.tmp", time.Now().UnixNano()))
+	if err := os.WriteFile(probe, []byte("ok"), 0600); err != nil {
+		return fmt.Errorf("目录不可写：%w", err)
+	}
+	_ = os.Remove(probe)
+	return nil
+}
+
+func lumaSamePath(left string, right string) bool {
+	leftAbs, leftErr := filepath.Abs(left)
+	rightAbs, rightErr := filepath.Abs(right)
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	return strings.EqualFold(filepath.Clean(leftAbs), filepath.Clean(rightAbs))
+}
+
+func lumaPathOverlaps(source string, dest string) bool {
+	sourceAbs, sourceErr := filepath.Abs(source)
+	destAbs, destErr := filepath.Abs(dest)
+	if sourceErr != nil || destErr != nil {
+		return false
+	}
+	sourceAbs = filepath.Clean(sourceAbs)
+	destAbs = filepath.Clean(destAbs)
+	if strings.EqualFold(sourceAbs, destAbs) {
+		return false
+	}
+	relDest, destErr := filepath.Rel(sourceAbs, destAbs)
+	relSource, sourceErr := filepath.Rel(destAbs, sourceAbs)
+	return (destErr == nil && relDest != "." && !strings.HasPrefix(relDest, ".."+string(filepath.Separator)) && relDest != "..") ||
+		(sourceErr == nil && relSource != "." && !strings.HasPrefix(relSource, ".."+string(filepath.Separator)) && relSource != "..")
+}
+
+func lumaTransferDirectoryContents(source string, dest string, mode string, result *LumaPathTransferResult) error {
+	info, err := os.Stat(source)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("读取原目录失败：%w", err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("原路径不是目录")
+	}
+	err = filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			result.Failed = append(result.Failed, path+": "+walkErr.Error())
+			return nil
+		}
+		if path == source {
+			return nil
+		}
+		rel, relErr := filepath.Rel(source, path)
+		if relErr != nil {
+			result.Failed = append(result.Failed, path+": "+relErr.Error())
+			return nil
+		}
+		targetPath := filepath.Join(dest, rel)
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			result.Failed = append(result.Failed, path+": "+infoErr.Error())
+			return nil
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			result.Skipped++
+			return nil
+		}
+		if entry.IsDir() {
+			if _, statErr := os.Stat(targetPath); statErr == nil {
+				return nil
+			}
+			if err := os.MkdirAll(targetPath, info.Mode().Perm()); err != nil {
+				result.Failed = append(result.Failed, targetPath+": "+err.Error())
+			}
+			return nil
+		}
+		if _, statErr := os.Stat(targetPath); statErr == nil {
+			result.Skipped++
+			return nil
+		} else if !os.IsNotExist(statErr) {
+			result.Failed = append(result.Failed, targetPath+": "+statErr.Error())
+			return nil
+		}
+		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+			result.Failed = append(result.Failed, targetPath+": "+err.Error())
+			return nil
+		}
+		if err := lumaCopyFile(path, targetPath, info.Mode().Perm()); err != nil {
+			result.Failed = append(result.Failed, path+": "+err.Error())
+			return nil
+		}
+		result.Copied++
+		if mode == "move" {
+			if err := os.Remove(path); err != nil {
+				result.Failed = append(result.Failed, path+": "+err.Error())
+				return nil
+			}
+			result.Moved++
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	if mode == "move" {
+		_ = filepath.WalkDir(source, func(path string, entry os.DirEntry, err error) error {
+			if err != nil || path == source || !entry.IsDir() {
+				return nil
+			}
+			_ = os.Remove(path)
+			return nil
+		})
+	}
+	return nil
+}
+
+func lumaCopyFile(source string, dest string, perm os.FileMode) error {
+	input, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	output, err := os.OpenFile(dest, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+	if err != nil {
+		return err
+	}
+	defer output.Close()
+	_, err = io.Copy(output, input)
+	return err
+}
+
+func LumaSaveAs(urlValue string, filename string) (map[string]any, error) {
+	raw, contentType, sourceName, err := lumaReadDownloadBytes(urlValue)
+	if err != nil {
 		return nil, err
 	}
-	return LumaAppPaths(), nil
+	name := lumaSafeDownloadFilename(firstNonEmptyString(filename, sourceName, "download"))
+	outputDir := LumaAppPaths()["output"]
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return nil, fmt.Errorf("创建保存目录失败：%w", err)
+	}
+	if err := lumaEnsureWritableDir(outputDir); err != nil {
+		return nil, err
+	}
+	targetPath := lumaUniqueFilePath(filepath.Join(outputDir, name))
+	if err := os.WriteFile(targetPath, raw, 0644); err != nil {
+		return nil, fmt.Errorf("保存文件失败：%w", err)
+	}
+	return map[string]any{
+		"ok":           true,
+		"cancelled":    false,
+		"path":         targetPath,
+		"filename":     filepath.Base(targetPath),
+		"size_bytes":   len(raw),
+		"content_type": firstNonEmptyString(contentType, "application/octet-stream"),
+		"output_dir":   outputDir,
+	}, nil
+}
+
+func lumaReadDownloadBytes(urlValue string) ([]byte, string, string, error) {
+	value := strings.TrimSpace(urlValue)
+	if value == "" {
+		return nil, "", "", fmt.Errorf("下载地址为空")
+	}
+	if strings.HasPrefix(strings.ToLower(value), "data:") {
+		return lumaReadDataURL(value)
+	}
+	if strings.HasPrefix(value, "/") {
+		port := strings.TrimSpace(config.Cfg.Port)
+		if port == "" {
+			port = "8080"
+		}
+		value = "http://127.0.0.1:" + port + value
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme == "" {
+		return nil, "", "", fmt.Errorf("下载地址无效")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return nil, "", "", fmt.Errorf("只支持 http、https 或 data 下载地址")
+	}
+	response, err := lumaHTTPClient.Get(value)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("网络连接失败：%w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode >= http.StatusBadRequest {
+		return nil, "", "", fmt.Errorf("下载失败：HTTP %d", response.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, 512<<20))
+	if err != nil {
+		return nil, "", "", fmt.Errorf("读取下载内容失败：%w", err)
+	}
+	name := filepath.Base(parsed.Path)
+	return body, response.Header.Get("Content-Type"), name, nil
+}
+
+func lumaReadDataURL(value string) ([]byte, string, string, error) {
+	comma := strings.Index(value, ",")
+	if comma < 0 {
+		return nil, "", "", fmt.Errorf("data URL 格式无效")
+	}
+	meta := value[5:comma]
+	data := value[comma+1:]
+	contentType := strings.Split(meta, ";")[0]
+	if strings.Contains(meta, ";base64") {
+		raw, err := base64.StdEncoding.DecodeString(data)
+		if err != nil {
+			return nil, "", "", fmt.Errorf("data URL 解码失败：%w", err)
+		}
+		return raw, contentType, "", nil
+	}
+	raw, err := url.QueryUnescape(data)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("data URL 解码失败：%w", err)
+	}
+	return []byte(raw), contentType, "", nil
+}
+
+func lumaSafeDownloadFilename(value string) string {
+	name := strings.TrimSpace(value)
+	if name == "" || name == "." || name == string(filepath.Separator) {
+		name = "download"
+	}
+	replacer := strings.NewReplacer("\\", "-", "/", "-", ":", "-", "*", "-", "?", "-", "\"", "-", "<", "-", ">", "-", "|", "-")
+	name = strings.TrimSpace(replacer.Replace(name))
+	if name == "" {
+		return "download"
+	}
+	return name
+}
+
+func lumaUniqueFilePath(path string) string {
+	ext := filepath.Ext(path)
+	stem := strings.TrimSuffix(path, ext)
+	candidate := path
+	for index := 1; ; index++ {
+		if _, err := os.Stat(candidate); os.IsNotExist(err) {
+			return candidate
+		}
+		candidate = fmt.Sprintf("%s-%d%s", stem, index, ext)
+	}
 }
 
 func LumaAppPath(target string) (string, error) {

@@ -6,6 +6,9 @@ import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { useThemeStore } from "@/stores/use-theme-store";
 import type { ViewportTransform } from "../types";
 
+const CANVAS_WHEEL_EXCLUDED_SELECTOR = "[data-canvas-no-zoom],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown";
+const CANVAS_NODE_SELECTOR = "[data-node-id]";
+
 type InfiniteCanvasProps = {
     containerRef: React.RefObject<HTMLDivElement | null>;
     viewport: ViewportTransform;
@@ -30,13 +33,20 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         hasMoved: false,
     });
     const scaleRef = useRef(viewport.k);
+    const viewportRef = useRef(viewport);
+    const onViewportChangeRef = useRef(onViewportChange);
     const frameRef = useRef<number | null>(null);
     const nextViewportRef = useRef<ViewportTransform | null>(null);
     const [isSpacePressed, setIsSpacePressed] = useState(false);
 
     useEffect(() => {
+        viewportRef.current = viewport;
         scaleRef.current = viewport.k;
-    }, [viewport.k]);
+    }, [viewport]);
+
+    useEffect(() => {
+        onViewportChangeRef.current = onViewportChange;
+    }, [onViewportChange]);
 
     useEffect(
         () => () => {
@@ -64,39 +74,59 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
         };
     }, []);
 
-    const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-        const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("[data-canvas-no-zoom],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown")) return;
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container) return;
 
-        event.preventDefault();
-        if (!(event.ctrlKey || event.metaKey || event.altKey)) {
-            const dx = event.deltaX || (event.shiftKey ? event.deltaY : 0);
-            const dy = event.shiftKey ? 0 : event.deltaY;
-            onViewportChange({
-                x: viewport.x - dx,
-                y: viewport.y - dy,
-                k: viewport.k,
+        const handleWheel = (event: WheelEvent) => {
+            const target = event.target instanceof Element ? event.target : null;
+            const isViewportZoomGesture = event.ctrlKey || event.metaKey || event.altKey;
+            if (target?.closest(CANVAS_WHEEL_EXCLUDED_SELECTOR)) {
+                if (isViewportZoomGesture) event.preventDefault();
+                return;
+            }
+
+            const shouldLetNodeResize = event.altKey && !event.ctrlKey && !event.metaKey && Boolean(target?.closest(CANVAS_NODE_SELECTOR));
+            if (shouldLetNodeResize) {
+                event.preventDefault();
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const currentViewport = viewportRef.current;
+            if (!isViewportZoomGesture) {
+                const dx = event.deltaX || (event.shiftKey ? event.deltaY : 0);
+                const dy = event.shiftKey ? 0 : event.deltaY;
+                onViewportChangeRef.current({
+                    x: currentViewport.x - dx,
+                    y: currentViewport.y - dy,
+                    k: currentViewport.k,
+                });
+                return;
+            }
+
+            const delta = -event.deltaY;
+            const factor = Math.pow(1.1, delta / 100);
+            const newScale = Math.min(Math.max(currentViewport.k * factor, 0.05), 5);
+            const rect = container.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+            const worldX = (mouseX - currentViewport.x) / currentViewport.k;
+            const worldY = (mouseY - currentViewport.y) / currentViewport.k;
+
+            onViewportChangeRef.current({
+                x: mouseX - worldX * newScale,
+                y: mouseY - worldY * newScale,
+                k: newScale,
             });
-            return;
-        }
+        };
 
-        const delta = -event.deltaY;
-        const factor = Math.pow(1.1, delta / 100);
-        const newScale = Math.min(Math.max(viewport.k * factor, 0.05), 5);
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
+        container.addEventListener("wheel", handleWheel, { passive: false });
+        return () => container.removeEventListener("wheel", handleWheel);
+    }, [containerRef]);
 
-        const mouseX = event.clientX - rect.left;
-        const mouseY = event.clientY - rect.top;
-        const worldX = (mouseX - viewport.x) / viewport.k;
-        const worldY = (mouseY - viewport.y) / viewport.k;
-
-        onViewportChange({
-            x: mouseX - worldX * newScale,
-            y: mouseY - worldY * newScale,
-            k: newScale,
-        });
-    };
 
     const startPan = (event: React.PointerEvent<HTMLDivElement>) => {
         event.preventDefault();
@@ -138,7 +168,7 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
 
     const handleDoubleClick = (event: React.MouseEvent<HTMLDivElement>) => {
         const target = event.target instanceof Element ? event.target : null;
-        if (target?.closest("[data-canvas-no-zoom],.ant-modal,.ant-popover,.ant-dropdown,.ant-select-dropdown,.ant-picker-dropdown")) return;
+        if (target?.closest(CANVAS_WHEEL_EXCLUDED_SELECTOR)) return;
         if (target?.closest("[data-node-id],[data-connection-id],[data-connection-create-menu]")) return;
         if (panState.current.hasMoved) return;
         event.preventDefault();
@@ -189,7 +219,6 @@ export function InfiniteCanvas({ containerRef, viewport, backgroundMode = "lines
             style={{ background: theme.canvas.background }}
             onPointerDown={handlePointerDown}
             onDoubleClick={handleDoubleClick}
-            onWheel={handleWheel}
             onContextMenu={onContextMenu}
             onDragOver={(event) => event.preventDefault()}
             onDrop={onDrop}

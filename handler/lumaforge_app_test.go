@@ -365,6 +365,47 @@ func TestLumaAppSelectPathSavesEditablePath(t *testing.T) {
 	}
 }
 
+func TestLumaAppUpdatePathCopiesOldDataAndSkipsExistingFiles(t *testing.T) {
+	withTempHandlerLumaConfig(t, nil)
+	oldOutput := filepath.Join(config.Cfg.LumaForgeDataDir, "output")
+	if err := os.MkdirAll(oldOutput, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(oldOutput, "fresh.txt"), []byte("fresh"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(oldOutput, "same.txt"), []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	newOutput := filepath.Join(t.TempDir(), "output")
+	if err := os.MkdirAll(newOutput, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(newOutput, "same.txt"), []byte("new"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	body := []byte(fmt.Sprintf(`{"target":"output","path":%q,"transfer_mode":"copy"}`, newOutput))
+	request := httptest.NewRequest(http.MethodPost, "/api/app/update-path", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	LumaAppUpdatePath(recorder, request)
+
+	payload := decodeHandlerPayload(t, recorder)
+	if payload["ok"] != true || payload["target"] != "output" || payload["transfer_mode"] != "copy" {
+		t.Fatalf("payload = %#v", payload)
+	}
+	if payload["copied"] != float64(1) || payload["skipped"] != float64(1) {
+		t.Fatalf("payload = %#v, want copied=1 skipped=1", payload)
+	}
+	if data, err := os.ReadFile(filepath.Join(newOutput, "fresh.txt")); err != nil || string(data) != "fresh" {
+		t.Fatalf("fresh copy = %q, %v", data, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(newOutput, "same.txt")); err != nil || string(data) != "new" {
+		t.Fatalf("existing file should not be overwritten, got %q, %v", data, err)
+	}
+}
+
 func TestLumaNoopAndHealthHandlers(t *testing.T) {
 	withTempHandlerLumaConfig(t, func(cfg *config.Config) {
 		cfg.LumaForgeLegacyAPI = ""

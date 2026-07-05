@@ -104,14 +104,14 @@ export type ProviderConnectionPayload = {
 export async function testProviderConnection(payload: ProviderConnectionPayload) {
     return rawRequest<ProviderModelsResponse>("/api/providers/test-connection", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, base_url: normalizeApiBaseUrl(payload.base_url) }),
     });
 }
 
 export async function probeProviderAsync(payload: ProviderConnectionPayload) {
     return rawRequest<ProviderModelsResponse>("/api/providers/probe-async", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, base_url: normalizeApiBaseUrl(payload.base_url) }),
     });
 }
 
@@ -136,17 +136,17 @@ async function rawRequest<T>(url: string, init: RequestInit = {}) {
             headers,
         });
     } catch {
-        throw new Error("接口连接失败，请确认后端服务已启动");
+        throw new Error("接口连接失败，请确认本地服务已启动，然后重试。");
     }
 
     const payload = (await response.json().catch(() => null)) as WrappedResponse<T> | T | null;
     if (!response.ok) {
-        throw new Error(readErrorMessage(payload) || `请求失败：HTTP ${response.status}`);
+        throw new Error(explainProviderError(readErrorMessage(payload) || `请求失败：HTTP ${response.status}`));
     }
     if (payload && typeof payload === "object" && "code" in payload) {
         const wrapped = payload as WrappedResponse<T>;
         if (wrapped.code !== undefined && wrapped.code !== 0) {
-            throw new Error(wrapped.msg || wrapped.message || "请求失败");
+            throw new Error(explainProviderError(wrapped.msg || wrapped.message || "请求失败"));
         }
         return wrapped.data as T;
     }
@@ -163,7 +163,7 @@ function normalizeProvider(provider: Partial<LumaProvider>): LumaProvider {
     return {
         id: String(provider.id || "").trim(),
         name: String(provider.name || provider.id || "").trim(),
-        base_url: String(provider.base_url || "").trim(),
+        base_url: normalizeApiBaseUrl(provider.base_url),
         protocol: provider.protocol === "apimart" ? "apimart" : "openai",
         protocol_override: normalizeProtocolOverride(provider.protocol_override),
         enabled: provider.enabled !== false,
@@ -190,10 +190,46 @@ function cleanProviderForSave(provider: LumaProvider): LumaProvider {
     const cleaned = normalizeProvider(provider);
     return {
         ...cleaned,
+        base_url: normalizeApiBaseUrl(cleaned.base_url),
         primary: provider.primary === true,
         api_key: provider.clear_key ? undefined : provider.api_key?.trim() || undefined,
         clear_key: provider.clear_key === true,
     };
+}
+
+export function normalizeApiBaseUrl(value?: string) {
+    const raw = String(value || "").trim().replace(/\s+/g, "");
+    if (!raw) return "";
+
+    let normalized = raw.replace(/\/+$/, "");
+    if (normalized.startsWith("//")) {
+        normalized = `https:${normalized}`;
+    } else if (!/^[a-z][a-z\d+\-.]*:\/\//i.test(normalized)) {
+        normalized = `${defaultApiBaseUrlProtocol(normalized)}://${normalized}`;
+    }
+
+    try {
+        const url = new URL(normalized);
+        if (url.protocol !== "http:" && url.protocol !== "https:") return normalized;
+        url.pathname = url.pathname.replace(/\/+$/, "");
+        url.search = "";
+        url.hash = "";
+        return url.toString().replace(/\/+$/, "");
+    } catch {
+        return normalized;
+    }
+}
+
+function defaultApiBaseUrlProtocol(value: string) {
+    const host = value
+        .split(/[/?#]/, 1)[0]
+        .replace(/^\[/, "")
+        .replace(/\].*$/, "")
+        .replace(/:\d+$/, "")
+        .toLowerCase();
+    if (host === "localhost" || host === "::1" || host.startsWith("127.")) return "http";
+    if (/^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)) return "http";
+    return "https";
 }
 
 export function normalizeModels(models?: string[]) {
@@ -205,4 +241,19 @@ export function normalizeModels(models?: string[]) {
             seen.add(item);
             return true;
         });
+}
+
+export function explainProviderError(message: string) {
+    const text = String(message || "").trim();
+    const lower = text.toLowerCase();
+    if (!text) return "请求失败，请重试。";
+    if (text.includes("缺少 API Key") || text.includes("API Key") && (text.includes("缺少") || lower.includes("empty"))) return "缺少 API Key，请在当前平台粘贴 Key 后保存或测试。";
+    if (text.includes("缺少接口地址") || text.includes("Base URL") && (text.includes("缺少") || lower.includes("empty"))) return "Base URL 为空，请填写平台接口地址，通常以 /v1 结尾。";
+    if (lower.includes("unauthorized") || lower.includes("forbidden") || lower.includes("401") || lower.includes("403") || text.includes("鉴权")) return "API Key 无效或没有权限，请去平台复制新的 Key，并确认套餐/模型权限。";
+    if (lower.includes("not found") || lower.includes("404") || text.includes("模型不存在") || text.includes("model_not_found")) return "模型不存在或 Base URL 不匹配，请拉取模型列表，或检查地址是否需要 /v1。";
+    if (lower.includes("network") || lower.includes("fetch") || text.includes("网络") || text.includes("无响应") || text.includes("不可达")) return "上游接口无响应，请检查网络、代理或平台 Base URL 后重试。";
+    if (lower.includes("timeout") || text.includes("超时")) return "上游接口响应超时，请稍后重试或换一个平台节点。";
+    if (lower.includes("rate limit") || lower.includes("429") || text.includes("限流")) return "平台限流或额度不足，请稍后重试，或检查平台余额/套餐。";
+    if (text.includes("模型列表接口不可用")) return `${text} 可以先保存手动模型，之后再重试拉取。`;
+    return text;
 }

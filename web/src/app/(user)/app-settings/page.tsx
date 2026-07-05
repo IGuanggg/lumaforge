@@ -1,11 +1,12 @@
 "use client";
 
-import { Alert, Button, Input, Tag } from "antd";
-import { Archive, CheckCircle2, Code2, ExternalLink, FolderOpen, RefreshCcw, RotateCw, Server, ShieldCheck, Trash2 } from "lucide-react";
+import { Alert, Button, Input, Radio, Tag } from "antd";
+import { Archive, CheckCircle2, Code2, Download, ExternalLink, FolderOpen, RefreshCcw, RotateCw, Save, Server, ShieldCheck, Trash2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { APP_VERSION } from "@/constant/env";
+import { DOWNLOAD_HISTORY_EVENT, getDownloadHistory, openSavedFileLocation, type DownloadHistoryItem } from "@/services/api/downloads";
 
 type AppInfo = {
     version?: string;
@@ -56,16 +57,29 @@ type UpdateState = Record<string, unknown>;
 type DataHealth = { ok?: boolean; paths?: Record<string, string>; [key: string]: unknown };
 type Diagnostics = { ok?: boolean; checks?: Array<Record<string, unknown>> };
 type Preflight = { ok?: boolean; checks?: Array<Record<string, unknown>>; release_assets?: ReleaseAssetManifest; [key: string]: unknown };
-
-const pathLabels: Record<string, string> = {
-    data: "数据目录",
-    input: "输入目录",
-    output: "输出目录",
-    thumbs: "缩略图",
-    logs: "日志目录",
-    cache: "缓存目录",
-    backups: "备份目录",
+type PathTransferMode = "keep" | "copy" | "move";
+type PathUpdateResult = {
+    ok?: boolean;
+    target?: string;
+    old_path?: string;
+    path?: string;
+    transfer_mode?: PathTransferMode;
+    copied?: number;
+    moved?: number;
+    skipped?: number;
+    failed?: string[];
+    paths?: Record<string, string>;
 };
+
+const pathItems = [
+    { key: "save", label: "保存目录", editable: true, note: "素材、生成结果和默认子目录的根位置" },
+    { key: "input", label: "输入目录", editable: true, note: "本地上传、参考图和导入素材" },
+    { key: "output", label: "输出目录", editable: true, note: "生成图片、视频、导出文件默认保存位置" },
+    { key: "thumbs", label: "缩略图", editable: true, note: "素材库预览图缓存" },
+    { key: "logs", label: "日志目录", editable: true, note: "本机运行日志" },
+    { key: "cache", label: "缓存目录", editable: true, note: "可清理的临时缓存" },
+    { key: "data", label: "数据目录", editable: false, note: "数据库、画布和配置；运行中不迁移" },
+] as const;
 
 export default function AppSettingsPage() {
     const [backendInfo, setBackendInfo] = useState<AppInfo | null>(null);
@@ -79,6 +93,10 @@ export default function AppSettingsPage() {
     const [action, setAction] = useState("");
     const [updateURL, setUpdateURL] = useState("");
     const [isSourceMode, setIsSourceMode] = useState(true);
+    const [pathDrafts, setPathDrafts] = useState<Record<string, string>>({});
+    const [pathMode, setPathMode] = useState<PathTransferMode>("keep");
+    const [pathResult, setPathResult] = useState<PathUpdateResult | null>(null);
+    const [downloadHistory, setDownloadHistory] = useState<DownloadHistoryItem[]>([]);
     const backendPort = backendInfo?.backend_port || backendInfo?.entry?.api_port;
     const releaseAssets = updateCheck?.release_assets || preflight?.release_assets || {};
 
@@ -89,6 +107,7 @@ export default function AppSettingsPage() {
             setBackendInfo(info);
             setHealth(data);
             setUpdateState(state);
+            setPathDrafts(data.paths || {});
             setUpdateURL(String(info.update_check_url || ""));
             setStatusError("");
         } catch (error) {
@@ -105,6 +124,13 @@ export default function AppSettingsPage() {
         setIsSourceMode(window.location.port === "3001");
         void reload();
     }, [reload]);
+
+    useEffect(() => {
+        const syncDownloads = () => setDownloadHistory(getDownloadHistory());
+        syncDownloads();
+        window.addEventListener(DOWNLOAD_HISTORY_EVENT, syncDownloads);
+        return () => window.removeEventListener(DOWNLOAD_HISTORY_EVENT, syncDownloads);
+    }, []);
 
     const runAction = async (id: string, task: () => Promise<unknown>) => {
         setAction(id);
@@ -132,6 +158,36 @@ export default function AppSettingsPage() {
     };
 
     const updateChecks = useMemo(() => preflight?.checks || [], [preflight]);
+    const updatePath = async (key: string) => {
+        const path = String(pathDrafts[key] || "").trim();
+        if (!path) {
+            setStatusError("请先填写目标目录");
+            return;
+        }
+        setAction(`path-${key}`);
+        try {
+            setStatusError("");
+            const result = await rawPost<PathUpdateResult>("/api/app/update-path", { target: key, path, transfer_mode: pathMode });
+            setPathResult(result);
+            await reload();
+        } catch (error) {
+            setStatusError(error instanceof Error ? error.message : "目录保存失败");
+        } finally {
+            setAction("");
+        }
+    };
+
+    const openPath = async (key: string, path?: string) => {
+        setAction(`open-${key}`);
+        try {
+            setStatusError("");
+            await rawPost("/api/app/open-path", { target: key, path: path || "" });
+        } catch (error) {
+            setStatusError(error instanceof Error ? error.message : "打开目录失败");
+        } finally {
+            setAction("");
+        }
+    };
 
     return (
         <main className="h-full overflow-auto bg-stone-50 p-4 text-stone-950 dark:bg-stone-950 dark:text-stone-100">
@@ -197,13 +253,72 @@ export default function AppSettingsPage() {
                         </Panel>
 
                         <Panel title="本地数据" icon={<FolderOpen className="size-4" />}>
-                            <div className="grid gap-3 md:grid-cols-2">
-                                {Object.entries(pathLabels).map(([key, label]) => <Field key={key} label={label} value={health?.paths?.[key] || "-"} mono />)}
+                            <div className="mb-4 rounded-md border border-stone-200 bg-stone-50 p-3 dark:border-stone-800 dark:bg-stone-950">
+                                <div className="mb-2 text-sm font-medium">改位置时如何处理原始数据</div>
+                                <Radio.Group value={pathMode} onChange={(event) => setPathMode(event.target.value)} optionType="button" buttonStyle="solid">
+                                    <Radio.Button value="keep">只切换</Radio.Button>
+                                    <Radio.Button value="copy">复制旧数据</Radio.Button>
+                                    <Radio.Button value="move">移动旧数据</Radio.Button>
+                                </Radio.Group>
+                                <p className="m-0 mt-2 text-xs text-stone-500">{pathModeDescription(pathMode)}</p>
+                            </div>
+                            {pathResult ? <PathResultNotice result={pathResult} /> : null}
+                            <div className="grid gap-3">
+                                {pathItems.map((item) => (
+                                    <PathRow
+                                        key={item.key}
+                                        item={item}
+                                        value={health?.paths?.[item.key] || ""}
+                                        draft={pathDrafts[item.key] || ""}
+                                        saving={action === `path-${item.key}`}
+                                        opening={action === `open-${item.key}`}
+                                        onDraftChange={(value) => setPathDrafts((current) => ({ ...current, [item.key]: value }))}
+                                        onOpen={() => void openPath(item.key, health?.paths?.[item.key])}
+                                        onSave={() => void updatePath(item.key)}
+                                    />
+                                ))}
                             </div>
                         </Panel>
                     </div>
 
                     <aside className="grid content-start gap-4">
+                        <Panel title="下载与保存" icon={<Download className="size-4" />}>
+                            <div className="grid gap-3">
+                                <Field label="默认保存位置" value={health?.paths?.output || "-"} mono />
+                                <Field label="更新包缓存" value={String(updateState?.downloads_dir || "-")} mono />
+                                <div className="flex flex-wrap gap-2">
+                                    <Button className="min-h-11" icon={<FolderOpen className="size-4" />} onClick={() => void openPath("output", health?.paths?.output)}>
+                                        打开保存目录
+                                    </Button>
+                                    {updateState?.downloads_dir ? (
+                                        <Button className="min-h-11" icon={<FolderOpen className="size-4" />} onClick={() => void openPath("downloads", String(updateState.downloads_dir))}>
+                                            打开更新缓存
+                                        </Button>
+                                    ) : null}
+                                </div>
+                                <div className="rounded-md border border-stone-200 p-3 text-sm dark:border-stone-800">
+                                    <div className="mb-2 font-medium">最近保存</div>
+                                    {downloadHistory.length ? (
+                                        <div className="grid gap-2">
+                                            {downloadHistory.slice(0, 3).map((item) => (
+                                                <div key={item.id} className="min-w-0">
+                                                    <div className="truncate text-xs font-medium" title={item.filename}>{item.filename}</div>
+                                                    <div className="truncate text-xs text-stone-500" title={item.path || ""}>{item.path || "浏览器默认下载目录"}</div>
+                                                    {item.path ? (
+                                                        <Button size="small" className="mt-1" icon={<FolderOpen className="size-3.5" />} onClick={() => void openSavedFileLocation(item.path!)}>
+                                                            打开所在文件夹
+                                                        </Button>
+                                                    ) : null}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="m-0 text-xs text-stone-500">还没有保存记录。</p>
+                                    )}
+                                </div>
+                            </div>
+                        </Panel>
+
                         <Panel title="诊断" icon={<CheckCircle2 className="size-4" />}>
                             <Button block className="min-h-11" loading={action === "diagnostics"} onClick={() => runAction("diagnostics", () => rawGet("/api/app/diagnostics"))}>运行诊断</Button>
                             <div className="mt-3 grid gap-2">
@@ -289,6 +404,66 @@ function Field({ label, value, mono }: { label: string; value: string; mono?: bo
     return <div className="min-w-0 rounded-md border border-stone-200 px-3 py-2 dark:border-stone-800"><div className="text-xs text-stone-500">{label}</div><div className={`mt-1 truncate text-sm ${mono ? "font-mono" : "font-medium"}`} title={value}>{value}</div></div>;
 }
 
+function PathRow({
+    item,
+    value,
+    draft,
+    saving,
+    opening,
+    onDraftChange,
+    onOpen,
+    onSave,
+}: {
+    item: (typeof pathItems)[number];
+    value: string;
+    draft: string;
+    saving: boolean;
+    opening: boolean;
+    onDraftChange: (value: string) => void;
+    onOpen: () => void;
+    onSave: () => void;
+}) {
+    return (
+        <div className="grid gap-3 rounded-md border border-stone-200 p-3 dark:border-stone-800 lg:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold">{item.label}</span>
+                    {!item.editable ? <Tag className="m-0">只读</Tag> : null}
+                </div>
+                <p className="m-0 mt-1 text-xs text-stone-500">{item.note}</p>
+                {item.editable ? (
+                    <Input className="mt-3 min-h-11 font-mono" value={draft} placeholder={value || "输入本机目录路径"} onChange={(event) => onDraftChange(event.target.value)} />
+                ) : (
+                    <div className="mt-3 rounded-md bg-stone-50 px-3 py-2 font-mono text-sm dark:bg-stone-950" title={value}>{value || "-"}</div>
+                )}
+            </div>
+            <div className="flex flex-wrap items-end gap-2 lg:flex-col lg:justify-end">
+                <Button className="min-h-11" icon={<FolderOpen className="size-4" />} loading={opening} onClick={onOpen}>
+                    打开
+                </Button>
+                {item.editable ? (
+                    <Button className="min-h-11" type="primary" icon={<Save className="size-4" />} loading={saving} onClick={onSave}>
+                        保存位置
+                    </Button>
+                ) : null}
+            </div>
+        </div>
+    );
+}
+
+function PathResultNotice({ result }: { result: PathUpdateResult }) {
+    const mode = result.transfer_mode || "keep";
+    const hasFailed = Boolean(result.failed?.length);
+    const description = [
+        `新位置：${result.path || "-"}`,
+        mode === "keep" ? "旧数据留在原位置。" : "",
+        mode === "copy" ? `已复制 ${result.copied || 0} 个，跳过 ${result.skipped || 0} 个。` : "",
+        mode === "move" ? `已移动 ${result.moved || 0} 个，跳过 ${result.skipped || 0} 个。` : "",
+        hasFailed ? `失败 ${result.failed?.length || 0} 个，请检查权限或文件占用。` : "",
+    ].filter(Boolean).join(" ");
+    return <Alert className="mb-4" type={hasFailed ? "warning" : "success"} showIcon message={`${pathTargetLabel(result.target)}已更新`} description={description} />;
+}
+
 function StatusRow({ item }: { item: Record<string, unknown> }) {
     const ok = Boolean(item.ok) || item.status === "ok";
     return <div className="rounded-md border border-stone-200 px-3 py-2 text-sm dark:border-stone-800"><div className="flex items-center justify-between gap-2"><span className="font-medium">{String(item.label || item.id || "检查项")}</span><Tag className="m-0" color={ok ? "green" : "warning"}>{ok ? "通过" : "注意"}</Tag></div>{item.detail ? <p className="m-0 mt-1 break-all text-xs text-stone-500">{String(item.detail)}</p> : null}</div>;
@@ -312,6 +487,16 @@ function assetName(asset?: UpdateAsset | null) {
 function formatTime(value?: string) {
     if (!value) return "等待检查";
     return new Date(value).toLocaleString("zh-CN", { hour12: false });
+}
+
+function pathModeDescription(mode: PathTransferMode) {
+    if (mode === "copy") return "保存新位置前复制旧目录内容；目标已有同名文件会跳过，不覆盖。";
+    if (mode === "move") return "保存新位置前移动旧目录内容；目标已有同名文件会跳过并留在旧目录。";
+    return "只切换后续保存位置，旧目录里的文件保持不动。";
+}
+
+function pathTargetLabel(target?: string) {
+    return pathItems.find((item) => item.key === target)?.label || "目录";
 }
 
 async function rawGet<T>(url: string): Promise<T> {

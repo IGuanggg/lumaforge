@@ -10,6 +10,7 @@ import {
     fetchKeyDiagnostics,
     fetchProviderModelsDraft,
     fetchProviders,
+    normalizeApiBaseUrl,
     normalizeModels,
     probeProviderAsync,
     saveProviders,
@@ -270,7 +271,9 @@ export default function ApiSettingsPage() {
 
     const runConnectionTest = async () => {
         if (!selected) return;
-        const setupError = getProviderActionError(selected);
+        const normalizedBaseUrl = normalizeApiBaseUrl(selected.base_url);
+        if (normalizedBaseUrl !== selected.base_url) updateSelected({ base_url: normalizedBaseUrl });
+        const setupError = getProviderActionError({ ...selected, base_url: normalizedBaseUrl });
         if (setupError) {
             message.warning(setupError);
             return;
@@ -280,7 +283,7 @@ export default function ApiSettingsPage() {
         try {
             const data = await testProviderConnection({
                 provider_id: selected.id,
-                base_url: selected.base_url,
+                base_url: normalizedBaseUrl,
                 api_key: selected.api_key?.trim() || undefined,
                 protocol_override: selected.protocol_override || "auto",
             });
@@ -296,7 +299,9 @@ export default function ApiSettingsPage() {
 
     const runProtocolProbe = async () => {
         if (!selected) return;
-        const setupError = getProviderActionError(selected, { allowMissingKey: true });
+        const normalizedBaseUrl = normalizeApiBaseUrl(selected.base_url);
+        if (normalizedBaseUrl !== selected.base_url) updateSelected({ base_url: normalizedBaseUrl });
+        const setupError = getProviderActionError({ ...selected, base_url: normalizedBaseUrl }, { allowMissingKey: true });
         if (setupError) {
             message.warning(setupError);
             return;
@@ -305,7 +310,7 @@ export default function ApiSettingsPage() {
         try {
             const data = await probeProviderAsync({
                 provider_id: selected.id,
-                base_url: selected.base_url,
+                base_url: normalizedBaseUrl,
                 api_key: selected.api_key?.trim() || undefined,
                 protocol_override: selected.protocol_override || "auto",
             });
@@ -341,14 +346,16 @@ export default function ApiSettingsPage() {
 
     const runFetchModels = async () => {
         if (!selected) return;
-        const setupError = getProviderActionError(selected);
+        const normalizedBaseUrl = normalizeApiBaseUrl(selected.base_url);
+        if (normalizedBaseUrl !== selected.base_url) updateSelected({ base_url: normalizedBaseUrl });
+        const setupError = getProviderActionError({ ...selected, base_url: normalizedBaseUrl });
         if (setupError) {
             message.warning(setupError);
             return;
         }
         setAction("fetch");
         try {
-            const data = await fetchProviderModelsDraft(selected);
+            const data = await fetchProviderModelsDraft({ ...selected, base_url: normalizedBaseUrl });
             const classified = classifyFetchedModels(data);
             setCheckResult(data);
             setModelPicker({
@@ -521,7 +528,12 @@ export default function ApiSettingsPage() {
                                                 </Space.Compact>
                                             </div>
                                             <Field className="sm:col-span-2" label="Base URL">
-                                                <Input value={selected.base_url} onChange={(event) => updateSelected({ base_url: event.target.value })} placeholder="https://api.openai.com/v1" />
+                                                <Input
+                                                    value={selected.base_url}
+                                                    onChange={(event) => updateSelected({ base_url: event.target.value })}
+                                                    onBlur={(event) => updateSelected({ base_url: normalizeApiBaseUrl(event.target.value) })}
+                                                    placeholder="api.openai.com/v1"
+                                                />
                                             </Field>
                                             <Field label="协议">
                                                 <Select
@@ -642,6 +654,10 @@ export default function ApiSettingsPage() {
                                         <SummaryItem label="默认生图优先" value={providerModelLabel(selected, defaultImagePreview)} />
                                     </div>
                                     {!PROVIDER_ID_RE.test(selected.id) ? <Alert className="mt-3" type="warning" showIcon title="平台 ID 只能使用小写字母、数字、下划线或短横线" /> : null}
+                                </Panel>
+
+                                <Panel title="模型体检" icon={<DatabaseZap className="size-4" />}>
+                                    <ModelHealthPanel provider={selected} diagnostics={diagnostics} checkResult={checkResult} modelCount={modelCount} />
                                 </Panel>
 
                                 <Panel title="Key 诊断" icon={<ShieldCheck className="size-4" />}>
@@ -782,6 +798,38 @@ function SummaryItem({ label, value }: { label: string; value: string }) {
         <div className="flex min-w-0 items-center justify-between gap-3 rounded-md bg-stone-50 px-3 py-2 dark:bg-stone-950">
             <span className="shrink-0 text-stone-500 dark:text-stone-400">{label}</span>
             <span className="min-w-0 truncate font-medium" title={value}>{value}</span>
+        </div>
+    );
+}
+
+function ModelHealthPanel({ provider, diagnostics, checkResult, modelCount }: { provider: ProviderDraft; diagnostics: ProviderKeyDiagnostics | null; checkResult: ProviderModelsResponse | null; modelCount: number }) {
+    const hasBaseURL = Boolean(provider.base_url.trim());
+    const hasKey = Boolean(provider.api_key?.trim() || provider.has_key);
+    const hasImage = provider.image_models.length > 0;
+    const hasChat = provider.chat_models.length > 0;
+    const hasVideo = provider.video_models.length > 0;
+    const rows = [
+        { label: "Base URL", ok: hasBaseURL, detail: hasBaseURL ? provider.base_url : "填写平台接口地址，通常以 /v1 结尾" },
+        { label: "API Key", ok: hasKey, detail: hasKey ? "已配置，可测试连接" : "粘贴 Key 后保存或直接测试" },
+        { label: "模型列表", ok: modelCount > 0, detail: modelCount > 0 ? `${modelCount} 个模型` : "拉取模型或手动添加模型" },
+        { label: "生图", ok: hasImage, detail: hasImage ? provider.image_models[0] : "需要至少一个生图模型" },
+        { label: "聊天", ok: hasChat, detail: hasChat ? provider.chat_models[0] : "需要至少一个聊天模型" },
+        { label: "视频", ok: hasVideo, detail: hasVideo ? provider.video_models[0] : "不用视频可留空" },
+    ];
+    const fallback = checkResult?.fallback ? "模型列表接口不可用时，可以先保存手动模型。" : "";
+    const cloudHint = diagnostics?.recoverable_from_cloud && !diagnostics.stored_key_count ? "云端有可恢复 Key，可先恢复再测试。" : "";
+    return (
+        <div className="grid gap-2 text-sm">
+            {rows.map((row) => (
+                <div key={row.label} className="rounded-md border border-stone-200 px-3 py-2 dark:border-stone-800">
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">{row.label}</span>
+                        <Tag className="m-0" color={row.ok ? "green" : "warning"}>{row.ok ? "正常" : "需处理"}</Tag>
+                    </div>
+                    <p className="m-0 mt-1 break-all text-xs text-stone-500">{row.detail}</p>
+                </div>
+            ))}
+            {fallback || cloudHint ? <Alert type="info" showIcon message="下一步" description={[fallback, cloudHint].filter(Boolean).join(" ")} /> : null}
         </div>
     );
 }
@@ -1005,6 +1053,7 @@ function normalizeProviderList(providers: ProviderDraft[]) {
     return ensureOnePrimary(providers.map(normalizeDraft)).map((provider) => ({
         ...provider,
         name: provider.name || provider.id,
+        base_url: normalizeApiBaseUrl(provider.base_url),
         image_models: normalizeModels(provider.image_models),
         chat_models: normalizeModels(provider.chat_models),
         video_models: normalizeModels(provider.video_models),
@@ -1118,7 +1167,7 @@ function validateProviders(providers: ProviderDraft[]) {
 }
 
 function getProviderBaseUrlError(provider: Pick<ProviderDraft, "base_url">) {
-    const value = provider.base_url.trim();
+    const value = normalizeApiBaseUrl(provider.base_url);
     if (!value) return "请先填写 Base URL";
     if (value === "https://" || value === "http://") return "请填写完整 Base URL，不要只保留协议头";
     try {

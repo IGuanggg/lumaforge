@@ -17,6 +17,7 @@ import { modelDisplayLabel, useConfigStore, useEffectiveConfig, type AiConfig } 
 import { useThemeStore } from "@/stores/use-theme-store";
 import { nanoid } from "nanoid";
 import { formatBytes, formatDuration, getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
+import { explainModelError } from "@/lib/user-facing-errors";
 import { requestEdit, requestGeneration } from "@/services/api/image";
 import { openSavedFileLocation, saveFileWithPrompt } from "@/services/api/downloads";
 import { deleteStoredImages, resolveImageUrl, uploadImage } from "@/services/image-storage";
@@ -203,7 +204,7 @@ export default function ImagePage() {
                 }),
             );
             if (successCount) markOnboardingMilestone("generated");
-            successCount ? message.success("图片已生成") : message.error(failed?.reason instanceof Error ? failed.reason.message : "生成失败");
+            successCount ? message.success("图片已生成") : message.error(explainModelError(failed?.reason, "生成失败"));
         } finally {
             setRunning(false);
         }
@@ -356,7 +357,7 @@ export default function ImagePage() {
             setResults((value) => updateResultAt(value, index, { status: "success", image: nextImage }));
             return nextImage;
         } catch (error) {
-            setResults((value) => updateResultAt(value, index, { status: "failed", error: error instanceof Error ? error.message : "生成失败" }));
+            setResults((value) => updateResultAt(value, index, { status: "failed", error: explainModelError(error, "生成失败") }));
             throw error;
         }
     };

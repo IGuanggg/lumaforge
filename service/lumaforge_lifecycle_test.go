@@ -485,6 +485,35 @@ func TestLumaProbeProviderProtocolHonorsManualOverride(t *testing.T) {
 	}
 }
 
+func TestNormalizeLumaProviderBaseURLAddsUsableScheme(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "public domain defaults to https", raw: "api.example.com/v1", want: "https://api.example.com/v1"},
+		{name: "localhost defaults to http", raw: "localhost:11434/v1/", want: "http://localhost:11434/v1"},
+		{name: "private network defaults to http", raw: "192.168.1.12:8000/v1", want: "http://192.168.1.12:8000/v1"},
+		{name: "explicit http is preserved", raw: "http://api.example.com/v1/", want: "http://api.example.com/v1"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider, err := normalizeLumaProvider(LumaAPIProvider{
+				ID:      "custom-api",
+				Name:    "Custom API",
+				BaseURL: tc.raw,
+			})
+			if err != nil {
+				t.Fatalf("normalize provider: %v", err)
+			}
+			if provider.BaseURL != tc.want {
+				t.Fatalf("base url = %q, want %q", provider.BaseURL, tc.want)
+			}
+		})
+	}
+}
+
 func TestLumaCanvasSourceCapabilitiesReadsFrontendEndpoint(t *testing.T) {
 	previousAppURL := os.Getenv("LUMAFORGE_APP_URL")
 	previousPublicBaseURL := config.Cfg.PublicBaseURL

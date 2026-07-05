@@ -728,19 +728,41 @@ func resolveLumaOpenPath(target, requestedPath string) (string, error) {
 
 func LumaAppSelectPath(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
-		Target string `json:"target"`
-		Path   string `json:"path"`
+		Target       string `json:"target"`
+		Path         string `json:"path"`
+		TransferMode string `json:"transfer_mode"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		writeRawError(w, http.StatusBadRequest, fmt.Errorf("缺少目录参数"))
 		return
 	}
-	paths, err := service.LumaSaveAppPath(payload.Target, payload.Path)
+	result, err := service.LumaSaveAppPathWithTransfer(payload.Target, payload.Path, payload.TransferMode)
 	if err != nil {
 		writeRawError(w, http.StatusBadRequest, err)
 		return
 	}
-	writeRawJSON(w, map[string]any{"ok": true, "target": payload.Target, "path": paths[payload.Target], "paths": paths})
+	writeRawJSON(w, result)
+}
+
+func LumaAppUpdatePath(w http.ResponseWriter, r *http.Request) {
+	LumaAppSelectPath(w, r)
+}
+
+func LumaAppSaveAs(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		URL      string `json:"url"`
+		Filename string `json:"filename"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writeRawError(w, http.StatusBadRequest, fmt.Errorf("缺少下载参数"))
+		return
+	}
+	result, err := service.LumaSaveAs(payload.URL, payload.Filename)
+	if err != nil {
+		writeRawError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeRawJSON(w, result)
 }
 
 func LumaAppOpenURL(w http.ResponseWriter, r *http.Request) {

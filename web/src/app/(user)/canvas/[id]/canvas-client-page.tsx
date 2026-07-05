@@ -17,6 +17,7 @@ import { imageToDataUrl, resolveImageUrl, uploadImage, type UploadedImage } from
 import { resolveMediaUrl, uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { nanoid } from "nanoid";
 import { getDataUrlByteSize, readImageMeta } from "@/lib/image-utils";
+import { explainModelError } from "@/lib/user-facing-errors";
 import { canvasThemes, type CanvasBackgroundMode } from "@/lib/canvas-theme";
 import { RuntimeEntryBadge } from "@/components/layout/runtime-entry-badge";
 import { UserStatusActions } from "@/components/layout/user-status-actions";
@@ -2192,7 +2193,7 @@ function InfiniteCanvasPage() {
                 const size = fitNodeSize(uploaded.width, uploaded.height, node.width, node.height);
                 setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), prompt, ...generationMetadata } } : item)));
             } catch (error) {
-                const errorDetails = error instanceof Error ? error.message : "局部修改失败";
+                const errorDetails = explainModelError(error, "局部修改失败");
                 message.error(errorDetails);
                 setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails } } : item)));
             } finally {
@@ -2242,7 +2243,7 @@ function InfiniteCanvasPage() {
                 const size = fitNodeSize(uploaded.width, uploaded.height, node.width, node.height);
                 setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), prompt, ...generationMetadata } } : item)));
             } catch (error) {
-                const errorDetails = error instanceof Error ? error.message : "高清增强失败";
+                const errorDetails = explainModelError(error, "高清增强失败");
                 message.error(errorDetails);
                 setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, generationPhase: "failed", errorDetails } } : item)));
             } finally {
@@ -2292,7 +2293,7 @@ function InfiniteCanvasPage() {
                 const size = fitNodeSize(uploaded.width, uploaded.height, imageConfig.width, imageConfig.height);
                 setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, width: size.width, height: size.height, metadata: { ...item.metadata, ...imageMetadata(uploaded), prompt, ...generationMetadata } } : item)));
             } catch (error) {
-                const errorDetails = error instanceof Error ? error.message : "生成失败";
+                const errorDetails = explainModelError(error, "生成失败");
                 setNodes((prev) => prev.map((item) => (item.id === childId ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, errorDetails } } : item)));
             } finally {
                 setRunningNodeId(null);
@@ -2724,7 +2725,7 @@ function InfiniteCanvasPage() {
                     ),
                 );
             } catch (error) {
-                const errorDetails = error instanceof Error ? error.message : "生成失败";
+                const errorDetails = explainModelError(error, "生成失败");
                 message.error(errorDetails);
                 setNodes((prev) =>
                     prev.map((node) => (node.id === nodeId || pendingChildIds.includes(node.id) ? (node.id === nodeId && !markSourceStatus ? node : { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails } }) : node)),
@@ -2828,7 +2829,7 @@ function InfiniteCanvasPage() {
                     ),
                 );
             } catch (error) {
-                const errorDetails = error instanceof Error ? error.message : "生成失败";
+                const errorDetails = explainModelError(error, "生成失败");
                 message.error(errorDetails);
                 setNodes((prev) => prev.map((item) => (item.id === node.id ? { ...item, metadata: { ...item.metadata, status: NODE_STATUS_ERROR, generationPhase: "failed", errorDetails } } : item)));
             } finally {

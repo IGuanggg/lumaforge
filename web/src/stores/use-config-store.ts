@@ -6,6 +6,7 @@ import { persist } from "zustand/middleware";
 
 import { apiGet } from "@/services/api/request";
 import type { AdminPublicSettings, ProviderModelOption } from "@/services/api/admin";
+import { normalizeApiBaseUrl } from "@/services/api/providers";
 
 export type AiConfig = {
     channelMode: "remote" | "local";
@@ -341,7 +342,7 @@ export function useEffectiveConfig() {
 }
 
 export function buildApiUrl(baseUrl: string, path: string) {
-    let normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, "");
+    let normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
     normalizedBaseUrl = normalizeArkPlanBaseUrl(normalizedBaseUrl);
     const lowerBaseUrl = normalizedBaseUrl.toLowerCase();
     const apiBaseUrl = lowerBaseUrl.endsWith("/v1") || lowerBaseUrl.endsWith("/api/v3") || lowerBaseUrl.endsWith("/api/plan/v3") ? normalizedBaseUrl : `${normalizedBaseUrl}/v1`;

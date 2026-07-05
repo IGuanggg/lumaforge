@@ -69,13 +69,13 @@ export async function saveFileWithPrompt(url: string, filename: string): Promise
                 };
             }
             if (response.ok && payload.cancelled) return { ok: false, cancelled: true, filename: payload.filename || cleanFilename };
-            throw new Error(payload.detail || payload.message || `保存失败 (${response.status})`);
+            throw new Error(explainDownloadError(payload.detail || payload.message || `保存失败 (${response.status})`));
         } catch (error) {
             const fallback = await browserDownload(cleanUrl, cleanFilename);
-            const reason = error instanceof Error ? error.message : "";
+            const reason = explainDownloadError(error instanceof Error ? error.message : "");
             return {
                 ...fallback,
-                message: reason ? `系统保存窗口不可用（${reason}），已使用浏览器下载` : "系统保存窗口不可用，已使用浏览器下载",
+                message: reason ? `本地保存失败：${reason}。已改用浏览器下载，可在浏览器默认下载目录查看。` : "本地保存不可用，已改用浏览器下载。",
             };
         }
     }
@@ -131,9 +131,9 @@ async function browserDownload(url: string, filename: string): Promise<PromptSav
             saveAs(url, filename);
         }
         recordDownloadHistory({ filename, fallback: true, url });
-        return { ok: true, fallback: true, filename };
+        return { ok: true, fallback: true, filename, message: "已交给浏览器下载，可在浏览器默认下载目录查看。" };
     } catch (error) {
-        return { ok: false, message: error instanceof Error ? error.message : "浏览器下载失败" };
+        return { ok: false, message: explainDownloadError(error instanceof Error ? error.message : "浏览器下载失败") };
     }
 }
 
@@ -179,4 +179,17 @@ function recordDownloadHistory(item: Omit<DownloadHistoryItem, "id" | "savedAt">
     const items = [next, ...getDownloadHistory()].slice(0, 30);
     window.localStorage.setItem(DOWNLOAD_HISTORY_KEY, JSON.stringify(items));
     window.dispatchEvent(new CustomEvent(DOWNLOAD_HISTORY_EVENT));
+}
+
+function explainDownloadError(message: string) {
+    const text = String(message || "").trim();
+    const lower = text.toLowerCase();
+    if (!text) return "保存失败，请重试。";
+    if (lower.includes("network") || lower.includes("failed to fetch") || text.includes("网络")) return "网络连接失败，请检查网络后重试。";
+    if (lower.includes("permission") || lower.includes("access is denied") || text.includes("拒绝访问") || text.includes("权限")) return "目标目录没有写入权限，请换到用户目录或关闭占用中的文件后重试。";
+    if (lower.includes("no space") || text.includes("磁盘") || text.includes("空间")) return "磁盘空间可能不足，请清理空间后重试。";
+    if (lower.includes("being used") || text.includes("占用")) return "文件正在被其他程序占用，请关闭后重试。";
+    if (lower.includes("404")) return "下载文件不存在，请重新生成或刷新素材后再试。";
+    if (lower.includes("http 401") || lower.includes("http 403")) return "下载地址没有权限，请重新登录或检查云同步状态。";
+    return text;
 }
