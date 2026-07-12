@@ -201,7 +201,7 @@ export function normalizeApiBaseUrl(value?: string) {
     const raw = String(value || "").trim().replace(/\s+/g, "");
     if (!raw) return "";
 
-    let normalized = raw.replace(/\/+$/, "");
+    let normalized = raw;
     if (normalized.startsWith("//")) {
         normalized = `https:${normalized}`;
     } else if (!/^[a-z][a-z\d+\-.]*:\/\//i.test(normalized)) {
@@ -212,9 +212,8 @@ export function normalizeApiBaseUrl(value?: string) {
         const url = new URL(normalized);
         if (url.protocol !== "http:" && url.protocol !== "https:") return normalized;
         url.pathname = url.pathname.replace(/\/+$/, "");
-        url.search = "";
-        url.hash = "";
-        return url.toString().replace(/\/+$/, "");
+        const result = url.toString();
+        return url.search || url.hash ? result : result.replace(/\/+$/, "");
     } catch {
         return normalized;
     }

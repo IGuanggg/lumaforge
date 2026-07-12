@@ -146,6 +146,25 @@ func TestLumaUpdatePreflightExpandsSourceModeChecks(t *testing.T) {
 	}
 }
 
+func TestNormalizeLumaProviderBaseURLPreservesQueryAndHash(t *testing.T) {
+	got := normalizeLumaProviderBaseURL("api.example.com/v1/?tenant=demo/#frag")
+	want := "https://api.example.com/v1?tenant=demo/#frag"
+	if got != want {
+		t.Fatalf("normalized base URL = %q, want %q", got, want)
+	}
+}
+
+func TestLumaProviderAPIURLAppendsPathBeforeQuery(t *testing.T) {
+	got, err := lumaProviderAPIURL("https://api.example.com/root?tenant=demo/#frag", "/models")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "https://api.example.com/root/v1/models?tenant=demo/#frag"
+	if got != want {
+		t.Fatalf("model URL = %q, want %q", got, want)
+	}
+}
+
 func releaseHealthCheckByID(t *testing.T, health map[string]any, id string) map[string]any {
 	t.Helper()
 

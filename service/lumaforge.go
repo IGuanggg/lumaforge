@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -26,6 +27,7 @@ import (
 const LumaForgeVersion = "2.1.16"
 const LumaForgeBuildID = "20260623-v2116-product-closure1"
 const lumaUpdateDownloadStallSeconds = 45
+const lumaSaveAsMaxBytes int64 = 512 << 20
 
 var (
 	lumaHTTPClient = &http.Client{Timeout: 45 * time.Second}
@@ -604,7 +606,7 @@ func normalizeLumaProvider(provider LumaAPIProvider) (LumaAPIProvider, error) {
 }
 
 func normalizeLumaProviderBaseURL(value string) string {
-	value = strings.TrimRight(strings.TrimSpace(value), "/")
+	value = strings.TrimSpace(value)
 	if value == "" {
 		return ""
 	}
@@ -618,9 +620,18 @@ func normalizeLumaProviderBaseURL(value string) string {
 		return value
 	}
 	parsed.Path = strings.TrimRight(parsed.Path, "/")
-	parsed.RawQuery = ""
-	parsed.Fragment = ""
-	return strings.TrimRight(parsed.String(), "/")
+	return lumaURLString(parsed)
+}
+
+func lumaURLString(parsed *url.URL) string {
+	if parsed == nil {
+		return ""
+	}
+	value := parsed.String()
+	if parsed.RawQuery == "" && parsed.Fragment == "" {
+		value = strings.TrimRight(value, "/")
+	}
+	return value
 }
 
 func defaultLumaProviderBaseURLScheme(value string) string {
@@ -1077,6 +1088,9 @@ func LumaProbeProviderProtocol(provider LumaAPIProvider, apiKey string) map[stri
 }
 
 func fetchOpenAIModels(baseURL string, apiKey string) ([]string, int, string, error) {
+	if modelURL, err := lumaProviderAPIURL(baseURL, "/models"); err == nil {
+		return fetchOpenAIModelsURL(modelURL, apiKey)
+	}
 	baseURL = normalizeLumaProviderBaseURL(baseURL)
 	if baseURL == "" {
 		return nil, 0, "Base URL 为空", errors.New("Base URL 为空")
@@ -1117,6 +1131,62 @@ func fetchOpenAIModels(baseURL string, apiKey string) ([]string, int, string, er
 	}
 	sort.Strings(models)
 	return models, response.StatusCode, "地址验证通过", nil
+}
+
+func fetchOpenAIModelsURL(modelURL string, apiKey string) ([]string, int, string, error) {
+	request, err := http.NewRequest(http.MethodGet, modelURL, nil)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	if strings.TrimSpace(apiKey) != "" {
+		request.Header.Set("Authorization", "Bearer "+strings.TrimSpace(apiKey))
+	}
+	response, err := lumaHTTPClient.Do(request)
+	if err != nil {
+		return nil, 0, err.Error(), err
+	}
+	defer response.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(response.Body, 4<<20))
+	if response.StatusCode >= 400 {
+		return nil, response.StatusCode, string(data), fmt.Errorf("上游返回 HTTP %d", response.StatusCode)
+	}
+	var payload struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return nil, response.StatusCode, "模型列表返回格式异常", err
+	}
+	models := []string{}
+	for _, item := range payload.Data {
+		if strings.TrimSpace(item.ID) != "" {
+			models = append(models, strings.TrimSpace(item.ID))
+		}
+	}
+	sort.Strings(models)
+	return models, response.StatusCode, "地址验证通过", nil
+}
+
+func lumaProviderAPIURL(baseURL string, apiPath string) (string, error) {
+	normalized := normalizeLumaProviderBaseURL(baseURL)
+	if normalized == "" {
+		return "", errors.New("Base URL 为空")
+	}
+	parsed, err := url.Parse(normalized)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "", fmt.Errorf("Base URL 无效")
+	}
+	basePath := strings.TrimRight(parsed.Path, "/")
+	if !strings.HasSuffix(strings.ToLower(basePath), "/v1") {
+		if basePath == "" {
+			basePath = "/v1"
+		} else {
+			basePath += "/v1"
+		}
+	}
+	parsed.Path = strings.TrimRight(basePath, "/") + "/" + strings.TrimLeft(apiPath, "/")
+	return parsed.String(), nil
 }
 
 func classifiedModelPayload(models []string, status int, message string) map[string]any {
@@ -1629,6 +1699,9 @@ func LumaSaveAppPathWithTransfer(target string, rawPath string, transferMode str
 		if err := lumaTransferDirectoryContents(oldPath, absPath, mode, &result); err != nil {
 			return LumaPathTransferResult{}, err
 		}
+		if err := lumaValidatePathTransferResult(mode, &result); err != nil {
+			return LumaPathTransferResult{}, err
+		}
 	}
 	settings := lumaLoadAppPathSettings()
 	settings[target] = absPath
@@ -1654,6 +1727,23 @@ func lumaNormalizePathTransferMode(mode string) string {
 	default:
 		return "keep"
 	}
+}
+
+func lumaValidatePathTransferResult(mode string, result *LumaPathTransferResult) error {
+	if result == nil {
+		return nil
+	}
+	if len(result.Failed) > 0 {
+		detail := result.Failed[0]
+		if len(result.Failed) > 1 {
+			detail = fmt.Sprintf("%s ...", detail)
+		}
+		return fmt.Errorf("目录迁移失败，已保留原目录：%d 个失败，%s", len(result.Failed), detail)
+	}
+	if mode == "move" && result.Skipped > 0 {
+		return fmt.Errorf("移动目录时发现 %d 个同名或不可移动项目，已保留原目录；请换空目录或改用复制", result.Skipped)
+	}
+	return nil
 }
 
 func lumaEnsureWritableDir(path string) error {
@@ -1790,11 +1880,19 @@ func lumaCopyFile(source string, dest string, perm os.FileMode) error {
 }
 
 func LumaSaveAs(urlValue string, filename string) (map[string]any, error) {
-	raw, contentType, sourceName, err := lumaReadDownloadBytes(urlValue)
+	return lumaSaveAsStreamed(urlValue, filename)
+}
+
+func lumaReadDownloadBytes(urlValue string) ([]byte, string, string, error) {
+	return lumaReadDownloadBytesSafe(urlValue)
+}
+
+func lumaSaveAsStreamed(urlValue string, filename string) (map[string]any, error) {
+	source, err := lumaPrepareDownloadSource(urlValue)
 	if err != nil {
 		return nil, err
 	}
-	name := lumaSafeDownloadFilename(firstNonEmptyString(filename, sourceName, "download"))
+	name := lumaSafeDownloadFilename(firstNonEmptyString(filename, source.SourceName, "download"))
 	outputDir := LumaAppPaths()["output"]
 	if err := os.MkdirAll(outputDir, 0755); err != nil {
 		return nil, fmt.Errorf("创建保存目录失败：%w", err)
@@ -1802,57 +1900,270 @@ func LumaSaveAs(urlValue string, filename string) (map[string]any, error) {
 	if err := lumaEnsureWritableDir(outputDir); err != nil {
 		return nil, err
 	}
-	targetPath := lumaUniqueFilePath(filepath.Join(outputDir, name))
-	if err := os.WriteFile(targetPath, raw, 0644); err != nil {
+	targetPath, err := lumaDownloadTargetPath(outputDir, name)
+	if err != nil {
+		return nil, err
+	}
+	tempFile, err := os.CreateTemp(outputDir, ".lumaforge-download-*.part")
+	if err != nil {
+		return nil, fmt.Errorf("创建临时文件失败：%w", err)
+	}
+	tempPath := tempFile.Name()
+	cleanupTemp := true
+	defer func() {
+		if cleanupTemp {
+			_ = os.Remove(tempPath)
+		}
+	}()
+
+	contentType := ""
+	written := int64(0)
+	if source.DataURL != "" {
+		raw, dataContentType, _, err := lumaReadDataURL(source.DataURL)
+		if err != nil {
+			_ = tempFile.Close()
+			return nil, err
+		}
+		if _, err := tempFile.Write(raw); err != nil {
+			_ = tempFile.Close()
+			return nil, fmt.Errorf("保存文件失败：%w", err)
+		}
+		contentType = dataContentType
+		written = int64(len(raw))
+	} else {
+		contentType, written, err = lumaWriteHTTPDownloadToFile(source.URL.String(), tempFile)
+		if err != nil {
+			_ = tempFile.Close()
+			return nil, err
+		}
+	}
+	if err := tempFile.Close(); err != nil {
 		return nil, fmt.Errorf("保存文件失败：%w", err)
 	}
+	if err := os.Rename(tempPath, targetPath); err != nil {
+		return nil, fmt.Errorf("保存文件失败：%w", err)
+	}
+	cleanupTemp = false
 	return map[string]any{
 		"ok":           true,
 		"cancelled":    false,
 		"path":         targetPath,
 		"filename":     filepath.Base(targetPath),
-		"size_bytes":   len(raw),
+		"size_bytes":   written,
 		"content_type": firstNonEmptyString(contentType, "application/octet-stream"),
 		"output_dir":   outputDir,
 	}, nil
 }
 
-func lumaReadDownloadBytes(urlValue string) ([]byte, string, string, error) {
+type lumaDownloadSource struct {
+	URL        *url.URL
+	DataURL    string
+	SourceName string
+}
+
+func lumaReadDownloadBytesSafe(urlValue string) ([]byte, string, string, error) {
+	source, err := lumaPrepareDownloadSource(urlValue)
+	if err != nil {
+		return nil, "", "", err
+	}
+	if source.DataURL != "" {
+		return lumaReadDataURL(source.DataURL)
+	}
+	var buffer bytes.Buffer
+	contentType, _, err := lumaWriteHTTPDownloadToFile(source.URL.String(), &buffer)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return buffer.Bytes(), contentType, source.SourceName, nil
+}
+
+func lumaPrepareDownloadSource(urlValue string) (lumaDownloadSource, error) {
 	value := strings.TrimSpace(urlValue)
 	if value == "" {
-		return nil, "", "", fmt.Errorf("下载地址为空")
+		return lumaDownloadSource{}, fmt.Errorf("下载地址为空")
 	}
 	if strings.HasPrefix(strings.ToLower(value), "data:") {
-		return lumaReadDataURL(value)
+		return lumaDownloadSource{DataURL: value}, nil
 	}
-	if strings.HasPrefix(value, "/") {
+	parsed, err := lumaResolveSaveAsURL(value)
+	if err != nil {
+		return lumaDownloadSource{}, err
+	}
+	name := path.Base(parsed.Path)
+	if decoded, err := url.PathUnescape(name); err == nil {
+		name = decoded
+	}
+	if name == "." || name == ".." || name == "/" {
+		name = ""
+	}
+	return lumaDownloadSource{URL: parsed, SourceName: name}, nil
+}
+
+func lumaResolveSaveAsURL(value string) (*url.URL, error) {
+	if strings.HasPrefix(value, "/") && !strings.HasPrefix(value, "//") {
+		relative, err := url.Parse(value)
+		if err != nil {
+			return nil, fmt.Errorf("下载地址无效")
+		}
+		cleanPath, err := lumaCleanAllowedSaveAsPath(relative.Path)
+		if err != nil {
+			return nil, err
+		}
 		port := strings.TrimSpace(config.Cfg.Port)
 		if port == "" {
 			port = "8080"
 		}
-		value = "http://127.0.0.1:" + port + value
+		return &url.URL{Scheme: "http", Host: "127.0.0.1:" + port, Path: cleanPath, RawQuery: relative.RawQuery}, nil
 	}
 	parsed, err := url.Parse(value)
-	if err != nil || parsed.Scheme == "" {
-		return nil, "", "", fmt.Errorf("下载地址无效")
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return nil, fmt.Errorf("下载地址无效")
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return nil, "", "", fmt.Errorf("只支持 http、https 或 data 下载地址")
+		return nil, fmt.Errorf("只支持 http、https 或 data 下载地址")
 	}
-	response, err := lumaHTTPClient.Get(value)
+	if !lumaIsLoopbackHost(parsed.Hostname()) {
+		return nil, fmt.Errorf("只允许保存本机应用生成的文件")
+	}
+	cleanPath, err := lumaCleanAllowedSaveAsPath(parsed.Path)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("网络连接失败：%w", err)
+		return nil, err
+	}
+	parsed.Path = cleanPath
+	return parsed, nil
+}
+
+func lumaCleanAllowedSaveAsPath(pathValue string) (string, error) {
+	if strings.TrimSpace(pathValue) == "" {
+		return "", fmt.Errorf("下载路径为空")
+	}
+	if strings.Contains(pathValue, "\\") {
+		return "", fmt.Errorf("下载路径无效")
+	}
+	for _, segment := range strings.Split(pathValue, "/") {
+		if segment == ".." {
+			return "", fmt.Errorf("下载路径无效")
+		}
+	}
+	cleanPath := path.Clean("/" + strings.TrimPrefix(pathValue, "/"))
+	for _, prefix := range []string{"/assets", "/output", "/api"} {
+		if cleanPath == prefix || strings.HasPrefix(cleanPath, prefix+"/") {
+			return cleanPath, nil
+		}
+	}
+	return "", fmt.Errorf("只允许保存 assets、output 或 api 下的本机文件")
+}
+
+func lumaIsLoopbackHost(host string) bool {
+	host = strings.ToLower(strings.Trim(strings.TrimSpace(host), "[]"))
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func lumaWriteHTTPDownloadToFile(urlValue string, writer io.Writer) (string, int64, error) {
+	request, err := http.NewRequest(http.MethodGet, urlValue, nil)
+	if err != nil {
+		return "", 0, fmt.Errorf("下载地址无效")
+	}
+	client := *lumaHTTPClient
+	client.CheckRedirect = func(request *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("下载重定向次数过多")
+		}
+		if _, err := lumaResolveSaveAsURL(request.URL.String()); err != nil {
+			return err
+		}
+		return nil
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return "", 0, fmt.Errorf("网络连接失败：%w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode >= http.StatusBadRequest {
-		return nil, "", "", fmt.Errorf("下载失败：HTTP %d", response.StatusCode)
+		return "", 0, fmt.Errorf("下载失败：HTTP %d", response.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, 512<<20))
+	if response.ContentLength > lumaSaveAsMaxBytes {
+		return "", 0, fmt.Errorf("文件超过 512 MB，已取消保存")
+	}
+	written, err := lumaCopyWithMaxBytes(writer, response.Body, lumaSaveAsMaxBytes)
 	if err != nil {
-		return nil, "", "", fmt.Errorf("读取下载内容失败：%w", err)
+		return "", written, err
 	}
-	name := filepath.Base(parsed.Path)
-	return body, response.Header.Get("Content-Type"), name, nil
+	return response.Header.Get("Content-Type"), written, nil
+}
+
+func lumaCopyWithMaxBytes(writer io.Writer, reader io.Reader, maxBytes int64) (int64, error) {
+	buffer := make([]byte, 32*1024)
+	written := int64(0)
+	for {
+		n, readErr := reader.Read(buffer)
+		if n > 0 {
+			if written+int64(n) > maxBytes {
+				remaining := int(maxBytes - written)
+				if remaining > 0 {
+					count, err := writer.Write(buffer[:remaining])
+					written += int64(count)
+					if err != nil {
+						return written, fmt.Errorf("保存文件失败：%w", err)
+					}
+				}
+				return written, fmt.Errorf("文件超过 512 MB，已取消保存")
+			}
+			count, err := writer.Write(buffer[:n])
+			written += int64(count)
+			if err != nil {
+				return written, fmt.Errorf("保存文件失败：%w", err)
+			}
+			if count != n {
+				return written, io.ErrShortWrite
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return written, fmt.Errorf("读取下载内容失败：%w", readErr)
+		}
+	}
+	return written, nil
+}
+
+func lumaDownloadTargetPath(outputDir string, filename string) (string, error) {
+	absOutput, err := filepath.Abs(outputDir)
+	if err != nil {
+		return "", err
+	}
+	absOutput = filepath.Clean(absOutput)
+	name := lumaSafeDownloadFilename(filename)
+	targetPath := filepath.Join(absOutput, name)
+	absTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return "", err
+	}
+	if !lumaPathIsInside(absOutput, absTarget) {
+		return "", fmt.Errorf("文件名无效")
+	}
+	uniquePath := lumaUniqueFilePath(absTarget)
+	uniqueAbs, err := filepath.Abs(uniquePath)
+	if err != nil {
+		return "", err
+	}
+	if !lumaPathIsInside(absOutput, uniqueAbs) {
+		return "", fmt.Errorf("文件名无效")
+	}
+	return uniqueAbs, nil
+}
+
+func lumaPathIsInside(root string, candidate string) bool {
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(candidate))
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel))
 }
 
 func lumaReadDataURL(value string) ([]byte, string, string, error) {
@@ -1868,17 +2179,29 @@ func lumaReadDataURL(value string) ([]byte, string, string, error) {
 		if err != nil {
 			return nil, "", "", fmt.Errorf("data URL 解码失败：%w", err)
 		}
+		if int64(len(raw)) > lumaSaveAsMaxBytes {
+			return nil, "", "", fmt.Errorf("文件超过 512 MB，已取消保存")
+		}
 		return raw, contentType, "", nil
 	}
 	raw, err := url.QueryUnescape(data)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("data URL 解码失败：%w", err)
 	}
+	if int64(len(raw)) > lumaSaveAsMaxBytes {
+		return nil, "", "", fmt.Errorf("文件超过 512 MB，已取消保存")
+	}
 	return []byte(raw), contentType, "", nil
 }
 
 func lumaSafeDownloadFilename(value string) string {
 	name := strings.TrimSpace(value)
+	name = strings.ReplaceAll(name, "\x00", "")
+	name = strings.ReplaceAll(name, "\\", "/")
+	name = path.Base(name)
+	if name == "." || name == ".." || name == "/" {
+		name = ""
+	}
 	if name == "" || name == "." || name == string(filepath.Separator) {
 		name = "download"
 	}

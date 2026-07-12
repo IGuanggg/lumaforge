@@ -2606,7 +2606,7 @@ function InfiniteCanvasPage() {
                                 if (isConfigNode) setNodes((prev) => prev.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined } } : node)));
                                 return true;
                             } catch (error) {
-                                const errorDetails = error instanceof Error ? error.message : "生成失败";
+                                const errorDetails = explainModelError(error, "生成失败");
                                 hasFailure = true;
                                 setNodes((prev) => prev.map((node) => (node.id === targetId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, generationPhase: "failed", errorDetails } } : node)));
                                 return false;

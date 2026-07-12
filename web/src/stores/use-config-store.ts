@@ -344,9 +344,18 @@ export function useEffectiveConfig() {
 export function buildApiUrl(baseUrl: string, path: string) {
     let normalizedBaseUrl = normalizeApiBaseUrl(baseUrl);
     normalizedBaseUrl = normalizeArkPlanBaseUrl(normalizedBaseUrl);
-    const lowerBaseUrl = normalizedBaseUrl.toLowerCase();
-    const apiBaseUrl = lowerBaseUrl.endsWith("/v1") || lowerBaseUrl.endsWith("/api/v3") || lowerBaseUrl.endsWith("/api/plan/v3") ? normalizedBaseUrl : `${normalizedBaseUrl}/v1`;
-    return `${apiBaseUrl}${path}`;
+    try {
+        const url = new URL(normalizedBaseUrl);
+        const basePath = url.pathname.replace(/\/+$/, "");
+        const lowerPath = basePath.toLowerCase();
+        const apiBasePath = lowerPath.endsWith("/v1") || lowerPath.endsWith("/api/v3") || lowerPath.endsWith("/api/plan/v3") ? basePath : `${basePath}/v1`;
+        url.pathname = `${apiBasePath.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
+        return url.toString();
+    } catch {
+        const lowerBaseUrl = normalizedBaseUrl.toLowerCase();
+        const apiBaseUrl = lowerBaseUrl.endsWith("/v1") || lowerBaseUrl.endsWith("/api/v3") || lowerBaseUrl.endsWith("/api/plan/v3") ? normalizedBaseUrl : `${normalizedBaseUrl}/v1`;
+        return `${apiBaseUrl}${path}`;
+    }
 }
 
 function normalizeArkPlanBaseUrl(baseUrl: string) {
@@ -359,9 +368,8 @@ function normalizeArkPlanBaseUrl(baseUrl: string) {
         const end = arkPlanIndex + "/api/plan/v3".length;
         if (lowerPath.length !== end && lowerPath[end] !== "/") return baseUrl;
         url.pathname = path.slice(0, end);
-        url.search = "";
-        url.hash = "";
-        return url.toString().replace(/\/+$/, "");
+        const result = url.toString();
+        return url.search || url.hash ? result : result.replace(/\/+$/, "");
     } catch {
         return baseUrl;
     }

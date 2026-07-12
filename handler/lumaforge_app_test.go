@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/IGuanggg/lumaforge/config"
+	"github.com/IGuanggg/lumaforge/service"
 )
 
 func TestLumaAuthTokenFromRequestPrefersBearerThenCookie(t *testing.T) {
@@ -403,6 +404,110 @@ func TestLumaAppUpdatePathCopiesOldDataAndSkipsExistingFiles(t *testing.T) {
 	}
 	if data, err := os.ReadFile(filepath.Join(newOutput, "same.txt")); err != nil || string(data) != "new" {
 		t.Fatalf("existing file should not be overwritten, got %q, %v", data, err)
+	}
+}
+
+func TestLumaAppUpdatePathMoveConflictDoesNotSwitchPath(t *testing.T) {
+	withTempHandlerLumaConfig(t, nil)
+	oldOutput := filepath.Join(config.Cfg.LumaForgeDataDir, "output")
+	if err := os.MkdirAll(oldOutput, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(oldOutput, "same.txt"), []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	newOutput := filepath.Join(t.TempDir(), "output")
+	if err := os.MkdirAll(newOutput, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(newOutput, "same.txt"), []byte("new"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	body := []byte(fmt.Sprintf(`{"target":"output","path":%q,"transfer_mode":"move"}`, newOutput))
+	request := httptest.NewRequest(http.MethodPost, "/api/app/update-path", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	LumaAppUpdatePath(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s; want conflict to fail", recorder.Code, recorder.Body.String())
+	}
+	payload := decodeHandlerPayload(t, recorder)
+	if strings.TrimSpace(fmt.Sprint(payload["detail"])) == "" {
+		t.Fatalf("payload = %#v, want clear move conflict detail", payload)
+	}
+	if got := service.LumaAppPaths()["output"]; !strings.EqualFold(filepath.Clean(got), filepath.Clean(oldOutput)) {
+		t.Fatalf("output path switched to %q, want original %q", got, oldOutput)
+	}
+}
+
+func TestLumaAppSaveAsRejectsExternalHTTP(t *testing.T) {
+	withTempHandlerLumaConfig(t, nil)
+
+	body := []byte(`{"url":"http://169.254.169.254/latest/meta-data/","filename":"meta.txt"}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/app/save-as", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	LumaAppSaveAs(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s; want external URL rejected", recorder.Code, recorder.Body.String())
+	}
+	payload := decodeHandlerPayload(t, recorder)
+	if strings.TrimSpace(fmt.Sprint(payload["detail"])) == "" {
+		t.Fatalf("payload = %#v, want rejection detail", payload)
+	}
+}
+
+func TestLumaAppSaveAsKeepsFilenameInsideOutputDir(t *testing.T) {
+	withTempHandlerLumaConfig(t, nil)
+
+	body := []byte(`{"url":"data:text/plain,hello","filename":".."}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/app/save-as", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	LumaAppSaveAs(recorder, request)
+
+	payload := decodeHandlerPayload(t, recorder)
+	if recorder.Code != http.StatusOK || payload["ok"] != true {
+		t.Fatalf("payload = %#v, status = %d", payload, recorder.Code)
+	}
+	outputDir := service.LumaAppPaths()["output"]
+	savedPath := fmt.Sprint(payload["path"])
+	rel, err := filepath.Rel(outputDir, savedPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		t.Fatalf("saved path %q escaped output dir %q (rel=%q err=%v)", savedPath, outputDir, rel, err)
+	}
+	if filepath.Base(savedPath) == ".." {
+		t.Fatalf("unsafe filename was kept: %q", savedPath)
+	}
+	data, err := os.ReadFile(savedPath)
+	if err != nil || string(data) != "hello" {
+		t.Fatalf("saved data = %q, %v", data, err)
+	}
+}
+
+func TestLumaAppSaveAsRejectsTooLargeHTTP(t *testing.T) {
+	withTempHandlerLumaConfig(t, nil)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/output/huge.bin" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Length", fmt.Sprint(int64(512<<20)+1))
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	body := []byte(fmt.Sprintf(`{"url":%q,"filename":"huge.bin"}`, server.URL+"/output/huge.bin"))
+	request := httptest.NewRequest(http.MethodPost, "/api/app/save-as", bytes.NewReader(body))
+	recorder := httptest.NewRecorder()
+	LumaAppSaveAs(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s; want too-large download rejected", recorder.Code, recorder.Body.String())
+	}
+	payload := decodeHandlerPayload(t, recorder)
+	if !strings.Contains(fmt.Sprint(payload["detail"]), "512") {
+		t.Fatalf("payload = %#v, want size limit detail", payload)
 	}
 }
 

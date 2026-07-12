@@ -69,13 +69,21 @@ export async function saveFileWithPrompt(url: string, filename: string): Promise
                 };
             }
             if (response.ok && payload.cancelled) return { ok: false, cancelled: true, filename: payload.filename || cleanFilename };
-            throw new Error(explainDownloadError(payload.detail || payload.message || `保存失败 (${response.status})`));
+            return {
+                ok: false,
+                filename: payload.filename || cleanFilename,
+                message: explainDownloadError(payload.detail || payload.message || `保存失败 (${response.status})`),
+            };
         } catch (error) {
+            if (!canFallbackToBrowserDownload(error)) {
+                const reason = explainDownloadError(error instanceof Error ? error.message : "");
+                return { ok: false, filename: cleanFilename, message: reason };
+            }
             const fallback = await browserDownload(cleanUrl, cleanFilename);
             const reason = explainDownloadError(error instanceof Error ? error.message : "");
             return {
                 ...fallback,
-                message: reason ? `本地保存失败：${reason}。已改用浏览器下载，可在浏览器默认下载目录查看。` : "本地保存不可用，已改用浏览器下载。",
+                message: reason ? `本地保存不可用：${reason}。已改用浏览器下载，可在浏览器默认下载目录查看。` : "本地保存不可用，已改用浏览器下载。",
             };
         }
     }
@@ -137,6 +145,11 @@ async function browserDownload(url: string, filename: string): Promise<PromptSav
     }
 }
 
+function canFallbackToBrowserDownload(error: unknown) {
+    const message = error instanceof Error ? error.message.toLowerCase() : "";
+    return message.includes("failed to fetch") || message.includes("networkerror") || message.includes("load failed") || message.includes("network request failed");
+}
+
 export function sanitizeDownloadFilename(value: string) {
     const name = String(value || "download")
         .replace(/[\\/:*?"<>|]/g, "-")
@@ -185,6 +198,8 @@ function explainDownloadError(message: string) {
     const text = String(message || "").trim();
     const lower = text.toLowerCase();
     if (!text) return "保存失败，请重试。";
+    if (lower.includes("too large") || lower.includes("512 mb") || text.includes("超过")) return "文件超过 512 MB，已取消保存；请换较小文件或手动导出。";
+    if (text.includes("只允许保存") || lower.includes("not allowed") || lower.includes("blocked")) return "下载来源不安全或不是本机生成文件，已取消保存。";
     if (lower.includes("network") || lower.includes("failed to fetch") || text.includes("网络")) return "网络连接失败，请检查网络后重试。";
     if (lower.includes("permission") || lower.includes("access is denied") || text.includes("拒绝访问") || text.includes("权限")) return "目标目录没有写入权限，请换到用户目录或关闭占用中的文件后重试。";
     if (lower.includes("no space") || text.includes("磁盘") || text.includes("空间")) return "磁盘空间可能不足，请清理空间后重试。";
