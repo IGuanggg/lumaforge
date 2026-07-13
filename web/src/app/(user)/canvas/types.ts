@@ -126,6 +126,7 @@ export type CanvasAssistantReference = {
     id: string;
     type: CanvasNodeType;
     title: string;
+    label?: string;
     dataUrl?: string;
     storageKey?: string;
     text?: string;
@@ -141,9 +142,10 @@ export type CanvasAssistantImage = {
 export type CanvasAssistantMessage = {
     id: string;
     role: "user" | "assistant";
-    mode: "ask" | "image";
+    mode: "ask" | "prompt" | "image";
     text: string;
     isLoading?: boolean;
+    isError?: boolean;
     references?: CanvasAssistantReference[];
     images?: CanvasAssistantImage[];
 };

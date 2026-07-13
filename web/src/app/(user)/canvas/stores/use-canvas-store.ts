@@ -18,6 +18,8 @@ export type CanvasProject = {
     activeChatId: string | null;
     backgroundMode: CanvasBackgroundMode;
     showImageInfo: boolean;
+    showConnections: boolean;
+    snapToGrid: boolean;
     viewport: ViewportTransform;
     metadata?: {
         legacyId?: string;
@@ -36,7 +38,7 @@ type CanvasStore = {
     openProject: (id: string) => CanvasProject | null;
     renameProject: (id: string, title: string) => void;
     deleteProjects: (ids: string[]) => void;
-    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "viewport">>) => void;
+    updateProject: (id: string, patch: Partial<Pick<CanvasProject, "nodes" | "connections" | "chatSessions" | "activeChatId" | "backgroundMode" | "showImageInfo" | "showConnections" | "snapToGrid" | "viewport">>) => void;
 };
 
 const initialViewport: ViewportTransform = { x: 0, y: 0, k: 1 };
@@ -86,6 +88,8 @@ export const useCanvasStore = create<CanvasStore>()(
                     activeChatId: null,
                     backgroundMode: "lines",
                     showImageInfo: false,
+                    showConnections: true,
+                    snapToGrid: false,
                     viewport: initialViewport,
                     metadata: { source: "v2.1" },
                 };
@@ -106,6 +110,8 @@ export const useCanvasStore = create<CanvasStore>()(
                     activeChatId: source.activeChatId || null,
                     backgroundMode: source.backgroundMode || "lines",
                     showImageInfo: source.showImageInfo || false,
+                    showConnections: source.showConnections !== false,
+                    snapToGrid: source.snapToGrid || false,
                     viewport: source.viewport || initialViewport,
                     metadata: source.metadata || {},
                 };

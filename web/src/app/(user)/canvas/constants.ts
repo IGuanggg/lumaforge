@@ -9,11 +9,11 @@ type CanvasNodeSpec = {
 };
 
 export const NODE_DEFAULT_SIZE = {
-    [CanvasNodeType.Image]: { width: 340, height: 240, title: "New Generation" },
-    [CanvasNodeType.Text]: { width: 340, height: 240, title: "Note" },
+    [CanvasNodeType.Image]: { width: 340, height: 240, title: "图片节点" },
+    [CanvasNodeType.Text]: { width: 340, height: 240, title: "文本节点" },
     [CanvasNodeType.Config]: { width: 340, height: 240, title: "生成配置" },
-    [CanvasNodeType.Video]: { width: 420, height: 236, title: "Video" },
-    [CanvasNodeType.Audio]: { width: 340, height: 120, title: "Audio" },
+    [CanvasNodeType.Video]: { width: 420, height: 236, title: "视频节点" },
+    [CanvasNodeType.Audio]: { width: 340, height: 120, title: "音频节点" },
 } satisfies Record<CanvasNodeType, { width: number; height: number; title: string }>;
 
 export const NODE_SPECS = {

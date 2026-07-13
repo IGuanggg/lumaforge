@@ -419,7 +419,11 @@ def run_smoke_test(port, paths, log_file):
         result = {"ready": ready, "port": port, "error": last_error}
         if ready:
             with urllib.request.urlopen(ready_url, timeout=3) as response:
-                result["health"] = json.loads(response.read().decode("utf-8"))
+                health_body = response.read().decode("utf-8").strip()
+                try:
+                    result["health"] = json.loads(health_body)
+                except json.JSONDecodeError:
+                    result["health"] = {"ok": response.status < 400, "body": health_body}
             legacy_ready_url = v21_runtime.get("legacy_ready_url") if v21_runtime else ""
             if legacy_ready_url:
                 legacy_ready, legacy_error = wait_until_ready(legacy_ready_url, timeout=10)

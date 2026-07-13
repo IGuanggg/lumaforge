@@ -27,13 +27,14 @@ type CanvasNodePromptPanelProps = {
     onConfigChange: (nodeId: string, patch: Partial<CanvasNodeData["metadata"]>) => void;
     onGenerate: (nodeId: string, mode: CanvasNodeGenerationMode, prompt: string) => void;
     mentionReferences?: CanvasResourceReference[];
+    onReferenceSelect?: (nodeId: string, reference: CanvasResourceReference) => void;
     onRemoveReference?: (nodeId: string, reference: CanvasResourceReference) => void;
     onReplaceReference?: (nodeId: string, reference: CanvasResourceReference) => void;
     onIgnoreReference?: (nodeId: string, reference: CanvasResourceReference) => void;
     onImageSettingsOpenChange?: (open: boolean) => void;
 };
 
-export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onRemoveReference, onReplaceReference, onIgnoreReference, onImageSettingsOpenChange }: CanvasNodePromptPanelProps) {
+export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfigChange, onGenerate, mentionReferences = [], onReferenceSelect, onRemoveReference, onReplaceReference, onIgnoreReference, onImageSettingsOpenChange }: CanvasNodePromptPanelProps) {
     const globalConfig = useEffectiveConfig();
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
@@ -72,11 +73,13 @@ export function CanvasNodePromptPanel({ node, isRunning, onPromptChange, onConfi
         const token = `@${reference.label} `;
         const nextPrompt = prompt ? `${prompt}${/\s$/.test(prompt) ? "" : " "}${token}` : token;
         updatePrompt(nextPrompt, upsertPromptReference(node.metadata?.promptRefs, reference));
+        onReferenceSelect?.(node.id, reference);
     };
 
     const rememberReference = (reference: CanvasResourceReference) => {
         const nextRefs = upsertPromptReference(node.metadata?.promptRefs, reference);
         onConfigChange(node.id, { promptRefs: nextRefs, inputReferenceOrder: referenceOrder(orderPromptReferences(nextRefs, node.metadata?.inputReferenceOrder)) });
+        onReferenceSelect?.(node.id, reference);
     };
 
     const removeReference = (reference: CanvasResourceReference) => {

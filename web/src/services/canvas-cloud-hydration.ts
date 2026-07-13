@@ -73,6 +73,8 @@ function fromCloudProject(project: CloudCanvasProject): CanvasProject {
         activeChatId: project.activeChatId || null,
         backgroundMode: project.backgroundMode || "lines",
         showImageInfo: Boolean(project.showImageInfo),
+        showConnections: project.showConnections !== false,
+        snapToGrid: Boolean(project.snapToGrid),
         viewport: project.viewport || { x: 0, y: 0, k: 1 },
         metadata: project.metadata || {},
     };

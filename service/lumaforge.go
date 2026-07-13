@@ -24,8 +24,8 @@ import (
 	"github.com/IGuanggg/lumaforge/model"
 )
 
-const LumaForgeVersion = "2.1.16"
-const LumaForgeBuildID = "20260623-v2116-product-closure1"
+const LumaForgeVersion = "2.1.17"
+const LumaForgeBuildID = "20260713-v2117-canvas-download1"
 const lumaUpdateDownloadStallSeconds = 45
 const lumaSaveAsMaxBytes int64 = 512 << 20
 
@@ -1221,12 +1221,18 @@ func classifiedModelPayload(models []string, status int, message string) map[str
 func LumaAppInfo() map[string]any {
 	paths := LumaAppPaths()
 	updateCapability := LumaUpdateCapability()
+	desktop := boolFromAny(updateCapability["desktop"])
+	mode := "source"
+	if desktop {
+		mode = "desktop"
+	}
 	return map[string]any{
 		"name":                    "LumaForge",
 		"display_name":            "光绘工坊",
 		"version":                 LumaForgeVersion,
 		"build_id":                LumaForgeBuildID,
-		"desktop":                 updateCapability["desktop"],
+		"desktop":                 desktop,
+		"mode":                    mode,
 		"runtime_dir":             filepath.Dir(LumaDataDir()),
 		"data_dir":                LumaDataDir(),
 		"assets_dir":              LumaAssetsDir(),
@@ -1243,9 +1249,13 @@ func LumaAppInfo() map[string]any {
 	}
 }
 
+func LumaDesktopRuntime() bool {
+	return os.Getenv("LUMAFORGE_DESKTOP") == "1" || os.Getenv("INFINITE_CANVAS_DESKTOP") == "1"
+}
+
 func LumaAppActionCapability() map[string]any {
 	legacyURL := strings.TrimRight(strings.TrimSpace(config.Cfg.LumaForgeLegacyAPI), "/")
-	desktop := os.Getenv("LUMAFORGE_DESKTOP") == "1" || os.Getenv("INFINITE_CANVAS_DESKTOP") == "1"
+	desktop := LumaDesktopRuntime()
 	supported := legacyURL != ""
 	reason := ""
 	restartMode := ""
@@ -1497,7 +1507,7 @@ func lumaFetchCanvasCapabilities() (map[string]any, error) {
 
 func LumaUpdateCapability() map[string]any {
 	legacyURL := strings.TrimSpace(config.Cfg.LumaForgeLegacyAPI)
-	desktop := os.Getenv("LUMAFORGE_DESKTOP") == "1" || os.Getenv("INFINITE_CANVAS_DESKTOP") == "1"
+	desktop := LumaDesktopRuntime()
 	supported := legacyURL != ""
 	mode := "source-mode"
 	reason := "当前是源码/开发模式，自动替换桌面程序不可用；桌面版启动后会启用自动更新器。"
@@ -1881,6 +1891,61 @@ func lumaCopyFile(source string, dest string, perm os.FileMode) error {
 
 func LumaSaveAs(urlValue string, filename string) (map[string]any, error) {
 	return lumaSaveAsStreamed(urlValue, filename)
+}
+
+func LumaSaveBytes(reader io.Reader, filename string, contentType string) (map[string]any, error) {
+	if reader == nil {
+		return nil, fmt.Errorf("文件内容为空")
+	}
+	name := lumaSafeDownloadFilename(firstNonEmptyString(filename, "download"))
+	outputDir := LumaAppPaths()["output"]
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return nil, fmt.Errorf("创建保存目录失败：%w", err)
+	}
+	if err := lumaEnsureWritableDir(outputDir); err != nil {
+		return nil, err
+	}
+	targetPath, err := lumaDownloadTargetPath(outputDir, name)
+	if err != nil {
+		return nil, err
+	}
+	tempFile, err := os.CreateTemp(outputDir, ".lumaforge-download-*.part")
+	if err != nil {
+		return nil, fmt.Errorf("创建临时文件失败：%w", err)
+	}
+	tempPath := tempFile.Name()
+	cleanupTemp := true
+	defer func() {
+		if cleanupTemp {
+			_ = os.Remove(tempPath)
+		}
+	}()
+
+	written, err := lumaCopyWithMaxBytes(tempFile, reader, lumaSaveAsMaxBytes)
+	if err != nil {
+		_ = tempFile.Close()
+		return nil, err
+	}
+	if written == 0 {
+		_ = tempFile.Close()
+		return nil, fmt.Errorf("文件内容为空")
+	}
+	if err := tempFile.Close(); err != nil {
+		return nil, fmt.Errorf("保存文件失败：%w", err)
+	}
+	if err := os.Rename(tempPath, targetPath); err != nil {
+		return nil, fmt.Errorf("保存文件失败：%w", err)
+	}
+	cleanupTemp = false
+	return map[string]any{
+		"ok":           true,
+		"cancelled":    false,
+		"path":         targetPath,
+		"filename":     filepath.Base(targetPath),
+		"size_bytes":   written,
+		"content_type": firstNonEmptyString(strings.TrimSpace(contentType), "application/octet-stream"),
+		"output_dir":   outputDir,
+	}, nil
 }
 
 func lumaReadDownloadBytes(urlValue string) ([]byte, string, string, error) {

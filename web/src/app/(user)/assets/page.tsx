@@ -13,7 +13,7 @@ import { uploadImage } from "@/services/image-storage";
 import { uploadMediaFile, type UploadedFile } from "@/services/file-storage";
 import { fetchAssetLibrary, type AssetLibraryItem } from "@/services/api/assets";
 import { fetchCloudMediaStatus, restoreCloudMedia, syncCloudMedia, type CloudMediaStatus } from "@/services/api/cloud";
-import { openSavedFileLocation, saveBlobWithPrompt, saveFileWithPrompt } from "@/services/api/downloads";
+import { openSavedFileLocation, saveBlobWithPrompt, saveFileWithPrompt, type PromptSaveResult } from "@/services/api/downloads";
 import { DownloadHistoryDrawer } from "@/components/download-history-drawer";
 import { cn } from "@/lib/utils";
 import { useAssetStore, type Asset, type AssetKind, type ImageAsset } from "@/stores/use-asset-store";
@@ -288,28 +288,24 @@ export default function AssetsPage() {
             .trim()
             .slice(0, 80) || "asset";
 
-    const downloadAsset = async (asset: DisplayAsset) => {
-        if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio") return;
-        const url = asset.backendId ? `/api/assets/${encodeURIComponent(asset.backendId)}/download` : asset.kind === "image" ? asset.data.dataUrl : asset.data.url;
-        const filename = `${safeAssetFileStem(asset.title || "asset")}.${assetExtension(asset)}`;
-        const result = await saveFileWithPrompt(url, filename);
+    const showSaveResult = (result: PromptSaveResult, successText = "保存完成") => {
         if (result.cancelled) {
             message.info("已取消保存");
             return;
         }
         if (!result.ok) {
-            message.error(result.message || "下载失败");
+            message.error(result.message || "保存失败");
             return;
         }
         if (result.fallback) {
-            message.success(result.message || "已交给浏览器下载，文件会进入浏览器默认下载目录");
+            message.success(result.message || "文件已交给浏览器下载");
             return;
         }
         if (result.path) {
             message.success({
                 content: (
                     <span className="inline-flex items-center gap-2">
-                        <span>{`已保存到：${result.path}`}</span>
+                        <span>{`${successText}：${result.path}`}</span>
                         <button type="button" className="text-[#2f80ff] underline-offset-2 hover:underline" onClick={() => void openSavedFileLocation(result.path!)}>
                             打开所在文件夹
                         </button>
@@ -319,7 +315,15 @@ export default function AssetsPage() {
             });
             return;
         }
-        message.success("保存完成");
+        message.success(successText);
+    };
+
+    const downloadAsset = async (asset: DisplayAsset) => {
+        if (asset.kind !== "image" && asset.kind !== "video" && asset.kind !== "audio") return;
+        const url = asset.backendId ? `/api/assets/${encodeURIComponent(asset.backendId)}/download` : asset.kind === "image" ? asset.data.dataUrl : asset.data.url;
+        const filename = `${safeAssetFileStem(asset.title || "asset")}.${assetExtension(asset)}`;
+        const result = await saveFileWithPrompt(url, filename);
+        showSaveResult(result);
     };
 
     const openAssetInNewWindow = (asset: DisplayAsset) => {
@@ -360,7 +364,11 @@ export default function AssetsPage() {
             message.warning("暂无可导出的本地素材");
             return;
         }
-        await exportAssets(exportable);
+        try {
+            showSaveResult(await exportAssets(exportable), "素材已导出");
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "素材导出失败");
+        }
     };
 
     const importAssetZip = async (file?: File) => {
@@ -452,9 +460,7 @@ export default function AssetsPage() {
         try {
             const zip = await createZip(files);
             const result = await saveBlobWithPrompt(zip, `素材-${new Date().toISOString().slice(0, 10)}.zip`);
-            if (result.cancelled) message.info("已取消保存");
-            else if (!result.ok) message.error(result.message || "批量下载失败");
-            else message.success(errors.length ? `已打包 ${files.length - 1} 项，${errors.length} 项失败，详情见 errors.txt` : `已打包 ${selectedAssets.length} 项素材`);
+            showSaveResult(result, errors.length ? `已打包 ${files.length - 1} 项，${errors.length} 项失败，详情见 errors.txt` : `已打包 ${selectedAssets.length} 项素材`);
         } finally {
             setBatchWorking("");
         }

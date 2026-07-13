@@ -6,7 +6,7 @@
 
 #define MyAppName "LumaForge"
 #define MyAppNameCN "光绘工坊"
-#define MyAppVersion "2.1.16"
+#define MyAppVersion "2.1.17"
 #define MyAppPublisher "IGuanggg"
 #define MyAppURL "https://github.com/IGuanggg/lumaforge"
 #define MyAppExeName "LumaForge.exe"

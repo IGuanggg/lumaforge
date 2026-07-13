@@ -314,11 +314,11 @@ func TestLumaUpdateAutoSourceModeDoesNotWriteFailedState(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode([]map[string]any{
 			{
-				"tag_name":   "v2.1.17",
+				"tag_name":   "v2.1.18",
 				"draft":      false,
 				"prerelease": false,
 				"assets": []map[string]any{
-					{"name": "LumaForge-2.1.17-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
+					{"name": "LumaForge-2.1.18-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
 				},
 			},
 		})
@@ -343,8 +343,8 @@ func TestLumaUpdateAutoSourceModeDoesNotWriteFailedState(t *testing.T) {
 	if state["phase"] == "failed" {
 		t.Fatalf("source mode auto update wrote failed state: %#v", state)
 	}
-	if state["phase"] != "found" || state["latest_version"] != "2.1.17" {
-		t.Fatalf("state = %#v, want found 2.1.17", state)
+	if state["phase"] != "found" || state["latest_version"] != "2.1.18" {
+		t.Fatalf("state = %#v, want found 2.1.18", state)
 	}
 }
 
@@ -482,6 +482,69 @@ func TestLumaAppSaveAsKeepsFilenameInsideOutputDir(t *testing.T) {
 	data, err := os.ReadFile(savedPath)
 	if err != nil || string(data) != "hello" {
 		t.Fatalf("saved data = %q, %v", data, err)
+	}
+}
+
+func TestLumaAppSaveBytesStreamsIntoOutputDir(t *testing.T) {
+	withTempHandlerLumaConfig(t, nil)
+	t.Setenv("LUMAFORGE_DESKTOP", "1")
+
+	request := httptest.NewRequest(http.MethodPost, "/api/app/save-bytes?filename=../export.zip", strings.NewReader("zip-content"))
+	request.Header.Set("Content-Type", "application/zip")
+	recorder := httptest.NewRecorder()
+	LumaAppSaveBytes(recorder, request)
+
+	payload := decodeHandlerPayload(t, recorder)
+	if recorder.Code != http.StatusOK || payload["ok"] != true {
+		t.Fatalf("payload = %#v, status = %d", payload, recorder.Code)
+	}
+	savedPath := fmt.Sprint(payload["path"])
+	outputDir := service.LumaAppPaths()["output"]
+	rel, err := filepath.Rel(outputDir, savedPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		t.Fatalf("saved path %q escaped output dir %q (rel=%q err=%v)", savedPath, outputDir, rel, err)
+	}
+	data, err := os.ReadFile(savedPath)
+	if err != nil || string(data) != "zip-content" {
+		t.Fatalf("saved data = %q, %v", data, err)
+	}
+	if payload["content_type"] != "application/zip" {
+		t.Fatalf("content_type = %#v", payload["content_type"])
+	}
+}
+
+func TestLumaAppSaveBytesRejectsEmptyBody(t *testing.T) {
+	withTempHandlerLumaConfig(t, nil)
+	t.Setenv("LUMAFORGE_DESKTOP", "1")
+
+	request := httptest.NewRequest(http.MethodPost, "/api/app/save-bytes?filename=empty.txt", strings.NewReader(""))
+	recorder := httptest.NewRecorder()
+	LumaAppSaveBytes(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s; want empty body rejected", recorder.Code, recorder.Body.String())
+	}
+	payload := decodeHandlerPayload(t, recorder)
+	if !strings.Contains(fmt.Sprint(payload["detail"]), "为空") {
+		t.Fatalf("payload = %#v, want empty-content detail", payload)
+	}
+}
+
+func TestLumaAppSaveBytesRejectsSourceMode(t *testing.T) {
+	withTempHandlerLumaConfig(t, nil)
+	t.Setenv("LUMAFORGE_DESKTOP", "")
+	t.Setenv("INFINITE_CANVAS_DESKTOP", "")
+
+	request := httptest.NewRequest(http.MethodPost, "/api/app/save-bytes?filename=blocked.txt", strings.NewReader("blocked"))
+	recorder := httptest.NewRecorder()
+	LumaAppSaveBytes(recorder, request)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, body = %s; want source mode rejected", recorder.Code, recorder.Body.String())
+	}
+	payload := decodeHandlerPayload(t, recorder)
+	if !strings.Contains(fmt.Sprint(payload["detail"]), "桌面版") {
+		t.Fatalf("payload = %#v, want desktop-only detail", payload)
 	}
 }
 

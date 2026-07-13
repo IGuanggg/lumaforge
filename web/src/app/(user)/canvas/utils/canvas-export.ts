@@ -1,6 +1,5 @@
-import { saveAs } from "file-saver";
-
 import { createZip } from "@/lib/zip";
+import { saveBlobWithPrompt } from "@/services/api/downloads";
 import { getMediaBlob } from "@/services/file-storage";
 import { getImageBlob } from "@/services/image-storage";
 import type { CanvasExportAsset, CanvasExportFile } from "../export-types";
@@ -26,7 +25,7 @@ export async function exportCanvasProjects(projects: CanvasProject[], fileName =
 
     const data: CanvasExportFile = { app: "lumaforge", version: 3, exportedAt: new Date().toISOString(), projects: exportedProjects };
     const zip = await createZip([{ name: "projects.json", data: JSON.stringify(data, null, 2) }, ...zipFiles]);
-    saveAs(zip, `${safeFileName(fileName)}.zip`);
+    return saveBlobWithPrompt(zip, `${safeFileName(fileName)}.zip`);
 }
 
 function collectStorageKeys(value: unknown, keys = new Set<string>()) {

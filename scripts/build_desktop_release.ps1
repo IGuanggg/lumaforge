@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$Version = "2.1.16"
+$Version = "2.1.17"
 
 function Write-Sha256File {
     param(
@@ -70,6 +70,17 @@ if (Test-Path "web\public") {
     }
     Copy-Item "web\public" "web\.next\standalone" -Recurse -Force
 }
+$sharpRuntimeSource = "web\node_modules\@img\sharp-win32-x64\lib"
+$sharpRuntimeTarget = "web\.next\standalone\node_modules\@img\sharp-win32-x64\lib"
+foreach ($dll in @("libvips-42.dll", "libvips-cpp-8.17.3.dll")) {
+    $source = Join-Path $sharpRuntimeSource $dll
+    if (-not (Test-Path -LiteralPath $source)) {
+        throw "Sharp runtime dependency missing: $source"
+    }
+    New-Item -ItemType Directory -Force -Path $sharpRuntimeTarget | Out-Null
+    Copy-Item -LiteralPath $source -Destination (Join-Path $sharpRuntimeTarget $dll) -Force
+}
+Write-Host "  OK: Sharp/libvips Windows runtime"
 Write-Host "  OK: web\.next\standalone\server.js"
 
 Write-Host "[4/10] Copying Node runtime..."

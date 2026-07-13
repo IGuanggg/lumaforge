@@ -6,6 +6,7 @@ import { App, Button } from "antd";
 import { Download, FileUp, LayoutTemplate, Plus } from "lucide-react";
 
 import { readZip } from "@/lib/zip";
+import { openSavedFileLocation, type PromptSaveResult } from "@/services/api/downloads";
 import { setMediaBlob } from "@/services/file-storage";
 import { setImageBlob } from "@/services/image-storage";
 import { CanvasDeleteProjectsDialog } from "./components/canvas-delete-projects-dialog";
@@ -25,6 +26,45 @@ export default function CanvasPage() {
     const importProject = useCanvasStore((state) => state.importProject);
     const selectedIds = useCanvasUiStore((state) => state.selectedProjectIds);
     const setDeleteIds = useCanvasUiStore((state) => state.setDeleteProjectIds);
+
+    const showExportResult = (result: PromptSaveResult) => {
+        if (result.cancelled) {
+            message.info("已取消导出");
+            return;
+        }
+        if (!result.ok) {
+            message.error(result.message || "画布导出失败");
+            return;
+        }
+        if (result.fallback) {
+            message.success(result.message || "画布已交给浏览器下载");
+            return;
+        }
+        if (result.path) {
+            message.success({
+                content: (
+                    <span className="inline-flex items-center gap-2">
+                        <span>{`画布已保存到：${result.path}`}</span>
+                        <button type="button" className="text-[#2f80ff] underline-offset-2 hover:underline" onClick={() => void openSavedFileLocation(result.path!)}>
+                            打开所在文件夹
+                        </button>
+                    </span>
+                ),
+                duration: 8,
+            });
+            return;
+        }
+        message.success("画布导出完成");
+    };
+
+    const exportProjects = async (items: typeof projects, fileName: string) => {
+        try {
+            const result = await exportCanvasProjects(items, fileName);
+            showExportResult(result);
+        } catch (error) {
+            message.error(error instanceof Error ? error.message : "画布导出失败");
+        }
+    };
 
     const enterProject = (id: string) => {
         router.push(`/canvas/${id}`);
@@ -67,7 +107,16 @@ export default function CanvasPage() {
                     <div className="flex items-center gap-2">
                         {selectedIds.length ? (
                             <>
-                                <Button disabled={!hydrated} icon={<Download className="size-4" />} onClick={() => void exportCanvasProjects(projects.filter((project) => selectedIds.includes(project.id)), `智能画布-${selectedIds.length}个项目`)}>
+                                <Button
+                                    disabled={!hydrated}
+                                    icon={<Download className="size-4" />}
+                                    onClick={() =>
+                                        void exportProjects(
+                                            projects.filter((project) => selectedIds.includes(project.id)),
+                                            `智能画布-${selectedIds.length}个项目`,
+                                        )
+                                    }
+                                >
                                     导出选中
                                 </Button>
                                 <Button disabled={!hydrated} onClick={() => setDeleteIds(selectedIds)}>
@@ -97,7 +146,7 @@ export default function CanvasPage() {
                 ) : projects.length ? (
                     <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                         {projects.map((project) => (
-                            <CanvasProjectCard key={project.id} project={project} />
+                            <CanvasProjectCard key={project.id} project={project} onExport={() => void exportProjects([project], project.title || "智能画布")} />
                         ))}
                     </div>
                 ) : (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowUp, History, ImageIcon, LoaderCircle, MessageSquare, PanelRightClose, Plus, RotateCcw, Settings2, Sparkles, Trash2, X } from "lucide-react";
+import { ArrowUp, History, ImageIcon, LoaderCircle, MessageSquare, PanelRightClose, Plus, RotateCcw, Settings2, Sparkles, Trash2, WandSparkles, X } from "lucide-react";
 import { Button, Modal, Tooltip } from "antd";
 import { motion } from "motion/react";
 
@@ -17,13 +17,17 @@ import { imageToDataUrl, uploadImage } from "@/services/image-storage";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useThemeStore } from "@/stores/use-theme-store";
 import { imageReferenceLabel } from "@/lib/image-reference-prompt";
+import { explainModelError } from "@/lib/user-facing-errors";
 import type { ReferenceImage } from "@/types/image";
 import { DiaTextReveal } from "@/components/ui/dia-text-reveal";
 import { CanvasImageSettingsPopover } from "./canvas-image-settings-popover";
 import { CanvasPromptLibrary } from "./canvas-prompt-library";
+import { CanvasResourceMentionTextarea } from "./canvas-resource-mention-textarea";
+import { collectPromptReferencesFromText, removePromptReferenceToken } from "../utils/canvas-prompt-references";
+import type { CanvasResourceReference } from "../utils/canvas-resource-references";
 import { CanvasNodeType, type CanvasAssistantImage, type CanvasAssistantMessage, type CanvasAssistantReference, type CanvasAssistantSession, type CanvasNodeData } from "../types";
 
-type AssistantMode = "ask" | "image";
+type AssistantMode = "ask" | "prompt" | "image";
 const PANEL_MOTION_MS = 500;
 const PANEL_MOTION_SECONDS = PANEL_MOTION_MS / 1000;
 
@@ -32,6 +36,7 @@ type CanvasAssistantPanelProps = {
     selectedNodeIds: Set<string>;
     sessions: CanvasAssistantSession[];
     activeSessionId: string | null;
+    mentionReferences: CanvasResourceReference[];
     onSelectNodeIds: (ids: Set<string>) => void;
     onSessionsChange: (sessions: CanvasAssistantSession[], activeSessionId: string | null) => void;
     onInsertImage: (image: CanvasAssistantImage) => void;
@@ -41,7 +46,7 @@ type CanvasAssistantPanelProps = {
     onCollapse: () => void;
 };
 
-export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onPasteImage, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
+export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeSessionId, mentionReferences, onSelectNodeIds, onSessionsChange, onInsertImage, onInsertText, onPasteImage, onCollapseStart, onCollapse }: CanvasAssistantPanelProps) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
     const effectiveConfig = useEffectiveConfig();
     const modelCosts = useConfigStore((state) => state.publicSettings?.modelChannel.modelCosts);
@@ -51,7 +56,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const openConfigDialog = useConfigStore((state) => state.openConfigDialog);
     const [width, setWidth] = useState(390);
     const [view, setView] = useState<"chat" | "history">("chat");
-    const [mode, setMode] = useState<AssistantMode>("image");
+    const [mode, setMode] = useState<AssistantMode>("prompt");
     const [prompt, setPrompt] = useState("");
     const [isRunning, setIsRunning] = useState(false);
     const [checkedChatIds, setCheckedChatIds] = useState<string[]>([]);
@@ -59,6 +64,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const [closing, setClosing] = useState(false);
     const [resizing, setResizing] = useState(false);
     const [removedReferenceIds, setRemovedReferenceIds] = useState<Set<string>>(new Set());
+    const [mentionedReferenceIds, setMentionedReferenceIds] = useState<string[]>([]);
     const [localSessions, setLocalSessions] = useState<CanvasAssistantSession[]>(() => (sessions.length ? sessions : [createSession()]));
     const [localActiveSessionId, setLocalActiveSessionId] = useState<string | null>(activeSessionId);
 
@@ -79,7 +85,17 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
     const hasMessages = messages.length > 0;
     const selectedNodeKey = useMemo(() => Array.from(selectedNodeIds).sort().join(","), [selectedNodeIds]);
     const allSelectedReferences = useMemo(() => buildAssistantReferences(nodes, selectedNodeIds), [nodes, selectedNodeIds]);
-    const selectedReferences = useMemo(() => allSelectedReferences.filter((item) => !removedReferenceIds.has(item.id)), [allSelectedReferences, removedReferenceIds]);
+    const availableMentionReferences = useMemo(() => mentionReferences.filter((item) => item.kind === "image" || item.kind === "text"), [mentionReferences]);
+    const selectedReferences = useMemo(() => {
+        const mentionById = new Map(availableMentionReferences.map((item) => [item.id, item]));
+        const selected = allSelectedReferences.map((item) => ({ ...item, label: item.label || mentionById.get(item.id)?.label }));
+        const mentioned = availableMentionReferences.filter((item) => mentionedReferenceIds.includes(item.id)).map(resourceReferenceToAssistantReference);
+        return mergeAssistantReferences(selected, mentioned).filter((item) => !removedReferenceIds.has(item.id));
+    }, [allSelectedReferences, availableMentionReferences, mentionedReferenceIds, removedReferenceIds]);
+    const composerMentionReferences = useMemo(() => {
+        const activeIds = new Set(selectedReferences.map((item) => item.id));
+        return availableMentionReferences.map((item) => ({ ...item, active: activeIds.has(item.id) }));
+    }, [availableMentionReferences, selectedReferences]);
     const assistantConfig = useMemo(() => ({ ...effectiveConfig, count: effectiveConfig.canvasImageCount || effectiveConfig.count }), [effectiveConfig]);
     const iconButtonStyle = { color: theme.node.muted };
 
@@ -157,8 +173,9 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
         const userMessage: CanvasAssistantMessage = { id: nanoid(), role: "user", mode: nextMode, text, references: refs };
         const assistantId = nanoid();
         appendMessage(session.id, userMessage);
-        appendMessage(session.id, { id: assistantId, role: "assistant", mode: nextMode, text: nextMode === "image" ? "正在生成图片" : "正在回答", isLoading: true });
+        appendMessage(session.id, { id: assistantId, role: "assistant", mode: nextMode, text: assistantPendingLabel(nextMode), isLoading: true });
         setPrompt("");
+        setMentionedReferenceIds([]);
         setIsRunning(true);
 
         try {
@@ -176,15 +193,22 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                 return;
             }
 
-            const answer = await requestImageQuestion(requestConfig, await buildChatMessages([...history, userMessage]), (streamed) => {
-                updateMessage(session.id, assistantId, { text: streamed, isLoading: false });
+            const requestMessage = nextMode === "prompt" ? { ...userMessage, text: promptPolishRequest(text) } : userMessage;
+            const answer = await requestImageQuestion(requestConfig, await buildChatMessages([...history, requestMessage]), (streamed) => {
+                updateMessage(session.id, assistantId, { text: streamed, isLoading: false, isError: false });
             });
-            updateMessage(session.id, assistantId, { text: answer, isLoading: false });
+            updateMessage(session.id, assistantId, { text: answer, isLoading: false, isError: false });
         } catch (error) {
-            updateMessage(session.id, assistantId, { text: error instanceof Error ? error.message : "操作失败", isLoading: false });
+            updateMessage(session.id, assistantId, { text: explainModelError(error, nextMode === "image" ? "图片生成失败" : nextMode === "prompt" ? "提示词整理失败" : "对话失败"), isLoading: false, isError: true });
         } finally {
             setIsRunning(false);
         }
+    };
+
+    const updatePrompt = (value: string) => {
+        setPrompt(value);
+        const references = collectPromptReferencesFromText(value, undefined, availableMentionReferences);
+        setMentionedReferenceIds(references.map((reference) => reference.id));
     };
 
     const submit = async () => {
@@ -241,7 +265,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                 <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: theme.node.stroke }}>
                     <div className="flex items-center gap-2 text-sm font-medium">
                         <Sparkles className="size-4" />
-                        {view === "history" ? "历史记录" : "画布助手(未开发)"}
+                        {view === "history" ? "历史记录" : "创作助手"}
                     </div>
                     <div className="flex items-center gap-1">
                         {view === "history" ? (
@@ -302,7 +326,7 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                             onDelete={(id) => setDeleteChatIds([id])}
                         />
                     ) : messages.length ? (
-                        <AssistantMessages messages={messages} onRetry={retryMessage} onInsertImage={onInsertImage} onInsertText={onInsertText} />
+                        <AssistantMessages messages={messages} onRetry={retryMessage} onInsertImage={onInsertImage} onInsertText={onInsertText} onOpenConfig={() => openConfigDialog(true)} />
                     ) : (
                         <div className="flex h-full flex-col items-center justify-center px-1 text-center">
                             <div className="relative font-serif text-4xl font-bold italic tracking-normal" style={{ color: theme.node.text }}>
@@ -320,15 +344,26 @@ export function CanvasAssistantPanel({ nodes, selectedNodeIds, sessions, activeS
                         prompt={prompt}
                         isRunning={isRunning}
                         references={selectedReferences}
+                        mentionReferences={composerMentionReferences}
                         config={assistantConfig}
                         onModeChange={setMode}
-                        onPromptChange={setPrompt}
+                        onPromptChange={updatePrompt}
+                        onMentionReferenceSelect={(reference) => {
+                            setMentionedReferenceIds((current) => [...new Set([...current, reference.id])]);
+                            setRemovedReferenceIds((current) => {
+                                const next = new Set(current);
+                                next.delete(reference.id);
+                                return next;
+                            });
+                        }}
                         onSubmit={submit}
                         onConfigChange={(key, value) => updateConfig(key === "count" ? "canvasImageCount" : key, value)}
                         onMissingConfig={() => openConfigDialog(true)}
-                        onRemoveReference={(id) => {
-                            setRemovedReferenceIds((prev) => new Set(prev).add(id));
-                            if (selectedNodeIds.has(id)) onSelectNodeIds(new Set(Array.from(selectedNodeIds).filter((nodeId) => nodeId !== id)));
+                        onRemoveReference={(reference) => {
+                            setRemovedReferenceIds((prev) => new Set(prev).add(reference.id));
+                            setMentionedReferenceIds((current) => current.filter((id) => id !== reference.id));
+                            if (reference.label) setPrompt((current) => removePromptReferenceToken(current, reference.label!));
+                            if (selectedNodeIds.has(reference.id)) onSelectNodeIds(new Set(Array.from(selectedNodeIds).filter((nodeId) => nodeId !== reference.id)));
                         }}
                         onPasteImage={onPasteImage}
                         modelCosts={modelCosts}
@@ -368,9 +403,11 @@ function AssistantComposer({
     prompt,
     isRunning,
     references,
+    mentionReferences,
     config,
     onModeChange,
     onPromptChange,
+    onMentionReferenceSelect,
     onSubmit,
     onConfigChange,
     onMissingConfig,
@@ -382,13 +419,15 @@ function AssistantComposer({
     prompt: string;
     isRunning: boolean;
     references: CanvasAssistantReference[];
+    mentionReferences: CanvasResourceReference[];
     config: AiConfig;
     onModeChange: (mode: AssistantMode) => void;
     onPromptChange: (prompt: string) => void;
+    onMentionReferenceSelect: (reference: CanvasResourceReference) => void;
     onSubmit: () => void;
     onConfigChange: (key: keyof AiConfig, value: string) => void;
     onMissingConfig: () => void;
-    onRemoveReference: (id: string) => void;
+    onRemoveReference: (reference: CanvasAssistantReference) => void;
     onPasteImage: (file: File) => void;
     modelCosts?: { model: string; credits: number }[];
 }) {
@@ -401,28 +440,33 @@ function AssistantComposer({
             {references.length ? (
                 <div className="thin-scrollbar mb-1.5 flex max-w-full gap-1.5 overflow-x-auto px-1 pb-1">
                     {references.map((item, index) => (
-                        <AssistantReferenceChip key={item.id} item={item} label={assistantImageReferenceLabel(references, index)} onRemove={() => onRemoveReference(item.id)} />
+                        <AssistantReferenceChip key={item.id} item={item} label={item.label || assistantImageReferenceLabel(references, index)} onRemove={() => onRemoveReference(item)} />
                     ))}
                 </div>
-            ) : null}
+            ) : (
+                <Tooltip title="选中画布中的图片或文本可作为本次参考">
+                    <div className="mb-1.5 inline-flex min-h-7 items-center rounded-full border px-2.5 text-xs opacity-55" style={{ borderColor: theme.node.stroke, color: theme.node.text }}>
+                        无参考节点
+                    </div>
+                </Tooltip>
+            )}
             <div className="rounded-[28px] border px-3 pb-3 pt-3 shadow-lg" style={{ background: theme.toolbar.panel, borderColor: theme.node.stroke }}>
-                <textarea
+                <CanvasResourceMentionTextarea
                     value={prompt}
-                    onChange={(event) => onPromptChange(event.target.value)}
+                    references={mentionReferences}
+                    onChange={onPromptChange}
+                    onReferenceSelect={onMentionReferenceSelect}
                     onPaste={(event) => {
                         const file = Array.from(event.clipboardData.files).find((item) => item.type.startsWith("image/"));
                         if (!file) return;
                         event.preventDefault();
                         onPasteImage(file);
                     }}
-                    onKeyDown={(event) => {
-                        if (event.key !== "Enter" || event.ctrlKey || event.metaKey || event.shiftKey) return;
-                        event.preventDefault();
-                        void onSubmit();
-                    }}
+                    onSubmit={() => void onSubmit()}
                     className="thin-scrollbar h-20 w-full resize-none border-0 bg-transparent px-1 py-1 text-sm leading-5 outline-none placeholder:text-stone-400"
+                    containerClassName="h-20"
                     style={{ color: theme.node.text }}
-                    placeholder={mode === "image" ? "描述你想生成或修改的图片" : "输入你想问的问题"}
+                    placeholder={mode === "image" ? "描述你想生成或修改的图片，输入 @ 引用素材" : mode === "prompt" ? "描述画面需求，输入 @ 引用素材" : "输入问题，或用 @ 引用画布内容"}
                 />
                 <div className="mt-2 flex items-center justify-between gap-2">
                     <div className="canvas-composer-tools flex min-w-0 flex-1 items-center gap-1">
@@ -463,6 +507,7 @@ function AssistantModeSwitch({ mode, theme, onChange }: { mode: AssistantMode; t
         <div className="canvas-composer-mode-switch flex h-8 shrink-0 items-center rounded-full p-0.5" style={{ background: theme.node.fill }}>
             {[
                 { value: "ask" as const, title: "对话", icon: <MessageSquare className="size-4" /> },
+                { value: "prompt" as const, title: "仅整理", icon: <WandSparkles className="size-4" /> },
                 { value: "image" as const, title: "生图", icon: <ImageIcon className="size-4" /> },
             ].map((item) => (
                 <Tooltip key={item.value} title={item.title}>
@@ -499,11 +544,13 @@ function AssistantMessages({
     onRetry,
     onInsertImage,
     onInsertText,
+    onOpenConfig,
 }: {
     messages: CanvasAssistantMessage[];
     onRetry: (message: CanvasAssistantMessage) => void;
     onInsertImage: (image: CanvasAssistantImage) => void;
     onInsertText: (text: string) => void;
+    onOpenConfig: () => void;
 }) {
     const theme = canvasThemes[useThemeStore((state) => state.theme)];
 
@@ -518,16 +565,17 @@ function AssistantMessages({
                         {message.role === "assistant" ? (
                             <div className="mb-1 flex items-center gap-1.5 text-xs opacity-60">
                                 <MessageSquare className="size-3.5" />
-                                回答
+                                {assistantMessageLabel(message.mode)}
                             </div>
                         ) : null}
                         {message.text}
                     </div>
                     {message.references?.length ? <MessageReferences message={message} /> : null}
-                    {message.isLoading ? <ImageGenerationPending compact label={message.mode === "image" ? "正在生成图片" : "正在回答"} className="w-[250px] rounded-2xl border" /> : null}
+                    {message.isLoading ? <ImageGenerationPending compact label={assistantPendingLabel(message.mode)} className="w-[250px] rounded-2xl border" /> : null}
                     {message.role === "assistant" && !message.isLoading ? (
                         <div className="flex gap-1">
                             <Button shape="circle" size="small" style={{ borderColor: theme.node.stroke }} icon={<RotateCcw className="size-3.5" />} onClick={() => onRetry(message)} title="重试" />
+                            {message.isError ? <Button size="small" style={{ borderColor: theme.node.stroke }} icon={<Settings2 className="size-3.5" />} onClick={onOpenConfig}>检查配置</Button> : null}
                             {!message.images?.length ? <Button shape="circle" size="small" style={{ borderColor: theme.node.stroke }} icon={<Plus className="size-3.5" />} onClick={() => onInsertText(message.text)} title="插入画布" /> : null}
                         </div>
                     ) : null}
@@ -569,6 +617,7 @@ function AssistantHistory({
 
     return (
         <div className="space-y-1">
+            {!sessions.length ? <div className="grid min-h-48 place-items-center text-sm opacity-45">暂无对话记录</div> : null}
             {sessions.map((session) => (
                 <div key={session.id} className="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition hover:bg-black/5 dark:hover:bg-white/10" style={session.id === activeSession?.id ? { background: theme.node.fill } : undefined}>
                     <input type="checkbox" className="size-4 accent-stone-950" checked={checkedIds.includes(session.id)} onChange={(event) => onToggleChecked(session.id, event.target.checked)} />
@@ -646,6 +695,52 @@ function buildAssistantReferences(nodes: CanvasNodeData[], selectedNodeIds: Set<
         .filter((node): node is CanvasNodeData => Boolean(node))
         .map(nodeToReference)
         .filter((item): item is CanvasAssistantReference => Boolean(item));
+}
+
+function resourceReferenceToAssistantReference(reference: CanvasResourceReference): CanvasAssistantReference {
+    return {
+        id: reference.id,
+        type: resourceKindToNodeType(reference.kind),
+        title: reference.title,
+        label: reference.label,
+        dataUrl: reference.kind === "image" ? reference.url || reference.previewUrl : undefined,
+        storageKey: reference.storageKey,
+        text: reference.kind === "text" ? reference.text : undefined,
+    };
+}
+
+function resourceKindToNodeType(kind: CanvasResourceReference["kind"]) {
+    if (kind === "image") return CanvasNodeType.Image;
+    if (kind === "video") return CanvasNodeType.Video;
+    if (kind === "audio") return CanvasNodeType.Audio;
+    return CanvasNodeType.Text;
+}
+
+function mergeAssistantReferences(...groups: CanvasAssistantReference[][]) {
+    const result: CanvasAssistantReference[] = [];
+    const seen = new Set<string>();
+    groups.flat().forEach((reference) => {
+        if (seen.has(reference.id)) return;
+        seen.add(reference.id);
+        result.push(reference);
+    });
+    return result;
+}
+
+function assistantPendingLabel(mode: AssistantMode | CanvasAssistantMessage["mode"]) {
+    if (mode === "image") return "正在生成图片";
+    if (mode === "prompt") return "正在整理提示词";
+    return "正在回答";
+}
+
+function assistantMessageLabel(mode: CanvasAssistantMessage["mode"]) {
+    if (mode === "image") return "图片结果";
+    if (mode === "prompt") return "提示词";
+    return "回答";
+}
+
+function promptPolishRequest(text: string) {
+    return `请把下面的需求整理成一段可以直接用于 AI 图片生成的完整提示词。保留用户的主体、构图、风格、镜头、光线、材质和文字要求；不要解释过程，不要执行生成，只输出整理后的提示词。\n\n${text}`;
 }
 
 async function buildChatMessages(messages: CanvasAssistantMessage[]): Promise<ChatCompletionMessage[]> {

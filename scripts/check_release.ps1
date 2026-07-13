@@ -1,6 +1,6 @@
 param(
-    [string]$Version = "2.1.16",
-    [string]$BuildId = "20260623-v2116-product-closure1",
+    [string]$Version = "2.1.17",
+    [string]$BuildId = "20260713-v2117-canvas-download1",
     [string]$ToolRoot = $(Join-Path $env:LOCALAPPDATA "LumaForgeDevTools")
 )
 
@@ -129,6 +129,8 @@ Assert-Contains "README.md" "LumaForge-Setup-$Version.exe"
 Assert-Contains "README.md" "LumaForge-$Version-desktop.zip"
 Assert-Contains "README.md" "LumaForge-$Version-macos.zip"
 Assert-Contains "scripts/build_macos_release.sh" 'LumaForge-${VERSION}-macos.zip'
+Assert-Contains "scripts/build_desktop_release.ps1" "sharp-win32-x64"
+Assert-Contains "scripts/build_desktop_release.ps1" "libvips-42.dll"
 Assert-Contains ".github/workflows/build-macos.yml" "Setup Go"
 Assert-Contains ".github/workflows/build-macos.yml" "Setup Bun"
 Assert-Contains "docs/HANDOFF.md" "Old-version compatibility requirements"
@@ -158,7 +160,8 @@ $staleBuildIds = @(
     "20260605-v2027-resolution-cache-hotfix1",
     "20260605-v2028-cache-nav-hotfix1",
     "20260605-v2029-remove-comfyui-content1",
-    "20260617-v2115-desktop-info-hotfix"
+    "20260617-v2115-desktop-info-hotfix",
+    "20260623-v2116-product-closure1"
 )
 $staticFiles = Get-ChildItem -LiteralPath "static" -Recurse -File | Where-Object { $_.Extension -in ".html", ".js", ".css" }
 foreach ($file in $staticFiles) {

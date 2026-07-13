@@ -224,7 +224,7 @@ function AccountDrawer({ open, onClose, onLogout, onRefreshUser }: { open: boole
 
     const loggedIn = Boolean(status?.logged_in);
     return (
-        <Drawer title="账户设置" open={open} onClose={onClose} width={520} classNames={{ body: "bg-stone-50 dark:bg-stone-950" }}>
+        <Drawer title="账户设置" open={open} onClose={onClose} size={520} classNames={{ body: "bg-stone-50 dark:bg-stone-950" }}>
             <div className="space-y-4">
                 <section className="rounded-lg border border-stone-200 bg-white p-4 dark:border-stone-800 dark:bg-stone-900">
                     <div className="flex items-center gap-3">

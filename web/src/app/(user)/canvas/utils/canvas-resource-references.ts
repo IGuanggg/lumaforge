@@ -33,6 +33,12 @@ export function buildCanvasResourceReferences(nodes: CanvasNodeData[], connectio
     return globalReferences.map((reference) => (reference.nodeId ? activeByNodeId.get(reference.nodeId) || reference : reference));
 }
 
+export function buildGlobalCanvasResourceReferences(nodes: CanvasNodeData[], assets: Asset[] = []) {
+    const nodeReferences = labelResourceNodes(nodes.filter(isResourceNode), false, "manual");
+    const assetReferences = labelAssetResources(assets, false, "asset", nodeReferences.length);
+    return mergeReferences(nodeReferences, assetReferences);
+}
+
 export function buildNodeMentionReferences(node: CanvasNodeData | null, nodes: CanvasNodeData[], connections: CanvasConnection[], assets: Asset[] = []) {
     if (!node) return [];
     const directNodes = getDirectResourceNodes(node.id, nodes, connections);

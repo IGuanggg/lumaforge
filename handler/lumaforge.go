@@ -765,6 +765,24 @@ func LumaAppSaveAs(w http.ResponseWriter, r *http.Request) {
 	writeRawJSON(w, result)
 }
 
+func LumaAppSaveBytes(w http.ResponseWriter, r *http.Request) {
+	if !service.LumaDesktopRuntime() {
+		writeRawError(w, http.StatusBadRequest, fmt.Errorf("该保存方式仅在 LumaForge 桌面版中可用"))
+		return
+	}
+	filename := strings.TrimSpace(r.URL.Query().Get("filename"))
+	if filename == "" {
+		writeRawError(w, http.StatusBadRequest, fmt.Errorf("缺少文件名"))
+		return
+	}
+	result, err := service.LumaSaveBytes(r.Body, filename, r.Header.Get("Content-Type"))
+	if err != nil {
+		writeRawError(w, http.StatusBadRequest, err)
+		return
+	}
+	writeRawJSON(w, result)
+}
+
 func LumaAppOpenURL(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
 		URL string `json:"url"`

@@ -294,20 +294,20 @@ func TestLumaUpdateCheckSelectsNewerDesktopRelease(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode([]map[string]any{
 			{
-				"tag_name":   "v2.1.17",
-				"name":       "LumaForge 2.1.17",
+				"tag_name":   "v2.1.18",
+				"name":       "LumaForge 2.1.18",
 				"draft":      false,
 				"prerelease": false,
 				"body":       "quality release",
 				"assets": []map[string]any{
-					{"name": "LumaForge-Setup-2.1.17.exe", "browser_download_url": "https://cdn.example.com/setup.exe", "size": 30},
-					{"name": "LumaForge-2.1.17-macos.zip", "browser_download_url": "https://cdn.example.com/macos.zip", "size": 40},
-					{"name": "LumaForge-2.1.17-web.zip", "browser_download_url": "https://cdn.example.com/web.zip", "size": 10},
-					{"name": "LumaForge-2.1.17-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
+					{"name": "LumaForge-Setup-2.1.18.exe", "browser_download_url": "https://cdn.example.com/setup.exe", "size": 30},
+					{"name": "LumaForge-2.1.18-macos.zip", "browser_download_url": "https://cdn.example.com/macos.zip", "size": 40},
+					{"name": "LumaForge-2.1.18-web.zip", "browser_download_url": "https://cdn.example.com/web.zip", "size": 10},
+					{"name": "LumaForge-2.1.18-desktop.zip", "browser_download_url": "https://cdn.example.com/desktop.zip", "size": 20},
 				},
 			},
 			{
-				"tag_name":   "v2.1.17-beta",
+				"tag_name":   "v2.1.18-beta",
 				"draft":      false,
 				"prerelease": true,
 			},
@@ -321,18 +321,18 @@ func TestLumaUpdateCheckSelectsNewerDesktopRelease(t *testing.T) {
 	}
 
 	result := LumaUpdateCheck()
-	if result["ok"] != true || result["configured"] != true || result["latest_version"] != "2.1.17" || result["is_newer"] != true {
+	if result["ok"] != true || result["configured"] != true || result["latest_version"] != "2.1.18" || result["is_newer"] != true {
 		t.Fatalf("unexpected update result: %#v", result)
 	}
 	asset, ok := result["selected_asset"].(map[string]any)
 	if !ok {
 		t.Fatalf("selected asset missing: %#v", result)
 	}
-	if asset["name"] != "LumaForge-2.1.17-desktop.zip" || asset["url"] != "https://cdn.example.com/desktop.zip" {
+	if asset["name"] != "LumaForge-2.1.18-desktop.zip" || asset["url"] != "https://cdn.example.com/desktop.zip" {
 		t.Fatalf("selected asset = %#v, want desktop zip", asset)
 	}
 	state := LumaUpdateState()
-	if state["phase"] != "found" || state["latest_version"] != "2.1.17" {
+	if state["phase"] != "found" || state["latest_version"] != "2.1.18" {
 		t.Fatalf("update state = %#v, want found 2.1.17", state)
 	}
 }
@@ -343,11 +343,11 @@ func TestLumaUpdateCheckTreatsLatest214AsCurrent(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"tag_name":   "v2.1.16",
+			"tag_name":   "v2.1.17",
 			"draft":      false,
 			"prerelease": false,
 			"assets": []map[string]any{
-				{"name": "LumaForge-2.1.16-desktop.zip", "browser_download_url": "https://cdn.example.com/current.zip"},
+				{"name": "LumaForge-2.1.17-desktop.zip", "browser_download_url": "https://cdn.example.com/current.zip"},
 			},
 		})
 	}))
@@ -359,11 +359,11 @@ func TestLumaUpdateCheckTreatsLatest214AsCurrent(t *testing.T) {
 	}
 
 	result := LumaUpdateCheck()
-	if result["current_version"] != "2.1.16" {
-		t.Fatalf("current version = %#v, want 2.1.16", result["current_version"])
+	if result["current_version"] != "2.1.17" {
+		t.Fatalf("current version = %#v, want 2.1.17", result["current_version"])
 	}
-	if result["latest_version"] != "2.1.16" || result["is_newer"] != false || result["selected_asset"] != nil {
-		t.Fatalf("2.1.16 should be treated as current, got %#v", result)
+	if result["latest_version"] != "2.1.17" || result["is_newer"] != false || result["selected_asset"] != nil {
+		t.Fatalf("2.1.17 should be treated as current, got %#v", result)
 	}
 	state := LumaUpdateState()
 	if state["phase"] != "idle" {
@@ -377,7 +377,7 @@ func TestReleaseVersionAndVersionComparisonHelpers(t *testing.T) {
 		want    string
 	}{
 		{map[string]any{"tag_name": "v2.1.12"}, "2.1.12"},
-		{map[string]any{"tag_name": "", "name": "V2.1.16"}, "2.1.16"},
+		{map[string]any{"tag_name": "", "name": "V2.1.17"}, "2.1.17"},
 		{map[string]any{"tag_name": "20.0.29"}, "2.0.29"},
 	}
 	for _, tc := range cases {
@@ -390,9 +390,9 @@ func TestReleaseVersionAndVersionComparisonHelpers(t *testing.T) {
 		a, b string
 		want int
 	}{
-		{"v2.1.17", "2.1.16", 1},
-		{"2.1.16", "2.1.16", 0},
-		{"2.1.13", "2.1.16", -1},
+		{"v2.1.18", "2.1.17", 1},
+		{"2.1.17", "2.1.17", 0},
+		{"2.1.14", "2.1.17", -1},
 		{"2.1.12-beta", "2.1.11", 1},
 	}
 	for _, tc := range comparisons {

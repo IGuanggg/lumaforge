@@ -2,7 +2,7 @@
 
 LumaForge 是一个本地优先的 AI 创作工作台，围绕“智能画布 + 素材库 + 多模型生成 + 云同步”组织创作流程。桌面端优先保障本地数据安全，云端用于账户、配置、媒体和画布项目同步。
 
-当前版本：`2.1.16`
+当前版本：`2.1.17`
 
 ## 现在的状态
 
@@ -135,8 +135,8 @@ Windows 桌面包需要：
 
 ```text
 dist\LumaForge\LumaForge.exe
-releases\LumaForge-2.1.16-desktop.zip
-releases\LumaForge-Setup-2.1.16.exe
+releases\LumaForge-2.1.17-desktop.zip
+releases\LumaForge-Setup-2.1.17.exe
 ```
 
 桌面版默认数据目录：
@@ -164,7 +164,7 @@ dist\LumaForge Browser\LumaForge.exe
 macOS 包必须在 Mac 或 GitHub Actions macOS runner 上构建：
 
 ```bash
-VERSION=2.1.16 bash scripts/build_macos_release.sh
+VERSION=2.1.17 bash scripts/build_macos_release.sh
 ```
 
 GitHub Actions 工作流：
@@ -178,8 +178,8 @@ GitHub Actions 工作流：
 输出：
 
 ```text
-releases/LumaForge-2.1.16-macos.zip
-releases/LumaForge-2.1.16-macos.sha256.txt
+releases/LumaForge-2.1.17-macos.zip
+releases/LumaForge-2.1.17-macos.sha256.txt
 ```
 
 未配置 Apple Developer 证书时，产物是未签名版本；正式公开分发建议接入 `codesign` 和 `notarytool`。
@@ -189,7 +189,7 @@ releases/LumaForge-2.1.16-macos.sha256.txt
 构建镜像：
 
 ```bash
-docker build -f Dockerfile.cloud -t iguang9881/lumaforge-cloud:2.1.16 .
+docker build -f Dockerfile.cloud -t iguang9881/lumaforge-cloud:2.1.17 .
 ```
 
 多架构推送：
@@ -197,7 +197,7 @@ docker build -f Dockerfile.cloud -t iguang9881/lumaforge-cloud:2.1.16 .
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f Dockerfile.cloud \
-  -t iguang9881/lumaforge-cloud:2.1.16 \
+  -t iguang9881/lumaforge-cloud:2.1.17 \
   -t iguang9881/lumaforge-cloud:latest \
   --push .
 ```
@@ -212,10 +212,10 @@ docker run -d \
   --restart unless-stopped \
   -e CLOUD_CONFIG_DB=/app/data/cloud_config.db \
   -e CLOUD_CONFIG_PORT=8787 \
-  -e CLOUD_APP_VERSION=2.1.16 \
+  -e CLOUD_APP_VERSION=2.1.17 \
   -p 8787:8787 \
   -v /opt/lumaforge-cloud/cloud-data:/app/data \
-  iguang9881/lumaforge-cloud:2.1.16
+  iguang9881/lumaforge-cloud:2.1.17
 ```
 
 升级已有服务时，先备份 `/opt/lumaforge-cloud/cloud-data`，再替换容器。不要删除数据目录。新版本启动时会为已有数据库创建 `cloud_config.db.before-upgrade-<version>` 安全快照。
@@ -232,14 +232,14 @@ curl http://127.0.0.1:8787/version
 发布前：
 
 ```powershell
-.\scripts\check_release.ps1 -Version 2.1.16
+.\scripts\check_release.ps1 -Version 2.1.17
 ```
 
 GitHub Release 建议上传：
 
-- `releases/LumaForge-Setup-2.1.16.exe`
-- `releases/LumaForge-2.1.16-desktop.zip`
-- `releases/LumaForge-2.1.16-macos.zip`
+- `releases/LumaForge-Setup-2.1.17.exe`
+- `releases/LumaForge-2.1.17-desktop.zip`
+- `releases/LumaForge-2.1.17-macos.zip`
 - 对应 SHA256 校验文件
 
 更多发布流程和人工回归项见 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md)。
