@@ -233,7 +233,8 @@ async function requestLegacyOnlineImage(config: AiConfig, prompt: string, refere
     const providerModel = splitProviderModel(resolveImageBridgeModel(config));
     if (!providerModel) throw new Error("本地 API 平台模型格式无效");
     const n = Math.max(1, Math.min(8, Math.floor(Math.abs(Number(config.count)) || 1)));
-    const requestSize = config.size?.trim() || "1024x1024";
+    const selectedSize = config.size?.trim() || "1024x1024";
+    const requestSize = resolveRequestSize(normalizeQuality(config.quality), selectedSize) ?? selectedSize;
     const referenceImages = await Promise.all(
         references.map(async (image) => ({
             url: await imageToDataUrl(image),
